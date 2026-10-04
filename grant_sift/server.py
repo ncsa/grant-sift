@@ -1,8 +1,8 @@
-"""Small web backend: feedback writes and a chat proxy.
+"""Web backend: the catalogue, feedback writes and a chat proxy.
 
-Deliberately thin. The pipeline stays a cron job and the dashboard stays a
-static file reading web/opportunities.json, so the list still renders with this
-server down. Only two features need a server at all:
+The dashboard asks this server for the catalogue - search, filters, sort and
+paging are in catalogue.py - so the page, the API and the MCP tools at /mcp
+answer from one implementation. Two writes are worth a note:
 
   POST /api/feedback   a thumbs up or down cannot be written from a static
                        page, and it has to reach the same SQLite the
@@ -23,7 +23,8 @@ does hold, and it would be dishonest to call this nothing:
     Never a request body, so never a message or a key. Silence them with
     GRANT_SIFT_ACCESS_LOG=off.
   - the rate limiter's in-memory counters, keyed by a salted hash of the
-    client address rather than the address itself, and lost on restart.
+    signed-in username (the client address when auth is off) rather than the
+    name itself, and lost on restart.
 """
 
 import hashlib
@@ -41,32 +42,14 @@ from urllib.parse import urlparse
 
 import requests
 from fastapi import Body, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import adapters, auth, db, pipeline, telemetry
+from . import adapters, auth, catalogue, db, mcp_server, pipeline, telemetry
 
 DB_PATH = os.environ.get("GRANT_SIFT_DB", "grant-sift.db")
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
-
-def _opportunities_json_path() -> Path | None:
-    """Prefer the PVC next to the DB; fall back to web/ (local / entrypoint symlink).
-
-    The nightly pipeline and serve share the same /data volume. Export writes
-    /data/opportunities.json; the dashboard must read that file, not a stale
-    copy baked into the container layer.
-    """
-    for path in (
-        Path(DB_PATH).expanduser().resolve().parent / "opportunities.json",
-        WEB_DIR / "opportunities.json",
-    ):
-        try:
-            if path.is_file():
-                return path
-        except OSError:
-            continue
-    return None
 
 # Hosts this proxy will forward to. Without an allowlist the endpoint is an
 # SSRF pivot: a caller could name any internal address as base_url and read the
@@ -144,7 +127,9 @@ async def lifespan(app: FastAPI):
     grant_sift.server:app`) still gets a database with tables in it.
     """
     db.init(DB_PATH)
-    yield
+    # The MCP transport's task group; /mcp answers 500 without it.
+    async with mcp_server.session_manager().run():
+        yield
 
 
 app = FastAPI(title="Grant Sift", docs_url=None, redoc_url=None,
@@ -176,9 +161,19 @@ _SALT = secrets.token_bytes(16)
 
 
 def _client(request: Request) -> str:
-    """A stable per-process pseudonym for the caller, not their address."""
-    host = request.client.host if request.client else "unknown"
-    return hashlib.blake2b(_SALT + host.encode(), digest_size=8).hexdigest()
+    """A stable per-process pseudonym for the caller.
+
+    The signed-in username when there is one. Behind oauth2-proxy the peer
+    address is the proxy's for every request, so keying on it gave the whole
+    group one shared budget: ten roster adds an hour between everyone, and an
+    MCP client's calls spent the dashboard's. The address is the fallback
+    only with auth off, where there is no username to key on. Every caller
+    has already passed require_user, so principal() does not raise here.
+    """
+    p = auth.principal(request)
+    who = f"user:{p.username}" if p.authenticated else (
+        "addr:" + (request.client.host if request.client else "unknown"))
+    return hashlib.blake2b(_SALT + who.encode(), digest_size=8).hexdigest()
 
 
 def _conn():
@@ -371,17 +366,46 @@ def _identity_email(principal: auth.Principal, requested: str | None) -> str:
     return _normalize_email(base)
 
 
-_SOURCES_CACHE = None
+_CONFIG = {"stamp": None, "sources": {}, "roster": [], "contacts": {}}
+
+
+def _config_stamp():
+    """Modification times of every file load_config reads. A stat each is
+    cheap next to parsing the YAML, and lets an edit - a ConfigMap update in
+    Kubernetes - reach the next request without a restart."""
+    d = Path("config")
+    paths = (d / "sources.yaml", d / "prefilter.yaml", d / "ncsa_staff.yaml",
+             Path(os.environ.get("GRANT_SIFT_ROSTER") or (d / "roster.yaml")))
+    out = []
+    for p in paths:
+        try:
+            out.append(p.stat().st_mtime_ns)
+        except OSError:
+            out.append(None)
+    return tuple(out)
+
+
+def _config():
+    """sources.yaml, the roster and its contact index, parsed once per change.
+
+    The catalogue joins contact details on at read time, so this is what
+    carries a fixed address in config/roster.yaml onto every affected card.
+    A missing or malformed file degrades to empty rather than failing the
+    request: the list still renders, without contact blocks.
+    """
+    stamp = _config_stamp()
+    if _CONFIG["stamp"] != stamp:
+        try:
+            sources, roster, _ = pipeline.load_config()
+        except Exception:  # noqa: BLE001
+            sources, roster = {}, []
+        _CONFIG.update(stamp=stamp, sources=sources or {}, roster=roster,
+                       contacts=pipeline.contact_index(roster))
+    return _CONFIG
 
 
 def _sources_file():
-    global _SOURCES_CACHE
-    if _SOURCES_CACHE is None:
-        try:
-            _SOURCES_CACHE = pipeline.load_config()[0]
-        except Exception:  # noqa: BLE001
-            _SOURCES_CACHE = {}
-    return _SOURCES_CACHE
+    return _config()["sources"]
 
 
 # Hosts the ingester must never be pointed at. This endpoint takes a URL from
@@ -453,11 +477,11 @@ def sources_list(request: Request):
         stale = {s["name"] for s in db.stale_sources(conn)}
         out = []
 
-        def add(name, kind, url, origin, cadence=None, notes=None, sid=None):
+        def add(name, kind, url, origin, cadence=None, notes=None, sid=None, by=None):
             r = runs.get(name, {})
             out.append({
                 "name": name, "kind": kind, "url": url, "origin": origin,
-                "cadence": cadence, "notes": notes, "id": sid,
+                "cadence": cadence, "notes": notes, "id": sid, "created_by": by,
                 "last_success": r.get("last_success"), "last_run": r.get("last_run"),
                 "last_yield": r.get("last_yield"), "last_error": r.get("last_error"),
                 "stale": name in stale,
@@ -473,7 +497,7 @@ def sources_list(request: Request):
             add(f["name"], "page", f["url"], "file", f.get("cadence"), f.get("notes"))
         for a in db.source_additions(conn):
             add(a["name"], a["kind"], a["url"], "dashboard",
-                a["cadence"], a["notes"], a["id"])
+                a["cadence"], a["notes"], a["id"], a.get("created_by"))
 
         return {"count": len(out),
                 "keywords": cfg.get("keywords") or [],
@@ -746,8 +770,14 @@ def post_feedback(request: Request, payload: dict = Body(...)):
         # tautological anyway: the correction's value is on OTHER records, and
         # that only exists at the next full pass. Meanwhile the verdict itself
         # already takes effect, so the dashboard and digests respect it now.
+        #
+        # Flagged, not deleted. The dashboard reads the database live, and a
+        # deleted assessment takes the call out of the catalogue until the
+        # nightly run - the call someone just voted on would vanish under them.
+        # save_assessment's INSERT OR REPLACE clears the flag.
         requeued = bool(conn.execute(
-            "DELETE FROM assessments WHERE opportunity_id = ?", (opp_id,)).rowcount)
+            "UPDATE assessments SET requeued = 1 WHERE opportunity_id = ?",
+            (opp_id,)).rowcount)
         conn.commit()
         n = conn.execute(
             "SELECT COUNT(*) n FROM feedback WHERE opportunity_id = ?", (opp_id,)
@@ -808,40 +838,14 @@ name what document would: usually the full solicitation, which is linked from
 the dashboard. Do not invent deadlines, eligibility rules or award figures."""
 
 
-_ROSTER_CACHE = None
-_ROSTER_ENTRIES = None
-
-
 def _roster_entries():
-    """The roster file's parties, loaded once per process.
-
-    Same caching argument as _roster(): this sits in a request path, and a
-    roster edit already needs a restart the way every other config here does.
-    """
-    global _ROSTER_ENTRIES
-    if _ROSTER_ENTRIES is None:
-        try:
-            _ROSTER_ENTRIES = pipeline.load_config()[1]
-        except Exception:  # noqa: BLE001
-            _ROSTER_ENTRIES = []
-    return _ROSTER_ENTRIES
+    """The roster file's parties (see _config)."""
+    return _config()["roster"]
 
 
 def _roster():
-    """Roster, loaded once per process, for contact details only.
-
-    Read on first use rather than at import so a missing or malformed
-    roster degrades the chat context instead of preventing the app from
-    starting. Cached because this sits in a request path; a roster edit needs
-    a restart, which is already true of every other config here.
-    """
-    global _ROSTER_CACHE
-    if _ROSTER_CACHE is None:
-        try:
-            _ROSTER_CACHE = pipeline.contact_index(pipeline.load_config()[1])
-        except Exception:  # noqa: BLE001
-            _ROSTER_CACHE = {}
-    return _ROSTER_CACHE
+    """Roster name -> contact details (see _config)."""
+    return _config()["contacts"]
 
 
 def _opportunity_context(conn, opp_id: str) -> str:
@@ -1445,30 +1449,124 @@ def rescore(request: Request, payload: dict = Body(...)):
             "items": out, "scored": len(out), "of": len(ordered), "usage": usage}
 
 
-@app.get("/opportunities.json")
-def opportunities_json():
-    """Serve the export from the data volume (same file the nightly run writes).
+_PAGE_MAX = 200
 
-    Registered before StaticFiles so a broken or container-local copy under web/
-    cannot hide PVC updates. no-cache so a nightly refresh is visible on reload.
-    """
-    path = _opportunities_json_path()
-    if path is None:
-        raise HTTPException(404, "opportunities.json not found; run: python run.py export")
-    return FileResponse(
-        path,
-        media_type="application/json",
-        headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
-    )
+
+def _csv(raw: str) -> list[str]:
+    return [x.strip() for x in (raw or "").split(",") if x.strip()]
+
+
+@app.get("/api/catalogue")
+def catalogue_facets(request: Request):
+    """Header counts, the area and funder pickers, the deadline bounds and the
+    stale-source warning: everything the page needs before its first query."""
+    auth.principal(request)
+    conn = _conn()
+    try:
+        return catalogue.facets(conn, catalogue.load(conn, _roster()))
+    finally:
+        conn.close()
+
+
+@app.get("/api/opportunities")
+def list_opportunities(
+    request: Request,
+    q: str = "",
+    ids: str = "",
+    area: str = "",
+    funder: str = "",
+    deadline_from: str = "",
+    deadline_to: str = "",
+    filters: str = "",
+    category: str = "",
+    source: str = "",
+    min_score: int = 0,
+    sort: str = "",
+    page: int = 1,
+    page_size: int = 25,
+):
+    """Search the open catalogue. Every argument narrows; q is fuzzy on names
+    and titles and exact on prose (catalogue._relevance). filters is a comma
+    list of catalogue.FILTERS, including the identity ones: via-me,
+    my-sources, my-digests. ids fetches particular calls, e.g. a shelf."""
+    principal = auth.principal(request)
+    page_size = max(1, min(int(page_size), _PAGE_MAX))
+    conn = _conn()
+    try:
+        rows = catalogue.load(conn, _roster())
+        try:
+            hits = catalogue.search(
+                conn, rows, principal, q=q, ids=_csv(ids), area=area,
+                funder=funder, deadline_from=deadline_from,
+                deadline_to=deadline_to, filters=_csv(filters),
+                category=category, source=source, min_score=min_score, sort=sort)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+    finally:
+        conn.close()
+    pages = max(1, -(-len(hits) // page_size))
+    page = max(1, min(int(page), pages))
+    start = (page - 1) * page_size
+    return {"total": len(hits), "of": len(rows), "page": page, "pages": pages,
+            "page_size": page_size, "sort": sort or ("relevance" if q.strip() else "score"),
+            "opportunities": [catalogue.public(o) for o in hits[start:start + page_size]]}
+
+
+@app.get("/api/opportunities/{opportunity_id}")
+def get_opportunity(request: Request, opportunity_id: str):
+    """One open call in full: the list row plus the captured synopsis and the
+    feedback recorded on it."""
+    principal = auth.principal(request)
+    conn = _conn()
+    try:
+        hits = catalogue.search(conn, catalogue.load(conn, _roster()), principal,
+                                ids=[opportunity_id])
+        if not hits:
+            raise HTTPException(404, "no open call with that id")
+        syn = conn.execute("SELECT synopsis FROM opportunities WHERE id = ?",
+                           (opportunity_id,)).fetchone()["synopsis"]
+    finally:
+        conn.close()
+    return catalogue.public(hits[0]) | {
+        # The stored synopsis, not a fresh fetch of the funder's page.
+        "synopsis": (syn or "")[:8000],
+        "feedback": get_feedback(opportunity_id)["feedback"],
+    }
+
+
+@app.get("/api/feeds/{feed}")
+def preview_feed(request: Request, feed: str, since_days: int = 7, limit: int = 50):
+    """What a digest feed holds right now, ignoring what has been emailed:
+    open calls first seen in the last since_days that pass the feed's rule."""
+    auth.principal(request)
+    if feed not in pipeline.FEEDS:
+        raise HTTPException(404, f"no feed {feed!r}; feeds: {', '.join(pipeline.FEEDS)}")
+    conn = _conn()
+    try:
+        items = pipeline.build_digest(
+            conn, feed, since_days=max(1, min(int(since_days), 90)),
+            respect_sent_log=False, roster=_roster_entries())
+    finally:
+        conn.close()
+    # build_digest only looks at first_seen; over a long window it would
+    # otherwise list calls that have already closed.
+    items = [i for i in items if (catalogue.days_away(i.get("deadline")) or 0) >= 0]
+    keep = ("id", "title", "agency", "source", "deadline", "score", "category",
+            "match_name", "match_kind", "url")
+    return {"feed": feed, "label": pipeline.FEED_LABELS.get(feed, feed),
+            "count": len(items),
+            "items": [{k: i.get(k) for k in keep} for i in items[:max(1, min(int(limit), _PAGE_MAX))]]}
+
+
+# MCP tools at /mcp, plus the metadata that tells an MCP client
+# where to log in. Before the static mount, which would otherwise swallow them.
+app.router.routes.extend(mcp_server.routes)
 
 
 # Mounted last: it serves "/" so it must not shadow the /api routes above.
-# follow_symlink=True: docker/entrypoint.sh links web/opportunities.json → /data
-# on the PVC; Starlette's default realpath check treats that as escaping WEB_DIR
-# and returns 404 (defense in depth alongside the route above).
 if WEB_DIR.is_dir():
     app.mount(
         "/",
-        StaticFiles(directory=str(WEB_DIR), html=True, follow_symlink=True),
+        StaticFiles(directory=str(WEB_DIR), html=True),
         name="web",
     )

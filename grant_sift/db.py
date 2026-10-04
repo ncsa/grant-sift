@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS assessments (
     model            TEXT,
     input_hash       TEXT,
     assessed_at      TEXT,
+    requeued         INTEGER DEFAULT 0, -- feedback asked for a re-score; old score shown until then
     FOREIGN KEY (opportunity_id) REFERENCES opportunities(id)
 );
 
@@ -128,7 +129,7 @@ CREATE TABLE IF NOT EXISTS sent_log (
 );
 
 -- Nightly snapshots for Grafana (/api/stats). Written by the same in-app
--- daily job as ingest/assess/export — not a separate CronJob.
+-- daily job as ingest/assess — not a separate CronJob.
 CREATE TABLE IF NOT EXISTS telemetry_daily (
     day          TEXT NOT NULL,   -- YYYY-MM-DD (GRANT_SIFT_DAILY_TZ)
     metric       TEXT NOT NULL,
@@ -143,7 +144,7 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_metric_day ON telemetry_daily(metric, d
 
 # A closed call stays in the database -- the record of what was once open is
 # the point, and prune_expired is still opt-in -- but it is no longer offered
-# to anything downstream. Expired rows are excluded from the JSON export and
+# to anything downstream. Expired rows are excluded from the catalogue and
 # from every prompt built for the model: a call nobody can apply to cannot be
 # the right answer to "what should I write for", and paying to score or to
 # rank one spends the budget and the context window on a dead record.
@@ -208,6 +209,9 @@ def init(path: str = "grant-sift.db") -> None:
             if col not in acols:
                 conn.execute(f"ALTER TABLE assessments ADD COLUMN {col} TEXT")
                 conn.commit()
+        if "requeued" not in acols:
+            conn.execute("ALTER TABLE assessments ADD COLUMN requeued INTEGER DEFAULT 0")
+            conn.commit()
         fcols = {r["name"] for r in conn.execute("PRAGMA table_info(feedback)")}
         for col in ("aspect", "created_by"):
             if col not in fcols:
@@ -415,7 +419,8 @@ def page_changed(conn, url: str, text: str) -> bool:
 
 
 def unassessed(conn, limit: int = 200):
-    """Records with no assessment yet, newest first. Closed calls excluded.
+    """Records with no assessment yet, or one feedback asked to redo, newest
+    first. Closed calls excluded.
 
     This used to merely sort closed calls last so that nothing was permanently
     skipped. That was the wrong trade: every one of these rows is a paid model
@@ -431,7 +436,7 @@ def unassessed(conn, limit: int = 200):
     return conn.execute(
         f"""SELECT o.* FROM opportunities o
            LEFT JOIN assessments a ON a.opportunity_id = o.id
-           WHERE a.opportunity_id IS NULL AND {LIVE}
+           WHERE (a.opportunity_id IS NULL OR a.requeued = 1) AND {LIVE}
            ORDER BY o.first_seen DESC
            LIMIT ?""",
         (limit,),
@@ -694,6 +699,9 @@ def add_roster_entry(conn, entry: dict, created_by=None) -> int:
          entry.get("years"), entry.get("our_role"), entry.get("funders"),
          entry.get("status") or "cold", entry.get("notes"), created_by, now()),
     )
+    # Without this the insert is rolled back when the caller closes the
+    # connection, after the API has already answered ok with the new id.
+    conn.commit()
     return int(conn.execute("SELECT last_insert_rowid()").fetchone()[0])
 
 

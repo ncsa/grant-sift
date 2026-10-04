@@ -13,7 +13,7 @@ SQLite is a file on the PVC (`/data/grant-sift.db`); there is no separate SQLite
 | Deployment + Service | Web UI, feedback, chat proxy, `/api/stats` (ClusterIP only) |
 | oauth2-proxy + Ingress | Traefik → Keycloak login → app |
 | Grafana (optional) | OSS charts for `telemetry_daily`; Infinity → `http://grant-sift:8080/api/stats` |
-| PVC (`nfs-taiga`) | `/data`: `grant-sift.db` + `opportunities.json`, written by the Deployment only |
+| PVC (`nfs-taiga`) | `/data`: `grant-sift.db`, written by the Deployment only |
 | Secret | `GRANT_SIFT_LLM_API_KEY` (pipeline) + `grant-sift-oauth2` (OIDC) + `grant-sift-grafana` (admin) |
 | ConfigMap | Non-secret env + mounted `roster.yaml` + Grafana dashboards |
 
@@ -78,6 +78,43 @@ keycloak:
 ```
 
 The chart builds `{{url}}/realms/{{realm}}` into ConfigMap `grant-sift-keycloak` and injects it as `OAUTH2_PROXY_OIDC_ISSUER_URL`.
+
+### 2b. Keycloak client for MCP (`/mcp`)
+
+MCP clients (Claude Code, Claude Desktop) log in to Keycloak themselves and send
+the access token to `/mcp` as `Authorization: Bearer`; oauth2-proxy accepts it
+(`skip_jwt_bearer_tokens`) and passes the same identity headers a browser gets.
+They need their own **public** client, because a desktop app cannot keep a secret.
+
+| Field | Value |
+|---|---|
+| Client ID | `grant-sift-mcp` |
+| Client authentication | **Off** (public) |
+| Standard flow | On; everything else off |
+| PKCE method (Advanced) | `S256` |
+| Valid redirect URIs | `http://localhost:33418/callback` (the port users pass as `--callback-port`) |
+| Access token lifespan (Advanced) | 5–15 min |
+
+Then, on that client:
+
+- **Audience mapper** (Client scopes → `grant-sift-mcp-dedicated` → Add mapper →
+  By configuration → Audience): *Included Client Audience* = `grant-sift`, the
+  oauth2-proxy client. Without it the token's `aud` does not name the proxy and
+  every request is a 401.
+- **Groups**, only if `GRANT_SIFT_AUTH_REQUIRED_GROUP` is set: a Group Membership
+  mapper, claim `groups`, full path off, *Add to access token* on.
+- **`offline_access`** as an optional client scope, so a login lasts weeks
+  (Offline Session Idle) instead of the browser SSO session's hours.
+
+Each user adds the server once, and logs in through the browser on first use:
+
+```bash
+claude mcp add --transport http grant-sift https://grant-sift.software-dev.ncsa.illinois.edu/mcp \
+  --client-id grant-sift-mcp --callback-port 33418
+```
+
+Check the proxy end with a token in hand: `curl -H "Authorization: Bearer $TOKEN"
+https://…/api/whoami` should show your username, not `anonymous`.
 
 ### 3. Namespace, secrets, roster
 
@@ -155,7 +192,6 @@ Or:
 ```bash
 kubectl -n grant-sift exec deploy/grant-sift -- python run.py ingest
 kubectl -n grant-sift exec deploy/grant-sift -- python run.py assess --limit 400
-kubectl -n grant-sift exec deploy/grant-sift -- python run.py export
 ```
 
 Run it inside the running pod, not as a separate Job: that pod is the only
@@ -214,7 +250,7 @@ over 20h old, so a restart past the scheduled minute does not skip a day.
 in-app schedule — not a separate CronJob). Grafana reads those rows via
 `/api/stats`. Details: [GRAFANA.md](./GRAFANA.md).
 
-`run.py daily` exports to `web/opportunities.json`, which the entrypoint has symlinked to `/data/opportunities.json`. The running pod serves that file directly (no rebuild, no separate JSON mount). Refresh the browser after a run to see updates (`Cache-Control: no-cache`).
+The dashboard queries the database live (`/api/opportunities`), so a nightly run shows up on the next search or reload. A `/data/opportunities.json` left by an older release is no longer read or served; delete it at leisure.
 
 Users subscribe under **Personalize → Email digests**. Addresses land in SQLite `subscribers`; nightly digests email each feed when `GRANT_SIFT_SMTP_HOST` is set.
 

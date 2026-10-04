@@ -9,7 +9,7 @@ run.py daily  (GRANT_SIFT_DAILY_AT, in-app — not a k8s CronJob)
               → Grafana Infinity datasource
 ```
 
-`opportunities.json` stays UI-only. Do not point Grafana at the SQLite PVC.
+The dashboard's catalogue is `/api/opportunities`. Do not point Grafana at the SQLite PVC.
 
 Parent tracking: [#3](https://github.com/longshuicy/grant-sift/issues/3) / [#14](https://github.com/longshuicy/grant-sift/issues/14).
 

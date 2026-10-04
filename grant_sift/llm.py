@@ -363,7 +363,7 @@ def assess(opportunity: dict, roster_block: str, corrections: str = "") -> dict:
     # dict, so an isinstance check alone lets a scoreless result through.
     #
     # Raise rather than returning a score of 0. A 0 is indistinguishable from a
-    # real judgement, sits below the export cutoff, and is never re-assessed,
+    # real judgement, sinks to the bottom of every list, and is never re-assessed,
     # so a parse failure would bury a live opportunity permanently. Raising
     # leaves the record unassessed and it is retried on the next run.
     if not isinstance(result, dict) or result.get("score") is None:

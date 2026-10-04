@@ -19,7 +19,7 @@ cp config/roster.example.yaml config/roster.yaml            # collaborators and 
 cp config/ncsa_staff.example.yaml config/ncsa_staff.yaml   # optional: your staff's addresses
 set -a; source .env; set +a
 
-python run.py daily           # ingest, assess, export, digest
+python run.py daily           # ingest, assess, digest
 python run.py serve           # dashboard on http://127.0.0.1:8080
 ```
 
@@ -44,7 +44,6 @@ python run.py ingest                # fetch, enrich, store
 python run.py assess [--limit N]    # score anything unassessed, live calls first
 python run.py assess --rematch      # clear no-match assessments first, after a roster addition
 python run.py assess --backfill-axes # re-score rows predating summary/axes/facts (a full pass)
-python run.py export                # write web/opportunities.json
 python run.py status                # what ran, what has gone stale
 python run.py serve [--host --port] # dashboard, feedback and chat
 python run.py digest --feed closing-soon --send
@@ -88,7 +87,8 @@ flowchart TD
     R3["config/ncsa_staff.yaml<br/>our addresses"] --> R1
     P["Projects/<br/>proposals, gitignored"] -.->|"build_roster.py"| R1
     AS --> S
-    S --> J["web/opportunities.json"] --> D["dashboard"]
+    S --> J["/api/opportunities<br/>search, filters, paging<br/>(catalogue.py)"] --> D["dashboard"]
+    J --> M["MCP tools at /mcp"]
     R1 -.->|"who to email, and via whom"| J
     S --> G["five email digests"]
     D --> F["FEEDBACK<br/>what was wrong:<br/>score, category or match"]
@@ -98,8 +98,9 @@ flowchart TD
 
 Two properties worth preserving:
 
-**The model runs offline, never in a request path.** The dashboard reads a
-static file, so nothing user-facing depends on the gateway being up. The chat
+**The model runs offline, never in a request path.** The dashboard reads
+scores already in the database, so nothing user-facing depends on the gateway
+being up. The chat
 proxy and Idea match (`/api/focus`, `/api/rescore`) are the exceptions: both
 run on the viewer’s own key and degrade to a disabled control without one.
 
@@ -171,18 +172,17 @@ programme funds.
 
 **The card no longer shows the funder's own text.** It used to, behind a
 disclosure labelled *Show summary*, which was not one: it was `synopsis` cut
-to the first 900 characters at export time. On a 1,261-record corpus that cut
+to the first 900 characters when the list was built. On a 1,261-record corpus that cut
 861 of them mid-sentence, left 97 under 200 characters, and rendered 37 RSS
 teasers whose entire captured text was "Read more...". Every record has a
 `url`, so clicking the title reads the real solicitation rather than a
 truncated copy of its opening.
 
-Dropping it from the export took `web/opportunities.json` from 2.56 MB to
-1.40 MB, a **46%** cut in what every visitor downloads, for one collapsed
-element. Nothing else in the browser read it and the dashboard never searched
-it. The chat proxy is unaffected: it builds its system message from the full
-synopsis in the database, not from the export, so its answers stay richer than
-anything the card ever showed.
+Dropping it cut what every visitor downloaded by **46%**, for one collapsed
+element. The synopsis is still searchable (`/api/opportunities` matches it in
+SQL) and still feeds the chat proxy, which builds its system message from the
+full text in the database, so its answers stay richer than anything the card
+ever showed.
 
 The model returns `null` for `summary` when the captured text is too thin to
 describe the call, and the card then shows nothing. That guard is there
@@ -267,13 +267,15 @@ are not parties — needed enforcing in code, not just in a comment.
 
 Neither is stored. `assessments` holds no address of any kind — only
 `match_name` and the other `match_*` fields. Contact details are joined on at
-**export time**: `pipeline.contact_index()` builds a lookup from the roster
-plus `ncsa_staff.yaml`, and `export_json` attaches the matching record to each
-opportunity as `contact`, which is what the dashboard and the digests render.
+**read time**: `pipeline.contact_index()` builds a lookup from the roster plus
+`ncsa_staff.yaml`, and `pipeline.catalogue_rows` attaches the matching record
+to each opportunity as `contact`, which is what the dashboard, MCP and the
+digests render.
 
-The useful consequence: fixing an address in `config/roster.yaml` and re-running
-`python run.py export` corrects every affected card at once. No re-assessment,
-no model call.
+The useful consequence: fixing an address in `config/roster.yaml` corrects
+every affected card on the next request. The server re-reads its config when a
+file's modification time changes, so a ConfigMap update needs no restart, no
+re-assessment and no model call.
 
 The fragile part is the join key, which is the name the *model* returned. It
 shortens: "Praveen Kumar" for the party `Praveen Kumar (PI, Civil and
@@ -403,6 +405,52 @@ must be unreachable except through the proxy. Writes are attributed to the
 username, which is what makes weighting feedback by reviewer possible later.
 `GRANT_SIFT_AUTH=oidc` fails loudly rather than pretending.
 
+## MCP
+
+`/mcp` exposes the dashboard to an assistant (Claude Code, Claude Desktop).
+Every tool is a REST endpoint the dashboard itself calls - search, filters
+and "via me" included - so the page and an assistant cannot disagree.
+
+| Read | Write (stamped with your username) |
+|---|---|
+| `whoami`, `search_opportunities`, `get_catalogue`, `get_opportunity`, `my_opportunities` | `add_feedback` |
+| `list_sources`, `list_roster`, `preview_feed` | `add_source`, `retire_source` |
+| `get_subscriptions`, `get_stats` | `add_roster_entry`, `retire_roster_entry`, `set_subscriptions` |
+
+Search is fuzzy on names, titles, funders and people (a typo still finds
+them, via rapidfuzz) and exact on prose: rationale, summary and the captured
+synopsis. Chat, idea match and
+rescore are not exposed: each spends the viewer's own Lumen key, which would
+have to pass through the model as a tool argument, and the assistant is already
+a model that can read `get_opportunity` itself.
+
+`my_opportunities` is the reason identity matters: calls from sources *you*
+added, calls matched to collaborators *you* are the NCSA contact for, and calls
+in the digests *you* subscribe to.
+
+Auth is the section above, unchanged. An MCP client cannot follow a cookie
+login, so it reads `/.well-known/oauth-protected-resource`, logs in to the
+Keycloak realm named there as the public client `grant-sift-mcp`, and sends
+the access token as `Authorization: Bearer`. oauth2-proxy validates it and sets
+the same identity headers a browser session gets, and the tools go through the
+same `auth.require_user` as the REST endpoints. Keycloak setup is in
+[helm/grant-sift/README.md](helm/grant-sift/README.md#2b-keycloak-client-for-mcp-mcp).
+
+```bash
+GRANT_SIFT_PUBLIC_URL=https://grant-sift.example.com   # names the resource; allowed Host
+GRANT_SIFT_OIDC_ISSUER=https://keycloak…/realms/NCSA   # set by the chart from keycloak.*
+```
+
+There is no anonymous mode. With `GRANT_SIFT_AUTH` anything but `proxy`,
+`/mcp` answers 503 to everything, `initialize` included, rather than falling
+back to "anonymous" the way the dashboard does. Every MCP caller is a signed-in
+Keycloak user.
+
+```bash
+claude mcp add --transport http grant-sift https://grant-sift.software-dev.ncsa.illinois.edu/mcp \
+  --client-id grant-sift-mcp --callback-port 33418
+```
+
 ## Chat (“Ask about this call”)
 
 Each ask is a proxied Lumen `/chat/completions` call with the viewer’s own key
@@ -456,7 +504,7 @@ finishes, the panel opens with the hits and automatically generates a
 recommendation. Editing the idea and leaving the field re-ranks the kept calls
 without another full catalogue search.
 
-Closed calls are excluded from both prompts and from `web/opportunities.json`
+Closed calls are excluded from both prompts and from the catalogue
 (`db.LIVE`). Affinity is **fit to this idea**, not the group’s relevance score,
 and the two are never averaged.
 
