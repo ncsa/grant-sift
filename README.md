@@ -403,6 +403,49 @@ must be unreachable except through the proxy. Writes are attributed to the
 username, which is what makes weighting feedback by reviewer possible later.
 `GRANT_SIFT_AUTH=oidc` fails loudly rather than pretending.
 
+## MCP
+
+`/mcp` exposes the dashboard to an assistant (Claude Code, Claude Desktop).
+
+| Read | Write (stamped with your username) |
+|---|---|
+| `whoami`, `search_opportunities`, `get_opportunity`, `my_opportunities` | `add_feedback` |
+| `list_sources`, `list_roster`, `preview_feed` | `add_source`, `retire_source` |
+| `get_subscriptions`, `get_stats` | `add_roster_entry`, `retire_roster_entry`, `set_subscriptions` |
+
+Every write tool calls the dashboard's own handler, so validation, rate limits,
+URL deduplication and the SSRF check are the same code. Chat, idea match and
+rescore are not exposed: each spends the viewer's own Lumen key, which would
+have to pass through the model as a tool argument, and the assistant is already
+a model that can read `get_opportunity` itself.
+
+`my_opportunities` is the reason identity matters: calls from sources *you*
+added, calls matched to collaborators *you* are the NCSA contact for, and calls
+in the digests *you* subscribe to.
+
+Auth is the section above, unchanged. An MCP client cannot follow a cookie
+login, so it reads `/.well-known/oauth-protected-resource`, logs in to the
+Keycloak realm named there as the public client `grant-sift-mcp`, and sends
+the access token as `Authorization: Bearer`. oauth2-proxy validates it and sets
+the same identity headers a browser session gets, and the tools go through the
+same `auth.require_user` as the REST endpoints. Keycloak setup is in
+[helm/grant-sift/README.md](helm/grant-sift/README.md#2b-keycloak-client-for-mcp-mcp).
+
+```bash
+GRANT_SIFT_PUBLIC_URL=https://grant-sift.example.com   # names the resource; allowed Host
+GRANT_SIFT_OIDC_ISSUER=https://keycloak…/realms/NCSA   # set by the chart from keycloak.*
+```
+
+There is no anonymous mode. With `GRANT_SIFT_AUTH` anything but `proxy`,
+`/mcp` answers 503 to everything, `initialize` included, rather than falling
+back to "anonymous" the way the dashboard does. Every MCP caller is a signed-in
+Keycloak user.
+
+```bash
+claude mcp add --transport http grant-sift https://grant-sift.software-dev.ncsa.illinois.edu/mcp \
+  --client-id grant-sift-mcp --callback-port 33418
+```
+
 ## Chat (“Ask about this call”)
 
 Each ask is a proxied Lumen `/chat/completions` call with the viewer’s own key

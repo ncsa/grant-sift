@@ -23,7 +23,8 @@ does hold, and it would be dishonest to call this nothing:
     Never a request body, so never a message or a key. Silence them with
     GRANT_SIFT_ACCESS_LOG=off.
   - the rate limiter's in-memory counters, keyed by a salted hash of the
-    client address rather than the address itself, and lost on restart.
+    signed-in username (the client address when auth is off) rather than the
+    name itself, and lost on restart.
 """
 
 import hashlib
@@ -44,7 +45,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import adapters, auth, db, pipeline, telemetry
+from . import adapters, auth, db, mcp_server, pipeline, telemetry
 
 DB_PATH = os.environ.get("GRANT_SIFT_DB", "grant-sift.db")
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -144,7 +145,9 @@ async def lifespan(app: FastAPI):
     grant_sift.server:app`) still gets a database with tables in it.
     """
     db.init(DB_PATH)
-    yield
+    # The MCP transport's task group; /mcp answers 500 without it.
+    async with mcp_server.session_manager().run():
+        yield
 
 
 app = FastAPI(title="Grant Sift", docs_url=None, redoc_url=None,
@@ -176,9 +179,19 @@ _SALT = secrets.token_bytes(16)
 
 
 def _client(request: Request) -> str:
-    """A stable per-process pseudonym for the caller, not their address."""
-    host = request.client.host if request.client else "unknown"
-    return hashlib.blake2b(_SALT + host.encode(), digest_size=8).hexdigest()
+    """A stable per-process pseudonym for the caller.
+
+    The signed-in username when there is one. Behind oauth2-proxy the peer
+    address is the proxy's for every request, so keying on it gave the whole
+    group one shared budget: ten roster adds an hour between everyone, and an
+    MCP client's calls spent the dashboard's. The address is the fallback
+    only with auth off, where there is no username to key on. Every caller
+    has already passed require_user, so principal() does not raise here.
+    """
+    p = auth.principal(request)
+    who = f"user:{p.username}" if p.authenticated else (
+        "addr:" + (request.client.host if request.client else "unknown"))
+    return hashlib.blake2b(_SALT + who.encode(), digest_size=8).hexdigest()
 
 
 def _conn():
@@ -1460,6 +1473,11 @@ def opportunities_json():
         media_type="application/json",
         headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
     )
+
+
+# Read-only MCP tools at /mcp, plus the metadata that tells an MCP client
+# where to log in. Before the static mount, which would otherwise swallow them.
+app.router.routes.extend(mcp_server.routes)
 
 
 # Mounted last: it serves "/" so it must not shadow the /api routes above.

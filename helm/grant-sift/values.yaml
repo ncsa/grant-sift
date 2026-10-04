@@ -105,6 +105,9 @@ config:
   GRANT_SIFT_AUTH_NAME_HEADER: x-forwarded-preferred-username
   GRANT_SIFT_AUTH_GROUPS_HEADER: x-forwarded-groups
   GRANT_SIFT_AUTH_REQUIRED_GROUP: ""
+  # Public origin, e.g. https://grant-sift.example.com. Names the /mcp resource
+  # in its OAuth metadata and is the Host the MCP endpoint accepts.
+  GRANT_SIFT_PUBLIC_URL: ""
   GRANT_SIFT_CHAT_ALLOWED_HOSTS: "lumen.ncsa.illinois.edu,api.openai.com,api.groq.com,openrouter.ai,generativelanguage.googleapis.com,api.fireworks.ai,api.together.xyz,api.deepseek.com,api.mistral.ai,api.anthropic.com,.openai.azure.com"
   GRANT_SIFT_ACCESS_LOG: "on"
   GRANT_SIFT_DAILY_LIMIT: "400"
@@ -180,6 +183,17 @@ oauth2-proxy:
       oidc_email_claim = "email"
       oidc_groups_claim = "groups"
       user_id_claim = "preferred_username"
+      # MCP clients (Claude Code, Claude Desktop) cannot follow a cookie login.
+      # They log in to Keycloak themselves, as the public client grant-sift-mcp,
+      # and send the access token as "Authorization: Bearer". This accepts a
+      # valid one and sets the same X-Forwarded-* headers a browser session
+      # gets. The token's aud must include this proxy's client id: add an
+      # Audience mapper to grant-sift-mcp (helm/grant-sift/README.md).
+      skip_jwt_bearer_tokens = true
+      # 401 instead of a 302 to the login page, which an MCP client cannot use.
+      api_routes = [ "^/mcp" ]
+      # Where the client learns which realm to log in against; it has no token yet.
+      skip_auth_routes = [ "GET=^/[.]well-known/oauth-protected-resource" ]
   # Set issuer via keycloak.url + keycloak.realm (ConfigMap → env). Client id/secret
   # come from existingSecret.
   extraArgs:

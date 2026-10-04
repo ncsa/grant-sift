@@ -63,6 +63,15 @@ spec:
                 secretKeyRef:
                   name: {{ include "grant-sift.secretName" . }}
                   key: {{ .Values.secrets.existingSecretKey }}
+            # The realm MCP clients log in against, named in
+            # /.well-known/oauth-protected-resource. Optional so a release
+            # without Keycloak still starts; /mcp then has no login to offer.
+            - name: GRANT_SIFT_OIDC_ISSUER
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "grant-sift.fullname" . }}-keycloak
+                  key: issuer-url
+                  optional: true
           # /api/health touches no disk, so a slow answer means the process
           # is genuinely wedged, not that the volume is busy. timeoutSeconds
           # is set explicitly all the same: the k8s default is 1s, and leaving

@@ -79,6 +79,43 @@ keycloak:
 
 The chart builds `{{url}}/realms/{{realm}}` into ConfigMap `grant-sift-keycloak` and injects it as `OAUTH2_PROXY_OIDC_ISSUER_URL`.
 
+### 2b. Keycloak client for MCP (`/mcp`)
+
+MCP clients (Claude Code, Claude Desktop) log in to Keycloak themselves and send
+the access token to `/mcp` as `Authorization: Bearer`; oauth2-proxy accepts it
+(`skip_jwt_bearer_tokens`) and passes the same identity headers a browser gets.
+They need their own **public** client, because a desktop app cannot keep a secret.
+
+| Field | Value |
+|---|---|
+| Client ID | `grant-sift-mcp` |
+| Client authentication | **Off** (public) |
+| Standard flow | On; everything else off |
+| PKCE method (Advanced) | `S256` |
+| Valid redirect URIs | `http://localhost:33418/callback` (the port users pass as `--callback-port`) |
+| Access token lifespan (Advanced) | 5–15 min |
+
+Then, on that client:
+
+- **Audience mapper** (Client scopes → `grant-sift-mcp-dedicated` → Add mapper →
+  By configuration → Audience): *Included Client Audience* = `grant-sift`, the
+  oauth2-proxy client. Without it the token's `aud` does not name the proxy and
+  every request is a 401.
+- **Groups**, only if `GRANT_SIFT_AUTH_REQUIRED_GROUP` is set: a Group Membership
+  mapper, claim `groups`, full path off, *Add to access token* on.
+- **`offline_access`** as an optional client scope, so a login lasts weeks
+  (Offline Session Idle) instead of the browser SSO session's hours.
+
+Each user adds the server once, and logs in through the browser on first use:
+
+```bash
+claude mcp add --transport http grant-sift https://grant-sift.software-dev.ncsa.illinois.edu/mcp \
+  --client-id grant-sift-mcp --callback-port 33418
+```
+
+Check the proxy end with a token in hand: `curl -H "Authorization: Bearer $TOKEN"
+https://…/api/whoami` should show your username, not `anonymous`.
+
 ### 3. Namespace, secrets, roster
 
 ```bash

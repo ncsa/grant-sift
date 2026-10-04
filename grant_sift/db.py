@@ -694,6 +694,9 @@ def add_roster_entry(conn, entry: dict, created_by=None) -> int:
          entry.get("years"), entry.get("our_role"), entry.get("funders"),
          entry.get("status") or "cold", entry.get("notes"), created_by, now()),
     )
+    # Without this the insert is rolled back when the caller closes the
+    # connection, after the API has already answered ok with the new id.
+    conn.commit()
     return int(conn.execute("SELECT last_insert_rowid()").fetchone()[0])
 
 
