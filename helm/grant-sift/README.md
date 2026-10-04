@@ -29,7 +29,7 @@ Grafana setup details: **[GRAFANA.md](./GRAFANA.md)**.
 | Storage | **nfs-taiga** (RWX) |
 | DNS | `*.software-dev.ncsa.illinois.edu` |
 | Keycloak | [keycloak.software-dev…](https://keycloak.software-dev.ncsa.illinois.edu/) — set `keycloak.realm` (default **NCSA**) |
-| Image | **public** `ghcr.io/longshuicy/grant-sift:main` |
+| Image | **public** `ghcr.io/ncsa/grant-sift:main` |
 
 Traffic path:
 
@@ -50,7 +50,7 @@ kubectl config use-context software-dev
 ### 1. Image (public)
 
 ```bash
-docker pull ghcr.io/longshuicy/grant-sift:main
+docker pull ghcr.io/ncsa/grant-sift:main
 ```
 
 CI tags on merge to `main`: `:main`, `:sha-<short>`. Releases add semver + `:latest`. No pull secret needed.

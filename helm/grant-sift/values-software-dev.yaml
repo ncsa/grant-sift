@@ -11,7 +11,7 @@
 # Pair with a local values-secrets.yaml (gitignored). See README.md.
 
 image:
-  repository: ghcr.io/longshuicy/grant-sift
+  repository: ghcr.io/ncsa/grant-sift
   tag: main
   pullPolicy: Always
 
