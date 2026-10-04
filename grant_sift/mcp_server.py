@@ -1,12 +1,11 @@
-"""MCP endpoint at /mcp: the dashboard, for an assistant.
+"""MCP endpoint at /mcp: the dashboard's REST API, for an assistant.
 
-Reads are written here, shaped for a model (filters, limits, one call in full).
-WRITES ARE NOT. Feedback, roster and source additions, retirements and
-subscriptions each call the dashboard's own handler in server.py with the
-tool call's HTTP request, so validation, rate limits, URL deduplication, the
-SSRF check and created_by attribution are the same code, not a second copy
-that drifts. A write from Claude is stamped with the signed-in username
-exactly like a click.
+EVERY TOOL IS A REST ENDPOINT. Each one calls a handler in server.py with the
+tool call's own HTTP request, so search, filters, "via me", validation, rate
+limits, URL deduplication, the SSRF check and created_by attribution are the
+code the dashboard runs, not a second copy that drifts. This file only names
+the tools, describes them for a model, and trims what a model need not read.
+A write from Claude is stamped with the signed-in username exactly like a click.
 
 Not exposed: chat, focus, rescore and models. Each spends the viewer's own
 Lumen key, which would have to travel as a tool argument - through the
@@ -31,9 +30,7 @@ Identity decides attribution on writes, and "mine" on reads: the calls from
 sources I added, the calls matched to collaborators I am the contact for.
 """
 
-import json
 import os
-from datetime import date
 from urllib.parse import urlparse
 
 from fastapi import HTTPException
@@ -45,9 +42,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from . import auth, db, pipeline
-
-DB_PATH = os.environ.get("GRANT_SIFT_DB", "grant-sift.db")
+from . import auth
 
 # Where clients reach this app, e.g. https://grant-sift.software-dev.ncsa.illinois.edu.
 # Names the resource in the protected-resource metadata, and its host is added
@@ -75,9 +70,9 @@ mcp = MCPServer(
     instructions=(
         "Grant Sift tracks open funding calls and scores each for research "
         "software engineering relevance (0-100) against a roster of past "
-        "collaborators. Use search_opportunities to find calls, "
-        "get_opportunity for one call's full record, and my_opportunities for "
-        "calls tied to the signed-in person. A roster match of kind 'contact' "
+        "collaborators. Use search_opportunities to find calls (fuzzy on names "
+        "and titles), get_opportunity for one call's full record, and "
+        "my_opportunities for calls tied to the signed-in person. A roster match of kind 'contact' "
         "is an outreach lead, NOT a past collaboration: never describe it as "
         "one. Writes (feedback, roster, sources, subscriptions) are stamped "
         "with the signed-in username and shape every later score or digest: "
@@ -89,10 +84,6 @@ mcp = MCPServer(
 # ---------------------------------------------------------------------------
 # Plumbing
 # ---------------------------------------------------------------------------
-
-def _conn():
-    return db.connect(DB_PATH)
-
 
 def _principal(ctx: Context) -> auth.Principal:
     """The same gate the REST endpoints use, applied to the HTTP request that
@@ -112,80 +103,30 @@ def _principal(ctx: Context) -> auth.Principal:
     return p
 
 
-def _rest(ctx: Context, handler: str, *args):
-    """Run a dashboard handler from server.py on this tool call's request.
+def _rest(ctx: Context, handler: str, *args, **kwargs):
+    """Run a REST handler from server.py on this tool call's request.
 
     Imported here, not at the top: server.py imports this module to mount it.
     """
     _principal(ctx)
     from . import server
     try:
-        return getattr(server, handler)(ctx.request_context.request, *args)
+        return getattr(server, handler)(ctx.request_context.request, *args, **kwargs)
     except HTTPException as exc:
         raise ToolError(f"{exc.status_code}: {exc.detail}") from exc
 
 
-def _limit(n: int) -> int:
-    return max(1, min(int(n or 25), MAX_LIMIT))
+# A list row carries its subscores, extracted facts and contact block, which
+# is a lot of tokens times 25. A model choosing between calls needs these;
+# get_opportunity has the rest.
+_BRIEF = ("id", "title", "funder", "deadline", "award_ceiling", "score",
+          "category", "summary", "match_name", "match_kind", "human",
+          "relevance", "url")
 
 
-_ROSTER = None
-
-
-def _roster():
-    """Normalised roster, once per process; a missing file degrades to no
-    contact details rather than failing every tool call."""
-    global _ROSTER
-    if _ROSTER is None:
-        try:
-            _ROSTER = pipeline.load_config()[1]
-        except Exception:  # noqa: BLE001
-            _ROSTER = []
-    return _ROSTER
-
-
-_CONTACTS = None
-
-
-def _contacts():
-    global _CONTACTS
-    if _CONTACTS is None:
-        _CONTACTS = pipeline.contact_index(_roster())
-    return _CONTACTS
-
-
-def _loads(blob):
-    try:
-        v = json.loads(blob) if blob else None
-    except (TypeError, ValueError):
-        return None
-    return v if isinstance(v, dict) else None
-
-
-_SUMMARY_COLS = """o.id, o.source, o.title, o.agency, o.url, o.deadline,
-                   o.award_ceiling, a.score, a.category, a.summary,
-                   a.match_name, a.match_kind"""
-
-
-def _summary_row(r, verdicts) -> dict:
-    """One line's worth of a call: enough to choose, not enough to read."""
-    out = {k: r[k] for k in ("id", "title", "agency", "source", "deadline",
-                             "award_ceiling", "score", "category", "summary",
-                             "match_name", "match_kind", "url")}
-    v = verdicts.get(r["id"])
-    if v:
-        out["human_verdict"] = v["verdict"]
-    return out
-
-
-def _live_rows(conn, where: str = "", params: tuple = ()):
-    return conn.execute(
-        f"""SELECT {_SUMMARY_COLS}
-            FROM opportunities o JOIN assessments a ON a.opportunity_id = o.id
-            WHERE {db.LIVE} {('AND ' + where) if where else ''}
-            ORDER BY a.score DESC, (o.deadline IS NULL), o.deadline ASC""",
-        params,
-    ).fetchall()
+def _brief(page: dict) -> dict:
+    return {k: page[k] for k in ("total", "of", "page", "pages", "sort")} | {
+        "opportunities": [{k: o.get(k) for k in _BRIEF} for o in page["opportunities"]]}
 
 
 # ---------------------------------------------------------------------------
@@ -195,214 +136,96 @@ def _live_rows(conn, where: str = "", params: tuple = ()):
 @mcp.tool(annotations=_READ)
 def whoami(ctx: Context) -> dict:
     """Who this server thinks you are, and whether sign-in is enforced."""
-    p = _principal(ctx)
-    return auth.status() | {"username": p.label, "email": p.email or None,
-                            "groups": p.groups}
+    return _rest(ctx, "whoami")
 
 
 @mcp.tool(annotations=_READ)
 def search_opportunities(
     ctx: Context,
     query: str = "",
-    category: str | None = None,
-    source: str | None = None,
+    filters: list[str] | None = None,
+    category: str = "",
+    source: str = "",
+    funder: str = "",
+    area: str = "",
     min_score: int = 0,
-    closing_within_days: int | None = None,
-    roster_match_only: bool = False,
-    limit: int = 25,
+    deadline_from: str = "",
+    deadline_to: str = "",
+    sort: str = "",
+    page: int = 1,
+    page_size: int = 25,
 ) -> dict:
-    """Search open funding calls, best score first.
+    """Search open funding calls - the same search as the dashboard.
 
-    query matches title, funder, generated summary and captured synopsis
-    (case-insensitive substring; several words must all appear). category is
-    one of the pipeline's categories, e.g. ci_program, embedded_software,
-    domain_subaward. source is a source name such as grants.gov, nsf or a
-    foundation's name. Calls a person has marked "not for us" carry
-    human_verdict "down".
+    query: every word must match. Names, titles, funders and people match
+    fuzzily (a typo still finds them); rationale, summary and the captured
+    synopsis match exactly. filters (all must hold): soon (closes within 30
+    days), match (has a roster match), embedded, ci, foundation, and the
+    personal ones via-me, my-sources, my-digests. category e.g. ci_program,
+    embedded_software, domain_subaward. funder is the family name shown on
+    results (NIH, NSF, Defense, ...); area is a roster research area.
+    deadline_from/to are ISO dates. sort: relevance (default with a query),
+    score (default otherwise), deadline, award-desc, award-asc, new.
+    get_catalogue lists the funders, areas and their counts.
     """
-    _principal(ctx)
-    where, params = ["a.score >= ?"], [int(min_score or 0)]
-    for word in (query or "").split():
-        where.append("(o.title LIKE ? OR o.agency LIKE ? OR a.summary LIKE ? "
-                     "OR o.synopsis LIKE ?)")
-        params += [f"%{word}%"] * 4
-    if category:
-        where.append("a.category = ?")
-        params.append(category.strip())
-    if source:
-        where.append("o.source = ? COLLATE NOCASE")
-        params.append(source.strip())
-    if closing_within_days is not None:
-        where.append("o.deadline IS NOT NULL AND o.deadline <= date('now', ?)")
-        params.append(f"+{int(closing_within_days)} days")
-    if roster_match_only:
-        where.append("a.match_name IS NOT NULL AND a.match_name != ''")
-    conn = _conn()
-    try:
-        rows = _live_rows(conn, " AND ".join(where), tuple(params))
-        verdicts = db.human_verdicts(conn)
-    finally:
-        conn.close()
-    n = _limit(limit)
-    return {"total": len(rows), "returned": min(n, len(rows)),
-            "opportunities": [_summary_row(r, verdicts) for r in rows[:n]]}
+    return _brief(_rest(
+        ctx, "list_opportunities", q=query, filters=",".join(filters or []),
+        category=category, source=source, funder=funder, area=area,
+        min_score=min_score, deadline_from=deadline_from,
+        deadline_to=deadline_to, sort=sort, page=page,
+        page_size=min(max(1, page_size), 50)))
+
+
+@mcp.tool(annotations=_READ)
+def get_catalogue(ctx: Context) -> dict:
+    """The catalogue at a glance: open, closing-soon and matched counts, every
+    funder family and research area with its count, the deadline range, and
+    sources that have stopped updating (the list may be incomplete)."""
+    return _rest(ctx, "catalogue_facets")
 
 
 @mcp.tool(annotations=_READ)
 def get_opportunity(ctx: Context, opportunity_id: str) -> dict:
-    """One call in full: the assessment, its subscores and extracted facts,
-    the closest roster match with how to reach them, recorded feedback, and
-    the synopsis as captured (not a fresh fetch of the funder's page)."""
-    _principal(ctx)
-    conn = _conn()
-    try:
-        r = conn.execute(
-            """SELECT o.id, o.source, o.title, o.agency, o.url, o.deadline,
-                      o.award_ceiling, o.indirect_cap, o.first_seen, o.synopsis,
-                      a.score, a.category, a.rationale, a.summary, a.axes_json,
-                      a.facts_json, a.match_name, a.match_kind, a.match_domain,
-                      a.match_project, a.match_status, a.match_rationale
-               FROM opportunities o
-               LEFT JOIN assessments a ON a.opportunity_id = o.id
-               WHERE o.id = ?""",
-            (opportunity_id.strip(),),
-        ).fetchone()
-        if r is None:
-            raise ToolError(f"unknown opportunity_id {opportunity_id!r}")
-        feedback = [dict(f) for f in conn.execute(
-            """SELECT verdict, aspect, note, created_by, created_at FROM feedback
-               WHERE opportunity_id = ? ORDER BY created_at DESC LIMIT 20""",
-            (r["id"],))]
-    finally:
-        conn.close()
-    out = {k: r[k] for k in r.keys() if k not in ("axes_json", "facts_json", "synopsis")}
-    out["axes"] = _loads(r["axes_json"])
-    out["facts"] = _loads(r["facts_json"])
-    out["contact"] = _contacts().get((r["match_name"] or "").strip().lower())
-    out["feedback"] = feedback
-    out["synopsis"] = (r["synopsis"] or "")[:SYNOPSIS_CHARS]
-    return out
+    """One open call in full: the assessment, its subscores and extracted
+    facts, the closest roster match with how to reach them, recorded
+    feedback, and the synopsis as captured (not a fresh fetch)."""
+    return _rest(ctx, "get_opportunity", opportunity_id.strip())
 
 
-def _mine_by_sources(conn, p: auth.Principal):
-    names = [s["name"] for s in db.source_additions(conn)
-             if s.get("created_by") == p.label]
-    if not names:
-        return names, []
-    marks = ",".join("?" * len(names))
-    return names, _live_rows(conn, f"o.source IN ({marks})", tuple(names))
-
-
-def _is_me(person: dict, p: auth.Principal) -> bool:
-    email = (person.get("email") or "").strip().lower()
-    if not email:
-        return False
-    if p.email and email == p.email.lower():
-        return True
-    # Keycloak usernames here are NetIDs, and staff addresses are NetID@illinois.edu.
-    return email.split("@")[0] == p.username.lower()
-
-
-def _mine_by_contacts(conn, p: auth.Principal):
-    mine = {name for name, c in _contacts().items()
-            if any(_is_me(x, p) for x in c.get("ncsa_contact") or [])}
-    rows = [r for r in _live_rows(conn, "a.match_name IS NOT NULL")
-            if (r["match_name"] or "").strip().lower() in mine]
-    return sorted({r["match_name"] for r in rows}), rows
-
-
-def _mine_by_subscriptions(conn, p: auth.Principal):
-    email = (p.email or p.username).strip().lower()
-    if "@" not in email:
-        email += "@illinois.edu"
-    feeds = db.list_feeds_for_email(conn, email)
-    tests = [pipeline.FEEDS[f] for f in feeds if f in pipeline.FEEDS]
-    rows = [r for r in _live_rows(conn) if any(t(r) for t in tests)]
-    return feeds, rows
-
-
-_SCOPES = {
-    "sources": _mine_by_sources,
-    "contacts": _mine_by_contacts,
-    "subscriptions": _mine_by_subscriptions,
-}
+_SCOPES = {"contacts": "via-me", "sources": "my-sources", "subscriptions": "my-digests"}
 
 
 @mcp.tool(annotations=_READ)
-def my_opportunities(ctx: Context, scope: str = "all", limit: int = 25) -> dict:
+def my_opportunities(ctx: Context, scope: str = "all", page_size: int = 25) -> dict:
     """Open calls tied to you, the signed-in person.
 
     scope:
-      sources        calls from funder pages or feeds you added in the dashboard
-      contacts       calls matched to a collaborator you are the NCSA contact for
-      subscriptions  calls in the email digests you subscribe to
+      contacts       matched to a collaborator you are the NCSA contact for
+      sources        from funder pages or feeds you added in the dashboard
+      subscriptions  in the email digests you subscribe to
       all            each of the above, separately
 
-    Down-voted calls are left out.
+    The same filters as the dashboard's chips (via-me, my-sources, my-digests).
     """
-    p = _principal(ctx)
     wanted = list(_SCOPES) if scope == "all" else [scope]
-    unknown = [s for s in wanted if s not in _SCOPES]
-    if unknown:
+    if any(s not in _SCOPES for s in wanted):
         raise ToolError(f"scope must be one of {', '.join(_SCOPES)} or all")
-    n = _limit(limit)
-    conn = _conn()
-    try:
-        verdicts = db.human_verdicts(conn)
-        out = {"username": p.label}
-        for s in wanted:
-            via, rows = _SCOPES[s](conn, p)
-            rows = [r for r in rows if not pipeline._suppressed(r, verdicts)]
-            out[s] = {"via": via, "total": len(rows),
-                      "opportunities": [_summary_row(r, verdicts) for r in rows[:n]]}
-    finally:
-        conn.close()
-    return out
+    return {s: _brief(_rest(ctx, "list_opportunities", filters=_SCOPES[s],
+                            page_size=min(max(1, page_size), 50)))
+            for s in wanted}
 
 
 @mcp.tool(annotations=_READ)
 def list_sources(ctx: Context, added_by: str | None = None, stale_only: bool = False) -> dict:
     """Funder pages, feeds and APIs Grant Sift reads, with each one's health.
-    Dashboard additions carry the id retire_source takes.
-
-    added_by filters to sources a given username added in the dashboard.
-    stale_only keeps the ones that have stopped yielding, which is the failure
-    this list exists to catch.
-    """
-    _principal(ctx)
-    try:
-        cfg = pipeline.load_config()[0]
-    except Exception:  # noqa: BLE001
-        cfg = {}
-    conn = _conn()
-    try:
-        runs = {r["name"]: dict(r) for r in conn.execute(
-            "SELECT name, last_success, last_yield, last_error FROM sources")}
-        stale = {s["name"] for s in db.stale_sources(conn)}
-        additions = db.source_additions(conn)
-    finally:
-        conn.close()
-    out = []
-
-    def add(name, kind, url, origin, by=None, sid=None):
-        r = runs.get(name, {})
-        out.append({"id": sid, "name": name, "kind": kind, "url": url, "origin": origin,
-                    "added_by": by, "stale": name in stale,
-                    "last_success": r.get("last_success"),
-                    "last_yield": r.get("last_yield"),
-                    "last_error": r.get("last_error")})
-
-    if not added_by:
-        for f in cfg.get("feeds") or []:
-            add(f["name"], "feed", f.get("url"), "file")
-        for f in cfg.get("foundations") or []:
-            add(f["name"], "page", f.get("url"), "file")
-    for a in additions:
-        if not added_by or a.get("created_by") == added_by:
-            add(a["name"], a["kind"], a["url"], "dashboard", a.get("created_by"), a["id"])
-    if stale_only:
-        out = [s for s in out if s["stale"]]
-    return {"count": len(out), "sources": out}
+    added_by keeps the ones a given username added in the dashboard (those
+    carry the id retire_source takes); stale_only keeps the ones that have
+    stopped yielding, which is the failure this list exists to catch."""
+    out = _rest(ctx, "sources_list")
+    keep = [s for s in out["sources"]
+            if (not added_by or s.get("created_by") == added_by)
+            and (not stale_only or s["stale"])]
+    return {"count": len(keep), "sources": keep}
 
 
 @mcp.tool(annotations=_READ)
@@ -411,25 +234,7 @@ def preview_feed(ctx: Context, feed: str, since_days: int = 7, limit: int = 25) 
     since_days that pass the feed's rule, ignoring what has already been
     emailed. Feeds: closing-soon, roster-match, ci-programs, embedded,
     foundations."""
-    _principal(ctx)
-    if feed not in pipeline.FEEDS:
-        raise ToolError(f"feed must be one of {', '.join(pipeline.FEEDS)}")
-    conn = _conn()
-    try:
-        items = pipeline.build_digest(
-            conn, feed, since_days=max(1, min(int(since_days), 90)),
-            respect_sent_log=False, roster=_roster())
-    finally:
-        conn.close()
-    # build_digest only looks at first_seen; a digest run is days fresh, but a
-    # preview over a long window would otherwise list calls already closed.
-    today = date.today().isoformat()
-    items = [i for i in items if not i.get("deadline") or i["deadline"] >= today]
-    keep = ("id", "title", "agency", "source", "deadline", "score", "category",
-            "match_name", "match_kind", "url")
-    return {"feed": feed, "label": pipeline.FEED_LABELS.get(feed, feed),
-            "count": len(items),
-            "items": [{k: i.get(k) for k in keep} for i in items[:_limit(limit)]]}
+    return _rest(ctx, "preview_feed", feed, since_days=since_days, limit=limit)
 
 
 @mcp.tool(annotations=_READ)

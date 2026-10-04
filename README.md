@@ -88,7 +88,8 @@ flowchart TD
     R3["config/ncsa_staff.yaml<br/>our addresses"] --> R1
     P["Projects/<br/>proposals, gitignored"] -.->|"build_roster.py"| R1
     AS --> S
-    S --> J["web/opportunities.json"] --> D["dashboard"]
+    S --> J["/api/opportunities<br/>search, filters, paging<br/>(catalogue.py)"] --> D["dashboard"]
+    J --> M["MCP tools at /mcp"]
     R1 -.->|"who to email, and via whom"| J
     S --> G["five email digests"]
     D --> F["FEEDBACK<br/>what was wrong:<br/>score, category or match"]
@@ -98,8 +99,9 @@ flowchart TD
 
 Two properties worth preserving:
 
-**The model runs offline, never in a request path.** The dashboard reads a
-static file, so nothing user-facing depends on the gateway being up. The chat
+**The model runs offline, never in a request path.** The dashboard reads
+scores already in the database, so nothing user-facing depends on the gateway
+being up. The chat
 proxy and Idea match (`/api/focus`, `/api/rescore`) are the exceptions: both
 run on the viewer’s own key and degrade to a disabled control without one.
 
@@ -406,15 +408,18 @@ username, which is what makes weighting feedback by reviewer possible later.
 ## MCP
 
 `/mcp` exposes the dashboard to an assistant (Claude Code, Claude Desktop).
+Every tool is a REST endpoint the dashboard itself calls - search, filters
+and "via me" included - so the page and an assistant cannot disagree.
 
 | Read | Write (stamped with your username) |
 |---|---|
-| `whoami`, `search_opportunities`, `get_opportunity`, `my_opportunities` | `add_feedback` |
+| `whoami`, `search_opportunities`, `get_catalogue`, `get_opportunity`, `my_opportunities` | `add_feedback` |
 | `list_sources`, `list_roster`, `preview_feed` | `add_source`, `retire_source` |
 | `get_subscriptions`, `get_stats` | `add_roster_entry`, `retire_roster_entry`, `set_subscriptions` |
 
-Every write tool calls the dashboard's own handler, so validation, rate limits,
-URL deduplication and the SSRF check are the same code. Chat, idea match and
+Search is fuzzy on names, titles, funders and people (a typo still finds
+them, via rapidfuzz) and exact on prose: rationale, summary and the captured
+synopsis. Chat, idea match and
 rescore are not exposed: each spends the viewer's own Lumen key, which would
 have to pass through the model as a tool argument, and the assistant is already
 a model that can read `get_opportunity` itself.

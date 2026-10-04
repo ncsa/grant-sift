@@ -251,7 +251,7 @@ over 20h old, so a restart past the scheduled minute does not skip a day.
 in-app schedule — not a separate CronJob). Grafana reads those rows via
 `/api/stats`. Details: [GRAFANA.md](./GRAFANA.md).
 
-`run.py daily` exports to `web/opportunities.json`, which the entrypoint has symlinked to `/data/opportunities.json`. The running pod serves that file directly (no rebuild, no separate JSON mount). Refresh the browser after a run to see updates (`Cache-Control: no-cache`).
+The dashboard queries the database live (`/api/opportunities`), so a nightly run shows up on the next search or reload. `run.py daily` still writes `/data/opportunities.json` as an export; nothing in the app reads it.
 
 Users subscribe under **Personalize → Email digests**. Addresses land in SQLite `subscribers`; nightly digests email each feed when `GRANT_SIFT_SMTP_HOST` is set.
 

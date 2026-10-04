@@ -6,3 +6,5 @@ fastapi>=0.110
 uvicorn>=0.27
 # MCP endpoint at /mcp (grant_sift/mcp_server.py). 2.x renamed FastMCP to MCPServer.
 mcp>=2.3,<3
+# Typo-tolerant search over names and titles (grant_sift/catalogue.py).
+rapidfuzz>=3.0

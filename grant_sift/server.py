@@ -1,8 +1,8 @@
-"""Small web backend: feedback writes and a chat proxy.
+"""Web backend: the catalogue, feedback writes and a chat proxy.
 
-Deliberately thin. The pipeline stays a cron job and the dashboard stays a
-static file reading web/opportunities.json, so the list still renders with this
-server down. Only two features need a server at all:
+The dashboard asks this server for the catalogue - search, filters, sort and
+paging are in catalogue.py - so the page, the API and the MCP tools at /mcp
+answer from one implementation. Two writes are worth a note:
 
   POST /api/feedback   a thumbs up or down cannot be written from a static
                        page, and it has to reach the same SQLite the
@@ -45,7 +45,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import adapters, auth, db, mcp_server, pipeline, telemetry
+from . import adapters, auth, catalogue, db, mcp_server, pipeline, telemetry
 
 DB_PATH = os.environ.get("GRANT_SIFT_DB", "grant-sift.db")
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -466,11 +466,11 @@ def sources_list(request: Request):
         stale = {s["name"] for s in db.stale_sources(conn)}
         out = []
 
-        def add(name, kind, url, origin, cadence=None, notes=None, sid=None):
+        def add(name, kind, url, origin, cadence=None, notes=None, sid=None, by=None):
             r = runs.get(name, {})
             out.append({
                 "name": name, "kind": kind, "url": url, "origin": origin,
-                "cadence": cadence, "notes": notes, "id": sid,
+                "cadence": cadence, "notes": notes, "id": sid, "created_by": by,
                 "last_success": r.get("last_success"), "last_run": r.get("last_run"),
                 "last_yield": r.get("last_yield"), "last_error": r.get("last_error"),
                 "stale": name in stale,
@@ -486,7 +486,7 @@ def sources_list(request: Request):
             add(f["name"], "page", f["url"], "file", f.get("cadence"), f.get("notes"))
         for a in db.source_additions(conn):
             add(a["name"], a["kind"], a["url"], "dashboard",
-                a["cadence"], a["notes"], a["id"])
+                a["cadence"], a["notes"], a["id"], a.get("created_by"))
 
         return {"count": len(out),
                 "keywords": cfg.get("keywords") or [],
@@ -759,8 +759,14 @@ def post_feedback(request: Request, payload: dict = Body(...)):
         # tautological anyway: the correction's value is on OTHER records, and
         # that only exists at the next full pass. Meanwhile the verdict itself
         # already takes effect, so the dashboard and digests respect it now.
+        #
+        # Flagged, not deleted. The dashboard reads the database live, and a
+        # deleted assessment takes the call out of the catalogue until the
+        # nightly run - the call someone just voted on would vanish under them.
+        # save_assessment's INSERT OR REPLACE clears the flag.
         requeued = bool(conn.execute(
-            "DELETE FROM assessments WHERE opportunity_id = ?", (opp_id,)).rowcount)
+            "UPDATE assessments SET requeued = 1 WHERE opportunity_id = ?",
+            (opp_id,)).rowcount)
         conn.commit()
         n = conn.execute(
             "SELECT COUNT(*) n FROM feedback WHERE opportunity_id = ?", (opp_id,)
@@ -1456,6 +1462,115 @@ def rescore(request: Request, payload: dict = Body(...)):
 
     return {"recommendation": str(data.get("recommendation") or "")[:2000],
             "items": out, "scored": len(out), "of": len(ordered), "usage": usage}
+
+
+_PAGE_MAX = 200
+
+
+def _csv(raw: str) -> list[str]:
+    return [x.strip() for x in (raw or "").split(",") if x.strip()]
+
+
+@app.get("/api/catalogue")
+def catalogue_facets(request: Request):
+    """Header counts, the area and funder pickers, the deadline bounds and the
+    stale-source warning: everything the page needs before its first query."""
+    auth.principal(request)
+    conn = _conn()
+    try:
+        return catalogue.facets(conn, catalogue.load(conn, _roster()))
+    finally:
+        conn.close()
+
+
+@app.get("/api/opportunities")
+def list_opportunities(
+    request: Request,
+    q: str = "",
+    ids: str = "",
+    area: str = "",
+    funder: str = "",
+    deadline_from: str = "",
+    deadline_to: str = "",
+    filters: str = "",
+    category: str = "",
+    source: str = "",
+    min_score: int = 0,
+    sort: str = "",
+    page: int = 1,
+    page_size: int = 25,
+):
+    """Search the open catalogue. Every argument narrows; q is fuzzy on names
+    and titles and exact on prose (catalogue._relevance). filters is a comma
+    list of catalogue.FILTERS, including the identity ones: via-me,
+    my-sources, my-digests. ids fetches particular calls, e.g. a shelf."""
+    principal = auth.principal(request)
+    page_size = max(1, min(int(page_size), _PAGE_MAX))
+    conn = _conn()
+    try:
+        rows = catalogue.load(conn, _roster())
+        try:
+            hits = catalogue.search(
+                conn, rows, principal, q=q, ids=_csv(ids), area=area,
+                funder=funder, deadline_from=deadline_from,
+                deadline_to=deadline_to, filters=_csv(filters),
+                category=category, source=source, min_score=min_score, sort=sort)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+    finally:
+        conn.close()
+    pages = max(1, -(-len(hits) // page_size))
+    page = max(1, min(int(page), pages))
+    start = (page - 1) * page_size
+    return {"total": len(hits), "of": len(rows), "page": page, "pages": pages,
+            "page_size": page_size, "sort": sort or ("relevance" if q.strip() else "score"),
+            "opportunities": [catalogue.public(o) for o in hits[start:start + page_size]]}
+
+
+@app.get("/api/opportunities/{opportunity_id}")
+def get_opportunity(request: Request, opportunity_id: str):
+    """One open call in full: the list row plus the captured synopsis and the
+    feedback recorded on it."""
+    principal = auth.principal(request)
+    conn = _conn()
+    try:
+        hits = catalogue.search(conn, catalogue.load(conn, _roster()), principal,
+                                ids=[opportunity_id])
+        if not hits:
+            raise HTTPException(404, "no open call with that id")
+        syn = conn.execute("SELECT synopsis FROM opportunities WHERE id = ?",
+                           (opportunity_id,)).fetchone()["synopsis"]
+    finally:
+        conn.close()
+    return catalogue.public(hits[0]) | {
+        # The stored synopsis, not a fresh fetch of the funder's page.
+        "synopsis": (syn or "")[:8000],
+        "feedback": get_feedback(opportunity_id)["feedback"],
+    }
+
+
+@app.get("/api/feeds/{feed}")
+def preview_feed(request: Request, feed: str, since_days: int = 7, limit: int = 50):
+    """What a digest feed holds right now, ignoring what has been emailed:
+    open calls first seen in the last since_days that pass the feed's rule."""
+    auth.principal(request)
+    if feed not in pipeline.FEEDS:
+        raise HTTPException(404, f"no feed {feed!r}; feeds: {', '.join(pipeline.FEEDS)}")
+    conn = _conn()
+    try:
+        items = pipeline.build_digest(
+            conn, feed, since_days=max(1, min(int(since_days), 90)),
+            respect_sent_log=False, roster=_roster_entries())
+    finally:
+        conn.close()
+    # build_digest only looks at first_seen; over a long window it would
+    # otherwise list calls that have already closed.
+    items = [i for i in items if (catalogue.days_away(i.get("deadline")) or 0) >= 0]
+    keep = ("id", "title", "agency", "source", "deadline", "score", "category",
+            "match_name", "match_kind", "url")
+    return {"feed": feed, "label": pipeline.FEED_LABELS.get(feed, feed),
+            "count": len(items),
+            "items": [{k: i.get(k) for k in keep} for i in items[:max(1, min(int(limit), _PAGE_MAX))]]}
 
 
 @app.get("/opportunities.json")

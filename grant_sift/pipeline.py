@@ -668,7 +668,12 @@ def _loads(blob):
     return v if isinstance(v, dict) else None
 
 
-def export_json(conn, path="web/opportunities.json", min_score=0, roster=None):
+def catalogue_rows(conn, contacts, min_score=0):
+    """Every live, assessed call in the shape the dashboard and MCP read.
+
+    One shaping for the export, /api/opportunities and the MCP tools, so a
+    field added here reaches all three.
+    """
     # Closed calls are held in the database but not published. The dashboard
     # is a list of things to apply for, and a record whose deadline has passed
     # is not one of them -- it cost a slot in every filter, sort and count
@@ -686,33 +691,32 @@ def export_json(conn, path="web/opportunities.json", min_score=0, roster=None):
            ORDER BY (o.deadline IS NULL), o.deadline ASC, a.score DESC""",
         (min_score,),
     ).fetchall()
-    contacts = contact_index(roster or [])
-
-    # Shipped with the data so a recorded verdict shows up on the dashboard at
-    # once, without waiting for the record to be re-scored.
+    # Shipped with the data so a recorded verdict shows up at once, without
+    # waiting for the record to be re-scored.
     verdicts = db.human_verdicts(conn)
+    return [
+        # The synopsis is not carried. It was 0.96 MB of a 2.56 MB payload,
+        # and the generated summary replaces it in the list; the full text is
+        # read from the database where it is needed (one call in full, chat).
+        {k: r[k] for k in r.keys() if k not in ("axes_json", "facts_json")}
+        # Emitted as null when the model did not answer, rather than
+        # synthesised from the scalar score. A fabricated block would be
+        # indistinguishable from a real one, and the consumer is the only
+        # place that can decide honestly what to do without it.
+        | {"axes": _loads(r["axes_json"]), "facts": _loads(r["facts_json"])}
+        | {"human": verdicts.get(r["id"])}
+        | {"contact": contacts.get((r["match_name"] or "").strip().lower())}
+        for r in rows
+    ]
+
+
+def export_json(conn, path="web/opportunities.json", min_score=0, roster=None):
+    rows = catalogue_rows(conn, contact_index(roster or []), min_score)
     payload = {
         "generated_at": db.now(),
         "count": len(rows),
         "stale_sources": [dict(r) for r in db.stale_sources(conn)],
-        "opportunities": [
-            # The synopsis is no longer exported. It was 0.96 MB of a 2.56 MB
-            # payload, 37% of what every visitor downloads, and the dashboard
-            # rendered it in exactly one place: a disclosure labelled "Show
-            # summary" that actually held the funder's prose cut at 900
-            # characters. The generated summary replaces it, every record has
-            # a url to read the real thing, and the chat proxy reads the full
-            # synopsis server-side from the database rather than from here.
-            {k: r[k] for k in r.keys() if k not in ("axes_json", "facts_json")}
-            # Emitted as null when the model did not answer, rather than
-            # synthesised from the scalar score. A fabricated block would be
-            # indistinguishable from a real one, and the consumer is the only
-            # place that can decide honestly what to do without it.
-            | {"axes": _loads(r["axes_json"]), "facts": _loads(r["facts_json"])}
-            | {"human": verdicts.get(r["id"])}
-            | {"contact": contacts.get((r["match_name"] or "").strip().lower())}
-            for r in rows
-        ],
+        "opportunities": rows,
     }
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
