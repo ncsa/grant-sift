@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/longshuicy/grant-sift
+  repository: ghcr.io/ncsa/grant-sift
   tag: ""          # defaults to Chart.appVersion; overlays set main / semver
   pullPolicy: IfNotPresent
 
