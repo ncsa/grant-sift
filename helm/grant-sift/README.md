@@ -13,7 +13,7 @@ SQLite is a file on the PVC (`/data/grant-sift.db`); there is no separate SQLite
 | Deployment + Service | Web UI, feedback, chat proxy, `/api/stats` (ClusterIP only) |
 | oauth2-proxy + Ingress | Traefik → Keycloak login → app |
 | Grafana (optional) | OSS charts for `telemetry_daily`; Infinity → `http://grant-sift:8080/api/stats` |
-| PVC (`nfs-taiga`) | `/data`: `grant-sift.db` + `opportunities.json`, written by the Deployment only |
+| PVC (`nfs-taiga`) | `/data`: `grant-sift.db`, written by the Deployment only |
 | Secret | `GRANT_SIFT_LLM_API_KEY` (pipeline) + `grant-sift-oauth2` (OIDC) + `grant-sift-grafana` (admin) |
 | ConfigMap | Non-secret env + mounted `roster.yaml` + Grafana dashboards |
 
@@ -192,7 +192,6 @@ Or:
 ```bash
 kubectl -n grant-sift exec deploy/grant-sift -- python run.py ingest
 kubectl -n grant-sift exec deploy/grant-sift -- python run.py assess --limit 400
-kubectl -n grant-sift exec deploy/grant-sift -- python run.py export
 ```
 
 Run it inside the running pod, not as a separate Job: that pod is the only
@@ -251,7 +250,7 @@ over 20h old, so a restart past the scheduled minute does not skip a day.
 in-app schedule — not a separate CronJob). Grafana reads those rows via
 `/api/stats`. Details: [GRAFANA.md](./GRAFANA.md).
 
-The dashboard queries the database live (`/api/opportunities`), so a nightly run shows up on the next search or reload. `run.py daily` still writes `/data/opportunities.json` as an export; nothing in the app reads it.
+The dashboard queries the database live (`/api/opportunities`), so a nightly run shows up on the next search or reload. A `/data/opportunities.json` left by an older release is no longer read or served; delete it at leisure.
 
 Users subscribe under **Personalize → Email digests**. Addresses land in SQLite `subscribers`; nightly digests email each feed when `GRANT_SIFT_SMTP_HOST` is set.
 

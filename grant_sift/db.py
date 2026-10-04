@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS sent_log (
 );
 
 -- Nightly snapshots for Grafana (/api/stats). Written by the same in-app
--- daily job as ingest/assess/export — not a separate CronJob.
+-- daily job as ingest/assess — not a separate CronJob.
 CREATE TABLE IF NOT EXISTS telemetry_daily (
     day          TEXT NOT NULL,   -- YYYY-MM-DD (GRANT_SIFT_DAILY_TZ)
     metric       TEXT NOT NULL,
@@ -144,7 +144,7 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_metric_day ON telemetry_daily(metric, d
 
 # A closed call stays in the database -- the record of what was once open is
 # the point, and prune_expired is still opt-in -- but it is no longer offered
-# to anything downstream. Expired rows are excluded from the JSON export and
+# to anything downstream. Expired rows are excluded from the catalogue and
 # from every prompt built for the model: a call nobody can apply to cannot be
 # the right answer to "what should I write for", and paying to score or to
 # rank one spends the budget and the context window on a dead record.

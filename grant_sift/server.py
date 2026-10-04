@@ -42,7 +42,7 @@ from urllib.parse import urlparse
 
 import requests
 from fastapi import Body, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import adapters, auth, catalogue, db, mcp_server, pipeline, telemetry
@@ -50,24 +50,6 @@ from . import adapters, auth, catalogue, db, mcp_server, pipeline, telemetry
 DB_PATH = os.environ.get("GRANT_SIFT_DB", "grant-sift.db")
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
-
-def _opportunities_json_path() -> Path | None:
-    """Prefer the PVC next to the DB; fall back to web/ (local / entrypoint symlink).
-
-    The nightly pipeline and serve share the same /data volume. Export writes
-    /data/opportunities.json; the dashboard must read that file, not a stale
-    copy baked into the container layer.
-    """
-    for path in (
-        Path(DB_PATH).expanduser().resolve().parent / "opportunities.json",
-        WEB_DIR / "opportunities.json",
-    ):
-        try:
-            if path.is_file():
-                return path
-        except OSError:
-            continue
-    return None
 
 # Hosts this proxy will forward to. Without an allowlist the endpoint is an
 # SSRF pivot: a caller could name any internal address as base_url and read the
@@ -384,17 +366,46 @@ def _identity_email(principal: auth.Principal, requested: str | None) -> str:
     return _normalize_email(base)
 
 
-_SOURCES_CACHE = None
+_CONFIG = {"stamp": None, "sources": {}, "roster": [], "contacts": {}}
+
+
+def _config_stamp():
+    """Modification times of every file load_config reads. A stat each is
+    cheap next to parsing the YAML, and lets an edit - a ConfigMap update in
+    Kubernetes - reach the next request without a restart."""
+    d = Path("config")
+    paths = (d / "sources.yaml", d / "prefilter.yaml", d / "ncsa_staff.yaml",
+             Path(os.environ.get("GRANT_SIFT_ROSTER") or (d / "roster.yaml")))
+    out = []
+    for p in paths:
+        try:
+            out.append(p.stat().st_mtime_ns)
+        except OSError:
+            out.append(None)
+    return tuple(out)
+
+
+def _config():
+    """sources.yaml, the roster and its contact index, parsed once per change.
+
+    The catalogue joins contact details on at read time, so this is what
+    carries a fixed address in config/roster.yaml onto every affected card.
+    A missing or malformed file degrades to empty rather than failing the
+    request: the list still renders, without contact blocks.
+    """
+    stamp = _config_stamp()
+    if _CONFIG["stamp"] != stamp:
+        try:
+            sources, roster, _ = pipeline.load_config()
+        except Exception:  # noqa: BLE001
+            sources, roster = {}, []
+        _CONFIG.update(stamp=stamp, sources=sources or {}, roster=roster,
+                       contacts=pipeline.contact_index(roster))
+    return _CONFIG
 
 
 def _sources_file():
-    global _SOURCES_CACHE
-    if _SOURCES_CACHE is None:
-        try:
-            _SOURCES_CACHE = pipeline.load_config()[0]
-        except Exception:  # noqa: BLE001
-            _SOURCES_CACHE = {}
-    return _SOURCES_CACHE
+    return _config()["sources"]
 
 
 # Hosts the ingester must never be pointed at. This endpoint takes a URL from
@@ -827,40 +838,14 @@ name what document would: usually the full solicitation, which is linked from
 the dashboard. Do not invent deadlines, eligibility rules or award figures."""
 
 
-_ROSTER_CACHE = None
-_ROSTER_ENTRIES = None
-
-
 def _roster_entries():
-    """The roster file's parties, loaded once per process.
-
-    Same caching argument as _roster(): this sits in a request path, and a
-    roster edit already needs a restart the way every other config here does.
-    """
-    global _ROSTER_ENTRIES
-    if _ROSTER_ENTRIES is None:
-        try:
-            _ROSTER_ENTRIES = pipeline.load_config()[1]
-        except Exception:  # noqa: BLE001
-            _ROSTER_ENTRIES = []
-    return _ROSTER_ENTRIES
+    """The roster file's parties (see _config)."""
+    return _config()["roster"]
 
 
 def _roster():
-    """Roster, loaded once per process, for contact details only.
-
-    Read on first use rather than at import so a missing or malformed
-    roster degrades the chat context instead of preventing the app from
-    starting. Cached because this sits in a request path; a roster edit needs
-    a restart, which is already true of every other config here.
-    """
-    global _ROSTER_CACHE
-    if _ROSTER_CACHE is None:
-        try:
-            _ROSTER_CACHE = pipeline.contact_index(pipeline.load_config()[1])
-        except Exception:  # noqa: BLE001
-            _ROSTER_CACHE = {}
-    return _ROSTER_CACHE
+    """Roster name -> contact details (see _config)."""
+    return _config()["contacts"]
 
 
 def _opportunity_context(conn, opp_id: str) -> str:
@@ -1573,35 +1558,15 @@ def preview_feed(request: Request, feed: str, since_days: int = 7, limit: int = 
             "items": [{k: i.get(k) for k in keep} for i in items[:max(1, min(int(limit), _PAGE_MAX))]]}
 
 
-@app.get("/opportunities.json")
-def opportunities_json():
-    """Serve the export from the data volume (same file the nightly run writes).
-
-    Registered before StaticFiles so a broken or container-local copy under web/
-    cannot hide PVC updates. no-cache so a nightly refresh is visible on reload.
-    """
-    path = _opportunities_json_path()
-    if path is None:
-        raise HTTPException(404, "opportunities.json not found; run: python run.py export")
-    return FileResponse(
-        path,
-        media_type="application/json",
-        headers={"Cache-Control": "no-cache, max-age=0, must-revalidate"},
-    )
-
-
-# Read-only MCP tools at /mcp, plus the metadata that tells an MCP client
+# MCP tools at /mcp, plus the metadata that tells an MCP client
 # where to log in. Before the static mount, which would otherwise swallow them.
 app.router.routes.extend(mcp_server.routes)
 
 
 # Mounted last: it serves "/" so it must not shadow the /api routes above.
-# follow_symlink=True: docker/entrypoint.sh links web/opportunities.json → /data
-# on the PVC; Starlette's default realpath check treats that as escaping WEB_DIR
-# and returns 404 (defense in depth alongside the route above).
 if WEB_DIR.is_dir():
     app.mount(
         "/",
-        StaticFiles(directory=str(WEB_DIR), html=True, follow_symlink=True),
+        StaticFiles(directory=str(WEB_DIR), html=True),
         name="web",
     )

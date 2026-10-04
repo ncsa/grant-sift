@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copy a local grant-sift.db (and optional opportunities.json) into the
+# Copy a local grant-sift.db into the
 # Kubernetes PVC used by the Helm release.
 #
 # Usage:
@@ -12,7 +12,6 @@ LOCAL_DB="${1:-grant-sift.db}"
 NAMESPACE="${2:-default}"
 RELEASE="${3:-grant-sift}"
 REMOTE_DB="/data/grant-sift.db"
-REMOTE_JSON="/data/opportunities.json"
 
 if [[ ! -f "$LOCAL_DB" ]]; then
   echo "missing local database: $LOCAL_DB" >&2
@@ -86,23 +85,11 @@ kubectl -n "$NAMESPACE" wait --for=condition=Ready "pod/${JOB_POD}" --timeout=12
 echo "copying database -> ${JOB_POD}:${REMOTE_DB}"
 kubectl -n "$NAMESPACE" cp "$TMP" "${JOB_POD}:${REMOTE_DB}"
 
-LOCAL_JSON="$(dirname "$LOCAL_DB")/web/opportunities.json"
-if [[ ! -f "$LOCAL_JSON" ]]; then
-  LOCAL_JSON="web/opportunities.json"
-fi
-if [[ -f "$LOCAL_JSON" ]]; then
-  echo "copying opportunities.json -> ${JOB_POD}:${REMOTE_JSON}"
-  kubectl -n "$NAMESPACE" cp "$LOCAL_JSON" "${JOB_POD}:${REMOTE_JSON}"
-else
-  echo "no local opportunities.json; run: python run.py export"
-fi
-
 # kubectl cp preserves the local uid (e.g. macOS 502) and mode 600; the app
 # runs as uid 1000 and cannot open the DB otherwise.
 echo "fixing ownership to uid 1000 (app user)"
 kubectl -n "$NAMESPACE" exec "$JOB_POD" -- chown -R 1000:1000 /data
 kubectl -n "$NAMESPACE" exec "$JOB_POD" -- chmod 664 "$REMOTE_DB" 2>/dev/null || true
-kubectl -n "$NAMESPACE" exec "$JOB_POD" -- chmod 644 "$REMOTE_JSON" 2>/dev/null || true
 
 echo "scaling deployment back to 1"
 kubectl -n "$NAMESPACE" scale deploy/"$RELEASE" --replicas=1

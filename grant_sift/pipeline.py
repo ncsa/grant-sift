@@ -1,4 +1,4 @@
-"""Ingest -> prefilter -> classify -> match -> store -> export.
+"""Ingest -> prefilter -> classify -> match -> store.
 
 The prefilter is deterministic and free. It exists so the model only ever sees
 the small fraction of records that could plausibly matter.
@@ -102,7 +102,7 @@ def normalise(entries, d=Path("config")):
             "projects": projects,
             "unit": unit,
             "org": e.get("org") or "",
-            # Resolved once here so the export, the digests and the chat all
+            # Resolved once here so the catalogue, the digests and the chat all
             # get the same addresses instead of each re-implementing the join.
             "ncsa_contact": [
                 {"name": staff.get(n, {}).get("name", n),
@@ -573,7 +573,7 @@ def assess_new(conn, roster, limit=200, verbose=True):
 
 
 # --------------------------------------------------------------------------
-# Export, the dashboard is a static file reading this
+# The catalogue as the dashboard, the API and MCP read it
 # --------------------------------------------------------------------------
 
 def contact_index(roster):
@@ -658,7 +658,7 @@ def _aliases(name, entry):
 
 def _loads(blob):
     """Stored JSON is written by us, but a hand-edited database or a partial
-    write should degrade to "no answer" rather than take down the export."""
+    write should degrade to "no answer" rather than take down the catalogue."""
     if not blob:
         return None
     try:
@@ -671,8 +671,8 @@ def _loads(blob):
 def catalogue_rows(conn, contacts, min_score=0):
     """Every live, assessed call in the shape the dashboard and MCP read.
 
-    One shaping for the export, /api/opportunities and the MCP tools, so a
-    field added here reaches all three.
+    One shaping for /api/opportunities, and through it the dashboard and
+    the MCP tools, so a field added here reaches both.
     """
     # Closed calls are held in the database but not published. The dashboard
     # is a list of things to apply for, and a record whose deadline has passed
@@ -708,20 +708,6 @@ def catalogue_rows(conn, contacts, min_score=0):
         | {"contact": contacts.get((r["match_name"] or "").strip().lower())}
         for r in rows
     ]
-
-
-def export_json(conn, path="web/opportunities.json", min_score=0, roster=None):
-    rows = catalogue_rows(conn, contact_index(roster or []), min_score)
-    payload = {
-        "generated_at": db.now(),
-        "count": len(rows),
-        "stale_sources": [dict(r) for r in db.stale_sources(conn)],
-        "opportunities": rows,
-    }
-    out = Path(path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(payload, indent=1))
-    return len(rows)
 
 
 # --------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 """Daily grant-stats rollups for Grafana.
 
 SQLite stays the source of truth. Each nightly `run.py daily` (the same
-in-app scheduler as ingest/assess/export — not a separate k8s CronJob)
+in-app scheduler as ingest/assess — not a separate k8s CronJob)
 writes compact rows into `telemetry_daily`. Grafana charts them via
 `/api/stats`; the catalogue is `/api/opportunities`.
 """

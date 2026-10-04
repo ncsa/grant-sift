@@ -1,7 +1,7 @@
 """The open catalogue, filtered, searched, sorted and paged on the server.
 
-This used to live in the dashboard's JavaScript, over a full download of
-opportunities.json. It lives here now so the dashboard, the REST API and the
+This used to live in the dashboard's JavaScript, over a nightly JSON export
+of the whole catalogue. It lives here now so the dashboard, the REST API and the
 MCP tools ask one implementation the same question and get the same answer:
 "via me" cannot mean one thing on the page and another to an assistant.
 

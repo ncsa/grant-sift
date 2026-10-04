@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Grant Sift CLI.
 
-    python run.py daily                 # nightly: ingest, assess, export, digest, telemetry
+    python run.py daily                 # nightly: ingest, assess, digest, telemetry
     python run.py ingest                # fetch and prefilter only
     python run.py assess                # classify and match anything unassessed
-    python run.py export                # write web/opportunities.json
     python run.py digest --feed closing-soon [--send]
     python run.py telemetry             # write telemetry_daily for Grafana (/api/stats)
     python run.py feedback <opp_id> up|down "optional note"
@@ -91,15 +90,6 @@ def cmd_assess(conn, args):
     return n
 
 
-def cmd_export(conn, args):
-    # The roster carries the contact details the dashboard renders, so the
-    # export needs it even though scoring is already done.
-    _, roster, _ = pipeline.load_config()
-    n = pipeline.export_json(conn, args.out, min_score=args.min_score,
-                             roster=roster)
-    print(f"exported {n} opportunities to {args.out}")
-
-
 def cmd_digest(conn, args):
     stale = db.stale_sources(conn)
     _, roster, _ = pipeline.load_config()
@@ -133,7 +123,6 @@ def cmd_digest(conn, args):
 def cmd_daily(conn, args):
     cmd_ingest(conn, args)
     cmd_assess(conn, args)
-    cmd_export(conn, args)
     # Send when an SMTP host is configured. Without --send, digests only print;
     # daily is the production path so empty GRANT_SIFT_SMTP_HOST skips mail.
     send = bool(SMTP_HOST and SMTP_HOST.strip())
@@ -350,10 +339,6 @@ def main():
                         "deploying: the dashboard shows the summary in place "
                         "of the funder text it used to print.")
 
-    e = sub.add_parser("export")
-    e.add_argument("--out", default="web/opportunities.json")
-    e.add_argument("--min-score", type=int, default=0)
-
     d = sub.add_parser("digest")
     d.add_argument("--feed", required=True, choices=list(pipeline.FEEDS))
     d.add_argument("--since", type=int, default=7)
@@ -370,8 +355,7 @@ def main():
                    help="YYYY-MM-DD to write (default: today in GRANT_SIFT_DAILY_TZ)")
 
     args = p.parse_args()
-    for attr, default in (("limit", 200), ("out", "web/opportunities.json"),
-                          ("min_score", 0), ("feed", None), ("since", 7),
+    for attr, default in (("limit", 200), ("feed", None), ("since", 7),
                           ("send", False), ("host", "127.0.0.1"), ("port", 8080),
                           ("rematch", False), ("day", None),
                           ("backfill_axes", False)):
@@ -383,8 +367,7 @@ def main():
     db.init(args.db)
     conn = db.connect(args.db)
     try:
-        {"ingest": cmd_ingest, "assess": cmd_assess, "export": cmd_export,
-         "digest": cmd_digest, "daily": cmd_daily, "feedback": cmd_feedback,
+        {"ingest": cmd_ingest, "assess": cmd_assess, "digest": cmd_digest, "daily": cmd_daily, "feedback": cmd_feedback,
          "telemetry": cmd_telemetry, "status": cmd_status,
          "serve": cmd_serve}[args.cmd](conn, args)
     finally:

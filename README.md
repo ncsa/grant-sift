@@ -19,7 +19,7 @@ cp config/roster.example.yaml config/roster.yaml            # collaborators and 
 cp config/ncsa_staff.example.yaml config/ncsa_staff.yaml   # optional: your staff's addresses
 set -a; source .env; set +a
 
-python run.py daily           # ingest, assess, export, digest
+python run.py daily           # ingest, assess, digest
 python run.py serve           # dashboard on http://127.0.0.1:8080
 ```
 
@@ -44,7 +44,6 @@ python run.py ingest                # fetch, enrich, store
 python run.py assess [--limit N]    # score anything unassessed, live calls first
 python run.py assess --rematch      # clear no-match assessments first, after a roster addition
 python run.py assess --backfill-axes # re-score rows predating summary/axes/facts (a full pass)
-python run.py export                # write web/opportunities.json
 python run.py status                # what ran, what has gone stale
 python run.py serve [--host --port] # dashboard, feedback and chat
 python run.py digest --feed closing-soon --send
@@ -173,18 +172,17 @@ programme funds.
 
 **The card no longer shows the funder's own text.** It used to, behind a
 disclosure labelled *Show summary*, which was not one: it was `synopsis` cut
-to the first 900 characters at export time. On a 1,261-record corpus that cut
+to the first 900 characters when the list was built. On a 1,261-record corpus that cut
 861 of them mid-sentence, left 97 under 200 characters, and rendered 37 RSS
 teasers whose entire captured text was "Read more...". Every record has a
 `url`, so clicking the title reads the real solicitation rather than a
 truncated copy of its opening.
 
-Dropping it from the export took `web/opportunities.json` from 2.56 MB to
-1.40 MB, a **46%** cut in what every visitor downloads, for one collapsed
-element. Nothing else in the browser read it and the dashboard never searched
-it. The chat proxy is unaffected: it builds its system message from the full
-synopsis in the database, not from the export, so its answers stay richer than
-anything the card ever showed.
+Dropping it cut what every visitor downloaded by **46%**, for one collapsed
+element. The synopsis is still searchable (`/api/opportunities` matches it in
+SQL) and still feeds the chat proxy, which builds its system message from the
+full text in the database, so its answers stay richer than anything the card
+ever showed.
 
 The model returns `null` for `summary` when the captured text is too thin to
 describe the call, and the card then shows nothing. That guard is there
@@ -269,13 +267,15 @@ are not parties — needed enforcing in code, not just in a comment.
 
 Neither is stored. `assessments` holds no address of any kind — only
 `match_name` and the other `match_*` fields. Contact details are joined on at
-**export time**: `pipeline.contact_index()` builds a lookup from the roster
-plus `ncsa_staff.yaml`, and `export_json` attaches the matching record to each
-opportunity as `contact`, which is what the dashboard and the digests render.
+**read time**: `pipeline.contact_index()` builds a lookup from the roster plus
+`ncsa_staff.yaml`, and `pipeline.catalogue_rows` attaches the matching record
+to each opportunity as `contact`, which is what the dashboard, MCP and the
+digests render.
 
-The useful consequence: fixing an address in `config/roster.yaml` and re-running
-`python run.py export` corrects every affected card at once. No re-assessment,
-no model call.
+The useful consequence: fixing an address in `config/roster.yaml` corrects
+every affected card on the next request. The server re-reads its config when a
+file's modification time changes, so a ConfigMap update needs no restart, no
+re-assessment and no model call.
 
 The fragile part is the join key, which is the name the *model* returned. It
 shortens: "Praveen Kumar" for the party `Praveen Kumar (PI, Civil and
@@ -504,7 +504,7 @@ finishes, the panel opens with the hits and automatically generates a
 recommendation. Editing the idea and leaving the field re-ranks the kept calls
 without another full catalogue search.
 
-Closed calls are excluded from both prompts and from `web/opportunities.json`
+Closed calls are excluded from both prompts and from the catalogue
 (`db.LIVE`). Affinity is **fit to this idea**, not the group’s relevance score,
 and the two are never averaged.
 
