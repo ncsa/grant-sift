@@ -349,6 +349,42 @@ def save_detail(conn, opp_id: str, detail: dict, ok: bool = True):
     )
 
 
+def stale_undated(conn, source: str, older_than_days: int = 7):
+    """Stored, undated records of `source` whose detail is older than the window.
+
+    An undated record counts as rolling, and so as live, forever. Its detail
+    was fetched once, when it was first seen, so a call archived since then is
+    never noticed: it also drops out of the search results, and nothing else
+    looks at it again (issue #34). These are the rows worth re-asking about.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=older_than_days)).isoformat(timespec="seconds")
+    return conn.execute(
+        """SELECT o.id, o.external_id FROM opportunities o
+           LEFT JOIN detail_cache d ON d.id = o.id
+           WHERE o.source = ? AND o.deadline IS NULL AND o.external_id IS NOT NULL
+             AND (d.fetched_at IS NULL OR d.fetched_at < ?)""",
+        (source, cutoff),
+    ).fetchall()
+
+
+def set_deadline(conn, opp_id: str, deadline: str):
+    """Give a stored record the deadline a re-check found.
+
+    Rehashes with it, so the next upsert does not see the new deadline as
+    changed content and delete the assessment: the description is the same,
+    and the score still describes it.
+    """
+    row = conn.execute(
+        "SELECT title, synopsis FROM opportunities WHERE id = ?", (opp_id,)
+    ).fetchone()
+    if row is None:
+        return
+    conn.execute(
+        "UPDATE opportunities SET deadline = ?, content_hash = ? WHERE id = ?",
+        (deadline, hash_text(row["title"], row["synopsis"], deadline), opp_id),
+    )
+
+
 def needs_detail(conn, opp_id: str) -> bool:
     """True when we have never stored a description for this opportunity.
 
