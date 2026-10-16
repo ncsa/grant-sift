@@ -3,7 +3,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -21,154 +24,483 @@
     {
       "title": "Assess backlog",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "grant-sift-stats" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "grant-sift-stats"
+      },
       "targets": [
         {
           "refId": "A",
           "type": "json",
           "source": "url",
           "url": "http://grant-sift:8080/api/stats?metric=assess_backlog&since_days=90",
-          "url_options": { "method": "GET" },
+          "url_options": {
+            "method": "GET"
+          },
           "format": "table",
           "root_selector": "rows",
           "columns": [
-            { "selector": "day", "text": "day", "type": "timestamp" },
-            { "selector": "value", "text": "backlog", "type": "number" }
+            {
+              "selector": "day",
+              "text": "day",
+              "type": "timestamp"
+            },
+            {
+              "selector": "value",
+              "text": "backlog",
+              "type": "number"
+            }
           ]
         }
       ],
-      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "lineWidth": 2 } }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      }
     },
     {
       "title": "New opportunities / day",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "grant-sift-stats" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "grant-sift-stats"
+      },
       "targets": [
         {
           "refId": "A",
           "type": "json",
           "source": "url",
           "url": "http://grant-sift:8080/api/stats?metric=opps_new&since_days=90",
-          "url_options": { "method": "GET" },
+          "url_options": {
+            "method": "GET"
+          },
           "format": "table",
           "root_selector": "rows",
           "columns": [
-            { "selector": "day", "text": "day", "type": "timestamp" },
-            { "selector": "value", "text": "new", "type": "number" }
+            {
+              "selector": "day",
+              "text": "day",
+              "type": "timestamp"
+            },
+            {
+              "selector": "value",
+              "text": "new",
+              "type": "number"
+            }
           ]
         }
       ],
-      "fieldConfig": { "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 40 } }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 40
+          }
+        },
+        "overrides": []
+      }
     },
     {
       "title": "Category mix (stock)",
       "type": "timeseries",
-      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 8 },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "grant-sift-stats" },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "grant-sift-stats"
+      },
       "targets": [
         {
           "refId": "A",
           "type": "json",
           "source": "url",
           "url": "http://grant-sift:8080/api/stats?metric=category_count&since_days=90",
-          "url_options": { "method": "GET" },
+          "url_options": {
+            "method": "GET"
+          },
           "format": "table",
           "root_selector": "rows",
           "columns": [
-            { "selector": "day", "text": "day", "type": "timestamp" },
-            { "selector": "dim", "text": "category", "type": "string" },
-            { "selector": "value", "text": "count", "type": "number" }
+            {
+              "selector": "day",
+              "text": "day",
+              "type": "timestamp"
+            },
+            {
+              "selector": "dim",
+              "text": "category",
+              "type": "string"
+            },
+            {
+              "selector": "value",
+              "text": "count",
+              "type": "number"
+            }
           ]
         }
       ],
       "fieldConfig": {
-        "defaults": { "custom": { "drawStyle": "line", "stacking": { "mode": "normal" } } },
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never"
+          },
+          "displayName": "${__field.labels.category}"
+        },
         "overrides": []
+      },
+      "transformations": [
+        {
+          "id": "partitionByValues",
+          "options": {
+            "fields": [
+              "category"
+            ],
+            "keepFields": false
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ],
+          "sortBy": "Last *",
+          "sortDesc": true,
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       }
     },
     {
       "title": "Score bands (stock)",
       "type": "timeseries",
-      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 8 },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "grant-sift-stats" },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "grant-sift-stats"
+      },
       "targets": [
         {
           "refId": "A",
           "type": "json",
           "source": "url",
           "url": "http://grant-sift:8080/api/stats?metric=score_band&since_days=90",
-          "url_options": { "method": "GET" },
+          "url_options": {
+            "method": "GET"
+          },
           "format": "table",
           "root_selector": "rows",
           "columns": [
-            { "selector": "day", "text": "day", "type": "timestamp" },
-            { "selector": "dim", "text": "band", "type": "string" },
-            { "selector": "value", "text": "count", "type": "number" }
+            {
+              "selector": "day",
+              "text": "day",
+              "type": "timestamp"
+            },
+            {
+              "selector": "dim",
+              "text": "band",
+              "type": "string"
+            },
+            {
+              "selector": "value",
+              "text": "count",
+              "type": "number"
+            }
           ]
         }
       ],
       "fieldConfig": {
-        "defaults": { "custom": { "drawStyle": "line", "stacking": { "mode": "normal" } } },
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never"
+          },
+          "displayName": "${__field.labels.band}"
+        },
         "overrides": []
+      },
+      "transformations": [
+        {
+          "id": "partitionByValues",
+          "options": {
+            "fields": [
+              "band"
+            ],
+            "keepFields": false
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ],
+          "sortBy": "Last *",
+          "sortDesc": true,
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       }
     },
     {
       "title": "Feedback thumbs-down by aspect",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 17 },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "grant-sift-stats" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "grant-sift-stats"
+      },
       "targets": [
         {
           "refId": "A",
           "type": "json",
           "source": "url",
           "url": "http://grant-sift:8080/api/stats?metric=feedback_down&since_days=90",
-          "url_options": { "method": "GET" },
+          "url_options": {
+            "method": "GET"
+          },
           "format": "table",
           "root_selector": "rows",
           "columns": [
-            { "selector": "day", "text": "day", "type": "timestamp" },
-            { "selector": "dim", "text": "aspect", "type": "string" },
-            { "selector": "value", "text": "down", "type": "number" }
+            {
+              "selector": "day",
+              "text": "day",
+              "type": "timestamp"
+            },
+            {
+              "selector": "dim",
+              "text": "aspect",
+              "type": "string"
+            },
+            {
+              "selector": "value",
+              "text": "down",
+              "type": "number"
+            }
           ]
         }
       ],
-      "fieldConfig": { "defaults": { "custom": { "drawStyle": "bars", "stacking": { "mode": "normal" } } }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal"
+            },
+            "fillOpacity": 70,
+            "lineWidth": 1
+          },
+          "displayName": "${__field.labels.aspect}"
+        },
+        "overrides": []
+      },
+      "transformations": [
+        {
+          "id": "partitionByValues",
+          "options": {
+            "fields": [
+              "aspect"
+            ],
+            "keepFields": false
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "sum"
+          ],
+          "sortBy": "Total",
+          "sortDesc": true,
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
     },
     {
       "title": "Source zero-streak",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 17 },
-      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "grant-sift-stats" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "grant-sift-stats"
+      },
       "targets": [
         {
           "refId": "A",
           "type": "json",
           "source": "url",
           "url": "http://grant-sift:8080/api/stats?metric=source_zero_streak&since_days=90",
-          "url_options": { "method": "GET" },
+          "url_options": {
+            "method": "GET"
+          },
           "format": "table",
           "root_selector": "rows",
           "columns": [
-            { "selector": "day", "text": "day", "type": "timestamp" },
-            { "selector": "dim", "text": "source", "type": "string" },
-            { "selector": "value", "text": "streak", "type": "number" }
+            {
+              "selector": "day",
+              "text": "day",
+              "type": "timestamp"
+            },
+            {
+              "selector": "dim",
+              "text": "source",
+              "type": "string"
+            },
+            {
+              "selector": "value",
+              "text": "streak",
+              "type": "number"
+            }
           ]
         }
       ],
-      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line" } }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "showPoints": "always",
+            "pointSize": 4,
+            "spanNulls": false,
+            "lineInterpolation": "stepAfter",
+            "insertNulls": 129600000
+          },
+          "displayName": "${__field.labels.source}",
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "transformations": [
+        {
+          "id": "filterByValue",
+          "options": {
+            "type": "include",
+            "match": "any",
+            "filters": [
+              {
+                "fieldName": "streak",
+                "config": {
+                  "id": "greater",
+                  "options": {
+                    "value": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "partitionByValues",
+          "options": {
+            "fields": [
+              "source"
+            ],
+            "keepFields": false
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "sortBy": "Last *",
+          "sortDesc": true,
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Consecutive ingest runs with zero results, per source. Only sources with a streak > 0 are drawn."
     }
   ],
   "refresh": "5m",
   "schemaVersion": 39,
-  "tags": ["grant-sift", "telemetry"],
-  "templating": { "list": [] },
-  "time": { "from": "now-90d", "to": "now" },
+  "tags": [
+    "grant-sift",
+    "telemetry"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "browser",
   "title": "Grant Sift — Ops & Signal",
   "uid": "grant-sift-ops-signal",
-  "version": 1
+  "version": 2
 }

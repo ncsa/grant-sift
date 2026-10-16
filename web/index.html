@@ -137,7 +137,7 @@
      and tagging both would be twice the furniture for half the clarity.
 
      "why", not "relevance" or "why this score": the badge directly above
-     already reads "relevance 75/100", so repeating the word labels the
+     already reads "good fit 75/100", so labelling it "relevance" names the
      paragraph with the thing next to it rather than with what it says. */
   .tag { font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase;
          color: var(--ink-faint); margin-right: 8px; white-space: nowrap; }
@@ -192,27 +192,24 @@
   .pill.departed, .pill.stale { color: var(--ember); border-color: var(--ember); }
   .pill.added { color: var(--moss); border-color: var(--moss); }
 
-  /* relevance as a bar, not a badge */
-  .bar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  /* flex: 0 0 - as a plain flex item the track was shrinking from 92px to 70,
-     while the fill was still sized in px against the 92 it thought it had. It
-     overflowed, got clipped, and every score above ~76 rendered as a full bar:
-     the exact opposite of showing relevance. */
-  .bar .track { flex: 0 0 92px; height: 6px; background: var(--rule);
-                border-radius: 3px; overflow: hidden; }
-  /* Banded rather than a continuous ramp: the score is a model estimate, and a
-     smooth gradient implies a precision it does not have. Four bands say
-     "pursue / look / marginal / no" and that is the real resolution. */
-  /* display:block is load-bearing. As an inline span the fill ignored `width`
-     entirely and painted nothing, so the bar has only ever shown its grey
-     track - getComputedStyle reported the width we asked for, which is why it
-     looked correct while measuring 0px on screen. */
-  .bar .fill { display: block; height: 6px; border-radius: 3px;
-               background: var(--moss); }
-  .bar .fill.mid  { background: var(--moss); opacity: .55; }
-  .bar .fill.lo   { background: var(--ink-faint); opacity: .55; }
-  .bar .fill.min  { background: var(--ink-faint); opacity: .3; }
-  .bar .num { font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  /* Relevance as a four-step signal, not a progress bar. A bar filling
+     left-to-right reads as "how far along", which is the wrong question; rising
+     steps read as strength. Banded rather than a continuous ramp: the score is
+     a model estimate, and a smooth fill implies a precision it does not have.
+     Four bands say "pursue / look / marginal / no" and that is the real
+     resolution, so the band gets a word and the number stays secondary. */
+  .score { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .score .sig { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
+  .score .sig i { display: block; width: 4px; border-radius: 1px; background: var(--rule); }
+  .score .sig i:nth-child(1) { height: 5px; }
+  .score .sig i:nth-child(2) { height: 8px; }
+  .score .sig i:nth-child(3) { height: 11px; }
+  .score .sig i:nth-child(4) { height: 14px; }
+  .score .sig i.on { background: var(--moss); }
+  .score.lo .sig i.on, .score.min .sig i.on { background: var(--ink-faint); }
+  .score .band { font-size: 12.5px; font-weight: 500; color: var(--moss); }
+  .score.lo .band, .score.min .band { color: var(--ink-soft); font-weight: 400; }
+  .score .num { font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 
   .acts { margin-top: 8px; }
   .act { font-size: 13px; color: var(--moss); text-decoration: none; }
@@ -710,6 +707,21 @@ function reach(o) {
   return `<div class="reach">${lines.join("")}</div>`;
 }
 
+const SCORE_BANDS = [
+  [80, "hi", 4, "strong fit"],
+  [60, "mid", 3, "good fit"],
+  [40, "lo", 2, "partial fit"],
+  [0, "min", 1, "weak fit"],
+];
+function scoreSignal(score) {
+  const [, cls, lit, word] = SCORE_BANDS.find(([min]) => score >= min) || SCORE_BANDS[3];
+  const bars = [1, 2, 3, 4].map(n => `<i class="${n <= lit ? "on" : ""}"></i>`).join("");
+  return `<div class="score ${cls}" title="How well this matches the group's work, scored 0 to 100 by the model">
+        <span class="sig" role="img" aria-label="Relevance ${score} of 100, ${word}">${bars}</span>
+        <span class="band">${word}</span><span class="num">${score}/100</span>
+      </div>`;
+}
+
 function rowHTML(o, opts = {}) {
   const away = daysAway(o.deadline);
   const soon = away !== null && away <= 30;
@@ -765,12 +777,7 @@ function rowHTML(o, opts = {}) {
   return `<article class="row${soon ? " soon" : ""}">
     <div class="when">${when}</div>
     <div>
-      <div class="bar">
-        <span class="track" role="img" aria-label="Relevance ${o.score} of 100"><span class="fill ${
-          o.score >= 80 ? "hi" : o.score >= 60 ? "mid" : o.score >= 40 ? "lo" : "min"
-        }" style="width:${Math.max(3, Math.min(100, o.score))}%"></span></span>
-        <span class="num" title="How well this matches the group's work, scored 0 to 100 by the model">relevance ${o.score}/100</span>
-      </div>
+      ${scoreSignal(o.score)}
       ${verdict}
       <h2 class="title">${o.url
         ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.title)}</a>`
