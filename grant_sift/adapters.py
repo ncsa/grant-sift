@@ -110,7 +110,18 @@ def grants_gov_detail(oid):
     floor = _money(blk.get("awardFloor"))
     if ceiling and floor and floor != ceiling:
         ceiling = f"{floor} to {ceiling}"
-    deadline = _iso(blk.get("responseDate") or blk.get("estApplicationResponseDate"))
+    # A listing with no due date is treated downstream as rolling, i.e. open
+    # forever. Some are not: NSF posts notices for old solicitations with no
+    # responseDate and an archiveDate a day later (issue #34). So the archive
+    # date stands in for a missing deadline, and a listing grants.gov already
+    # reports as archived or closed is dead no later than today, which is what
+    # it says itself: "Funding Opportunity is Archived, Proposals are not
+    # accepted". Truly rolling calls carry no archiveDate, so they stay live.
+    archived = _iso(blk.get("archiveDate"))
+    deadline = _iso(blk.get("responseDate") or blk.get("estApplicationResponseDate")) or archived
+    if str(data.get("ost") or "").upper() in ("ARCHIVED", "CLOSED"):
+        gone = archived or datetime.utcnow().date().isoformat()
+        deadline = min(deadline or gone, gone)
 
     out = {}
     if desc.strip():

@@ -240,6 +240,37 @@ def _enrich(conn, rec, stats, verbose):
         conn.commit()
 
 
+# How stale an undated record's detail may get before it is re-fetched.
+RECHECK_DAYS = 7
+
+
+def _recheck_undated(conn, stats, verbose):
+    """Re-fetch detail for stored grants.gov records that have no deadline.
+
+    An undated record is treated as rolling and stays live forever, but some
+    were only undated until grants.gov archived them (issue #34). An archived
+    listing also leaves the search results, so this is the only place it is
+    seen again. grants_gov_detail turns the archive into a deadline, which
+    db.LIVE then excludes everywhere. Truly rolling calls come back undated.
+
+    A failed fetch leaves the cache alone and is retried next run: overwriting
+    it would blank the cached description.
+    """
+    for row in db.stale_undated(conn, "grants.gov", RECHECK_DAYS):
+        try:
+            detail = adapters.grants_gov_detail(row["external_id"])
+        except Exception:  # noqa: BLE001
+            continue
+        db.save_detail(conn, row["id"], detail, ok=True)
+        if detail.get("deadline"):
+            db.set_deadline(conn, row["id"], detail["deadline"])
+            if adapters.is_expired(detail, grace_days=0):
+                stats["archived"] += 1
+        conn.commit()
+    if verbose and stats["archived"]:
+        print(f"  grants.gov: {stats['archived']} undated calls found archived", flush=True)
+
+
 def merge_sources(sources, conn, verbose=True):
     """config/sources.yaml plus anything added through the dashboard.
 
@@ -275,7 +306,8 @@ def merge_sources(sources, conn, verbose=True):
 
 def ingest(conn, sources, prefilter, verbose=True):
     stats = {"fetched": 0, "kept": 0, "new": 0, "enriched": 0,
-             "detail_cached": 0, "detail_failed": 0, "expired": 0, "pruned": 0}
+             "detail_cached": 0, "detail_failed": 0, "expired": 0, "archived": 0,
+             "pruned": 0}
     sources = merge_sources(sources, conn, verbose)
     kw = sources.get("keywords", [])
 
@@ -319,6 +351,7 @@ def ingest(conn, sources, prefilter, verbose=True):
         cfg = sources["grants_gov"]
         run("grants.gov", "api", adapters.GRANTS_GOV_URL,
             lambda: adapters.grants_gov(kw, agencies=cfg.get("agencies")))
+        _recheck_undated(conn, stats, verbose)
 
     if sources.get("nsf", {}).get("enabled"):
         run("nsf", "api", adapters.NSF_URL, lambda: adapters.nsf(kw))
