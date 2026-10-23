@@ -3,7 +3,7 @@
 #
 # Cluster facts this file assumes:
 #   - ingress class: traefik (+ letsencrypt via certresolver)
-#   - RWX storage: nfs-taiga (default)
+#   - RWX storage: nfs-taiga (default); block storage: csi-cinder-sc-retain
 #   - wildcard DNS: *.software-dev.ncsa.illinois.edu
 #   - Keycloak: https://keycloak.software-dev.ncsa.illinois.edu
 #   - pod CIDR (k3s): 10.42.0.0/16
@@ -18,24 +18,24 @@ image:
 # Image is public on GHCR — no pull secret required.
 imagePullSecrets: []
 
-# TODO(#25): move this volume off nfs-taiga onto Cinder block storage. SQLite
-# is on NFS here, and WAL's shared-memory index is not coherent over NFS — the
-# same single-host assumption the comment below describes. NFS latency is also
-# what made the old /api/health probe time out. Not done in this change: it
-# needs a fresh RWO claim and a copy of the data, on a planned window.
+# SQLite lives on Cinder block storage, not nfs-taiga (#25). Over NFS every
+# request paid a network round-trip per statement - 150 ms for two tiny
+# queries, 2-5 s for a first page load - and WAL's shared-memory index is not
+# coherent over NFS at all.
 #
-# Still ReadWriteMany because this claim is already bound and a PVC's
-# accessModes are immutable — flipping it in place is rejected by the API
-# server, so it stays until a planned migration onto a fresh RWO claim.
-# That label is not what protects the database in any case: what protects it is
-# having exactly one writer (one nightly process, strategy: Recreate, one
-# replica). New installs get ReadWriteOnce from the chart default.
+# An existing claim because the chart's own claim, grant-sift-data, was bound
+# on nfs-taiga and a PVC's storage class and access modes are immutable. The
+# Cinder claim is created, and the data copied onto it, by
+# scripts/k8s-migrate-db-to-cinder.sh. The old NFS claim is kept (resource
+# policy "keep") as the rollback: set existingClaim to grant-sift-data and
+# upgrade to go back.
 persistence:
   enabled: true
-  storageClassName: nfs-taiga
+  existingClaim: grant-sift-data-cinder
+  storageClassName: csi-cinder-sc-retain
   accessModes:
-    - ReadWriteMany
-  size: 5Gi
+    - ReadWriteOnce
+  size: 2Gi
 
 # Local file config/roster.yaml (gitignored). Create before install:
 #   kubectl -n grant-sift create configmap grant-sift-roster \
