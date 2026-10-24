@@ -4,532 +4,251 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Grant Sift: funding watch</title>
-<style>
-  :root {
-    --paper:      #f3f5f2;
-    --card:       #fbfcfa;
-    --ink:        #19211e;
-    --ink-soft:   #5d6763;
-    --ink-faint:  #8b948f;
-    --rule:       #dbe0da;
-    --moss:       #2f5d50;
-    --ember:      #9c3b22;
-    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
-    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  }
-
-  * { box-sizing: border-box; }
-
-  body {
-    margin: 0;
-    background: var(--paper);
-    color: var(--ink);
-    font-family: var(--sans);
-    font-size: 15px;
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  .shell { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
-
-  /* ---- status strip: the operationally characteristic thing ---- */
-  .strip {
-    display: flex; flex-wrap: wrap; align-items: baseline; gap: 34px;
-    padding-bottom: 10px; border-bottom: 2px solid var(--ink);
-  }
-  .brand { font-family: var(--serif); font-size: 30px; letter-spacing: -0.01em; margin-right: auto; }
-  .brand span { color: var(--ink-faint); font-size: 14px; font-family: var(--sans); margin-left: 12px; }
-  .brand-block { margin-right: auto; }
-  .brand-block .brand { margin-right: 0; display: block; }
-  .brand-block .grafana-link {
-    display: inline-block; margin-top: 4px;
-    font-size: 12.5px; color: var(--ink-faint); text-decoration: none;
-  }
-  .brand-block .grafana-link:hover { color: var(--moss); text-decoration: underline; }
-  .brand-block .grafana-link:focus-visible {
-    outline: 2px solid var(--moss); outline-offset: 2px;
-  }
-  .stat b { font-family: var(--serif); font-size: 26px; font-weight: 600; display: block; line-height: 1.1; }
-  .stat i { font-style: normal; font-size: 12.5px; color: var(--ink-soft); }
-  .stat.warn b { color: var(--ember); }
-
-  /* Sits inside the strip, so it lands above the rule rather than pushing the
-     list down. Muted on purpose: this is a standing caveat about coverage, not
-     an emergency, and an alarm-coloured band that is always on gets ignored -
-     which is the one thing a staleness warning cannot afford. */
-  .strip #alarm { flex: 1 1 100%; }
-  .alarm {
-    margin: 12px 0 0; padding: 7px 0 0; border-top: 1px solid var(--rule);
-    font-size: 12.5px; color: var(--ink-faint);
-  }
-  .alarm b { font-weight: 600; color: var(--ink-soft); }
-
-  /* ---- controls ---- */
-  .controls {
-    display: flex; flex-direction: column; gap: 10px;
-    margin: 26px 0 8px;
-  }
-  .controls .search {
-    width: 100%; box-sizing: border-box;
-    padding: 9px 12px; font: inherit; color: var(--ink);
-    background: var(--card); border: 1px solid var(--rule); border-radius: 3px;
-  }
-  .affinity { font-size: 12.5px; color: var(--ink-soft); margin: 2px 0 8px; }
-  .kept { font-size: 12.5px; color: var(--moss); }
-  .tight { color: var(--rust, #9a3b23); }
-  .affinity b { color: var(--ink); font-weight: 500; }
-  .filters {
-    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
-  }
-  .search:focus, .chip:focus-visible, .sortsel:focus, .datesel:focus {
-    outline: 2px solid var(--moss); outline-offset: 1px;
-  }
-  .chip {
-    padding: 7px 13px; font: inherit; font-size: 13.5px;
-    background: transparent; color: var(--ink-soft);
-    border: 1px solid var(--rule); border-radius: 999px; cursor: pointer;
-  }
-  .chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-  .sortsel { padding: 8px 10px; font: inherit; font-size: 13.5px;
-             max-width: 220px;
-             background: var(--card); border: 1px solid var(--rule); border-radius: 3px; }
-  .daterange {
-    display: inline-flex; align-items: center; gap: 6px; flex-wrap: nowrap;
-  }
-  .daterange .dlbl { font-size: 13.5px; color: var(--ink-soft); white-space: nowrap; }
-  .datesel {
-    padding: 7px 8px; font: inherit; font-size: 13.5px;
-    color: var(--ink); background: var(--card);
-    border: 1px solid var(--rule); border-radius: 3px;
-    color-scheme: light;
-  }
-  #area { max-width: 200px; }
-  .tally { font-size: 13px; color: var(--ink-faint); padding: 6px 0 14px; }
-
-  /* ---- the list: an agenda, not cards ---- */
-  .row {
-    display: grid; grid-template-columns: 96px 1fr; gap: 22px;
-    padding: 20px 0; border-bottom: 1px solid var(--rule);
-  }
-  .when { font-family: var(--serif); text-align: right; padding-top: 2px; }
-  .when .d { font-size: 21px; line-height: 1.05; display: block; }
-  .when .m { font-size: 12.5px; color: var(--ink-soft); font-family: var(--sans); }
-  .when .away { font-size: 12px; color: var(--ink-faint); font-family: var(--sans); display: block; margin-top: 3px; }
-  .row.soon .when .d, .row.soon .when .away { color: var(--ember); }
-  .when .rolling { font-size: 13px; color: var(--ink-faint); font-family: var(--sans); }
-
-  h2.title { font-family: var(--serif); font-size: 19.5px; font-weight: 600;
-             margin: 0 0 5px; line-height: 1.3; }
-  h2.title a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--rule); }
-  h2.title a:hover { border-bottom-color: var(--ink); }
-
-  .meta { font-size: 13px; color: var(--ink-soft); margin-bottom: 9px; }
-  .meta em { font-style: normal; color: var(--ink-faint); }
-  .cap { color: var(--ember); }
-
-  .why { margin: 0 0 10px; }
-  /* What the call funds, written to be read. Sits above .why, which is the
-     model's justification of the score and answers a different question. */
-  .sumry { margin: 0 0 8px; color: var(--ink); }
-  /* The two paragraphs answer different questions and used to sit adjacent
-     and unlabelled, which reads as one run-on thought. Only the rationale is
-     tagged: the summary is the plain description and needs no introduction,
-     and tagging both would be twice the furniture for half the clarity.
-
-     "why", not "relevance" or "why this score": the badge directly above
-     already reads "good fit 75/100", so labelling it "relevance" names the
-     paragraph with the thing next to it rather than with what it says. */
-  .tag { font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase;
-         color: var(--ink-faint); margin-right: 8px; white-space: nowrap; }
-
-  .fit {
-    padding: 9px 12px; background: var(--card);
-    border-left: 2px solid var(--moss); font-size: 13.5px; color: var(--ink-soft);
-  }
-  .fit b { color: var(--moss); font-weight: 600; }
-  .fit a { text-decoration: none; }
-  .fit a:hover b { text-decoration: underline; }
-  .fit .cold { color: var(--ink-faint); font-weight: 400; }
-
-  /* Who to email, and who here already knows them. A match is only useful if
-     it ends in a message being sent, so both addresses are one click away. */
-  .reach { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--rule);
-           font-size: 12.5px; line-height: 1.75; }
-  .reach div { display: flex; gap: 6px; }
-  .reach .who { color: var(--ink-faint); flex: 0 0 5.5em; }
-  .reach a { color: var(--moss); text-decoration: none; }
-  .reach a:hover { text-decoration: underline; }
-  .reach .noaddr { color: var(--ink-faint); font-style: italic; }
-  .reach .addr { color: var(--ink-soft); font-size: 12px; }
-  .reach .addr:hover { color: var(--moss); }
-  .lead { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 9px;
-          font-size: 11px; color: var(--ember); border: 1px solid var(--ember); }
-  .ours { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 9px;
-          font-size: 11px; color: var(--moss); border: 1px solid var(--moss); }
-  .reach .flag { color: var(--ember); flex: 1 1 auto; }
-
-  /* ---- browse panes inside the roster / sources modals ---- */
-  .lede { margin: 2px 0 12px; font-size: 13px; color: var(--ink-soft); max-width: 68ch; }
-  .browsebar { display: flex; align-items: center; gap: 10px; margin: 4px 0 6px; }
-  .morebar { display: flex; align-items: center; justify-content: space-between;
-             gap: 12px; padding: 10px 0 2px; font-size: 12.5px; color: var(--ink-faint); }
-  .addbox { margin: 2px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
-  .addbox summary { cursor: pointer; color: var(--moss); font-size: 13.5px; }
-  .addbox form { margin-top: 10px; }
-  .browsebar input { flex: 1 1 auto; padding: 7px 10px; font: inherit; font-size: 13.5px;
-                     background: #fff; color: var(--ink); border: 1px solid var(--rule);
-                     border-radius: 3px; }
-  .rrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 9px;
-          padding: 7px 0; border-bottom: 1px solid var(--rule); font-size: 13px; }
-  .rrow .nm { font-weight: 600; color: var(--ink); }
-  .rrow .sub { color: var(--ink-faint); flex: 1 1 100%; font-size: 12.5px; }
-  .rrow a { color: var(--moss); text-decoration: none; }
-  .rrow a:hover { text-decoration: underline; }
-  .pill { padding: 0 7px; border-radius: 9px; font-size: 11px; border: 1px solid var(--rule);
-          color: var(--ink-soft); }
-  .pill.warm { color: var(--moss); border-color: var(--moss); }
-  .pill.prospect { color: var(--ink-faint); }
-  .pill.departed, .pill.stale { color: var(--ember); border-color: var(--ember); }
-  .pill.added { color: var(--moss); border-color: var(--moss); }
-
-  /* Relevance as a four-step signal, not a progress bar. A bar filling
-     left-to-right reads as "how far along", which is the wrong question; rising
-     steps read as strength. Banded rather than a continuous ramp: the score is
-     a model estimate, and a smooth fill implies a precision it does not have.
-     Four bands say "pursue / look / marginal / no" and that is the real
-     resolution, so the band gets a word and the number stays secondary. */
-  .score { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .score .sig { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
-  .score .sig i { display: block; width: 4px; border-radius: 1px; background: var(--rule); }
-  .score .sig i:nth-child(1) { height: 5px; }
-  .score .sig i:nth-child(2) { height: 8px; }
-  .score .sig i:nth-child(3) { height: 11px; }
-  .score .sig i:nth-child(4) { height: 14px; }
-  .score .sig i.on { background: var(--moss); }
-  .score.lo .sig i.on, .score.min .sig i.on { background: var(--ink-faint); }
-  .score .band { font-size: 12.5px; font-weight: 500; color: var(--moss); }
-  .score.lo .band, .score.min .band { color: var(--ink-soft); font-weight: 400; }
-  .score .num { font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
-
-  .acts { margin-top: 8px; }
-  .act { font-size: 13px; color: var(--moss); text-decoration: none; }
-  button.act {
-    background: none; border: none; padding: 0; cursor: pointer; font: inherit;
-  }
-  button.act:disabled { opacity: .45; cursor: not-allowed; }
-  .act:hover { text-decoration: underline; }
-  .amt { color: var(--ink); font-weight: 500; }
-  .noamt { color: var(--ink-faint); }
-  .areatag { display: inline-block; float: right; margin: 0 0 4px 8px; padding: 1px 7px;
-             max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-             vertical-align: bottom;
-             font: inherit; font-size: 11.5px; color: var(--ink-soft); cursor: pointer;
-             background: var(--paper); border: 1px solid var(--rule); border-radius: 9px; }
-  .areatag:hover { color: var(--moss); border-color: var(--moss); }
-
-  .acts { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-  .vote { font: inherit; font-size: 13px; padding: 2px 9px; cursor: pointer;
-          color: var(--ink-soft); background: var(--paper);
-          border: 1px solid var(--rule); border-radius: 11px; }
-  .vote:hover:not(:disabled) { color: var(--moss); border-color: var(--moss); }
-  .vote[aria-pressed="true"] { color: var(--moss); border-color: var(--moss); font-weight: 500; }
-  .vote:disabled { opacity: .45; cursor: not-allowed; }
-  .votenote { font-size: 12px; color: var(--ink-faint); }
-  .fbbox { margin-top: 8px; display: none; gap: 6px; }
-  .fbbox.on { display: flex; flex-wrap: wrap; }
-  .fbbox input { flex: 1 1 260px; font: inherit; font-size: 13px; padding: 4px 7px;
-                 border: 1px solid var(--rule); background: #fff; color: var(--ink); }
-
-  .chat {
-    display: none; margin-top: 14px; padding: 14px 14px 12px;
-    background: #fff; border: 1px solid var(--rule); border-left: 3px solid var(--moss);
-  }
-  .chat.on { display: block; }
-  .chat .chathead {
-    display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px;
-    margin-bottom: 8px;
-  }
-  .chat .chathead b { font-size: 13.5px; font-weight: 600; color: var(--moss); }
-  .chat .chathead .meta { font-size: 12px; color: var(--ink-faint); }
-  .chat .chathead .model { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-  .chat .log {
-    display: flex; flex-direction: column; gap: 10px;
-    max-height: 360px; overflow-y: auto; font-size: 13.5px;
-    padding: 4px 0; background: transparent; border: none; min-height: 0;
-  }
-  .chat .log:empty { display: none; }
-  .chat .turn {
-    max-width: min(92%, 520px); padding: 9px 12px; white-space: pre-wrap;
-    line-height: 1.45; border: 1px solid var(--rule);
-  }
-  .chat .turn .from {
-    display: block; font-size: 11.5px; font-weight: 600; margin-bottom: 4px;
-    color: var(--ink-faint); letter-spacing: 0.02em;
-  }
-  .chat .turn.user {
-    align-self: flex-end; background: #eef3f0; border-color: #d2ddd7;
-  }
-  .chat .turn.user .from { color: var(--moss); }
-  .chat .turn.assistant {
-    align-self: flex-start; background: #fff; border-color: var(--rule);
-  }
-  .chat .turn.assistant .from { color: var(--ink-soft); }
-  .chat form { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-  .chat input[type=text] { flex: 1 1 240px; font: inherit; font-size: 13px; padding: 6px 8px;
-                 border: 1px solid var(--rule); background: #fff; color: var(--ink); }
-  .chat .hint { font-size: 12px; color: var(--ink-faint); }
-  .chat .privacy { font-size: 12px; color: var(--ink-faint); margin-bottom: 10px;
-                   max-width: 68ch; line-height: 1.45; }
-  .chatfoot { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
-
-  .cfgpop input.hilite {
-    outline: 2px solid var(--moss); outline-offset: 1px;
-    border-color: var(--moss);
-    box-shadow: 0 0 0 3px rgba(47, 93, 80, 0.15);
-  }
-
-  .whoami { margin-left: auto; display: flex; align-items: center; gap: 10px; position: relative; }
-  .who { font-size: 12.5px; color: var(--ink-faint); }
-  .cfgbtn, .shelfbtn {
-    font: inherit; font-size: 13px; padding: 5px 11px; cursor: pointer;
-    border: 1px solid var(--rule); border-radius: 3px;
-    background: #fff; color: var(--ink-soft);
-  }
-  .cfgbtn:hover, .cfgbtn[aria-expanded="true"],
-  .shelfbtn:hover {
-    color: var(--moss); border-color: var(--moss);
-  }
-  .shelfbtn .n {
-    font-variant-numeric: tabular-nums; color: var(--moss); font-weight: 600;
-  }
-  .shelfbtn:disabled { opacity: 0.45; cursor: default; }
-  .cfgpop {
-    display: none; position: absolute; right: 0; top: calc(100% + 8px); z-index: 40;
-    width: min(440px, calc(100vw - 36px)); padding: 0;
-    background: #fff; border: 1px solid var(--rule); box-shadow: 0 8px 24px rgba(25,33,30,.08);
-    font-size: 13px;
-  }
-  .cfgpop.on { display: block; }
-  .cfgpop .cfgsec { padding: 14px 16px; border-bottom: 1px solid var(--rule); }
-  .cfgpop .cfgsec:last-child { border-bottom: none; }
-  .cfgpop .cfgsec h3 { margin: 0 0 4px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
-  .cfgpop .cfgsec .desc { margin: 0 0 10px; font-size: 12.5px; color: var(--ink-faint); line-height: 1.45; }
-  .cfgpop label { display: block; font-size: 12px; color: var(--ink-soft); margin: 8px 0 3px; }
-  .cfgpop label:first-of-type { margin-top: 0; }
-  .cfgpop input, .cfgpop select { width: 100%; font: inherit; font-size: 13px; padding: 6px 8px;
-                  border: 1px solid var(--rule); background: #fff; color: var(--ink); }
-  .cfgpop .offline { color: var(--ink-faint); font-size: 12px; margin-top: 8px; line-height: 1.4; }
-  .cfgpop .cfgsec .vote { margin-top: 4px; }
-  .cfgpop .subfeeds { margin: 8px 0 10px; display: flex; flex-direction: column; gap: 6px; }
-  .cfgpop .subfeeds label {
-    display: flex; align-items: flex-start; gap: 8px; margin: 0;
-    font-size: 13px; color: var(--ink); cursor: pointer; line-height: 1.35;
-  }
-  .cfgpop .subfeeds input[type="checkbox"] {
-    width: auto; margin-top: 2px; flex-shrink: 0;
-  }
-
-  .verdict { display: inline-block; margin-right: 8px; padding: 1px 7px; font-size: 11.5px;
-             border-radius: 9px; border: 1px solid var(--moss); color: var(--moss); }
-  .verdict.down { border-color: #a4453a; color: #a4453a; }
-  .fbbox select { font: inherit; font-size: 13px; padding: 4px 6px;
-                  border: 1px solid var(--rule); background: #fff; color: var(--ink); }
-
-  input, select, textarea {
-    background: #fff; color: var(--ink);
-  }
-  .search, .sortsel, .datesel { background: #fff; }
-
-  .pager {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-    margin: 18px 0 8px; font-size: 13px; color: var(--ink-soft);
-  }
-  .pager .pages { display: flex; flex-wrap: wrap; gap: 4px; }
-  .pager button {
-    font: inherit; font-size: 13px; padding: 4px 10px; cursor: pointer;
-    border: 1px solid var(--rule); border-radius: 3px;
-    background: #fff; color: var(--ink-soft);
-  }
-  .pager button:hover:not(:disabled) { color: var(--moss); border-color: var(--moss); }
-  .pager button[aria-current="page"] {
-    background: var(--ink); color: var(--paper); border-color: var(--ink);
-  }
-  .pager button:disabled { opacity: .4; cursor: not-allowed; }
-
-  .modal-backdrop {
-    display: none; position: fixed; inset: 0; z-index: 50;
-    background: rgba(25, 33, 30, 0.35);
-    align-items: center; justify-content: center; padding: 24px;
-  }
-  .modal-backdrop.on { display: flex; }
-  .modal {
-    width: min(640px, 100%); max-height: min(84vh, 720px); overflow: auto;
-    background: #fff; border: 1px solid var(--rule); padding: 18px 20px 20px;
-  }
-  #shelf-modal .modal {
-    width: min(980px, 100%); max-height: min(92vh, 920px);
-    padding: 22px 28px 28px;
-  }
-  .modal header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
-  .shelfacts { display: flex; align-items: center; gap: 14px; margin: 10px 0 4px; flex-wrap: wrap; }
-  #shelf-body .mute {
-    font-size: 12px; color: var(--ink-faint); margin: 0 0 10px; line-height: 1.45;
-  }
-  #shelf-body .mute b { font-weight: 600; color: var(--ink-faint); }
-  #shelf-body textarea {
-    width: 100%; box-sizing: border-box; font: inherit; font-size: 14px;
-    padding: 12px 14px; margin: 4px 0 2px; resize: vertical; min-height: 140px;
-    border: 1px solid var(--rule); border-radius: 3px; background: #fff; color: var(--ink);
-  }
-  #shelf-body .bkout {
-    white-space: pre-wrap; font-size: 14px; margin: 14px 0 6px; line-height: 1.5;
-    color: var(--ink);
-  }
-  #shelf-body .bkout .tag { margin-right: 8px; }
-  #shelf-body .hint { font-size: 12px; color: var(--ink-faint); }
-  #shelf-list { margin-top: 8px; }
-  #shelf-list .row:last-child { border-bottom: none; }
-  .modal header h2 { margin: 0; font-family: var(--serif); font-size: 20px; font-weight: 600; }
-  .modal .x {
-    margin-left: auto; font: inherit; font-size: 13px; cursor: pointer;
-    color: var(--ink-soft); background: transparent; border: none; padding: 4px 6px;
-  }
-  .modal .x:hover { color: var(--moss); }
-  .modal form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .modal input, .modal select { font: inherit; font-size: 13px; padding: 6px 8px;
-           border: 1px solid var(--rule); background: #fff; color: var(--ink); }
-  .modal .wide { flex: 1 1 220px; }
-  .modal .rlist { margin-top: 12px; font-size: 12.5px; color: var(--ink-soft); }
-  .modal .rlist div { padding: 3px 0; }
-  .modal .note { font-size: 12px; color: var(--ink-faint); margin-top: 10px; max-width: 74ch;
-                 line-height: 1.45; }
-
-  .empty { padding: 60px 0; text-align: center; color: var(--ink-soft); }
-  .empty b { font-family: var(--serif); font-size: 19px; display: block; color: var(--ink); margin-bottom: 6px; }
-
-  footer { margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--rule);
-           font-size: 12.5px; color: var(--ink-faint); }
-
-  @media (max-width: 620px) {
-    .shell { padding: 26px 18px 60px; }
-    .row { grid-template-columns: 1fr; gap: 8px; }
-    .when { text-align: left; }
-    .when .d, .when .m { display: inline; font-size: 14px; }
-    .brand { font-size: 24px; }
-    .daterange { flex-wrap: wrap; }
-  }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
-</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=1">
 </head>
 <body>
-<div class="shell">
-
-  <header class="strip">
-    <div class="brand-block">
-      <div class="brand">Grant Sift<span id="asof">loading</span></div>
-      <a class="grafana-link" id="grafana-link" hidden href="#" target="_blank" rel="noopener">Ops &amp; signal</a>
-    </div>
-    <div class="stat"><b id="n-open">..</b><i>open calls</i></div>
-    <div class="stat warn"><b id="n-soon">..</b><i>close within 30 days</i></div>
-    <div class="stat"><b id="n-match">..</b><i>match a past collaborator</i></div>
-    <div class="whoami" id="whoami" hidden>
-      <div class="who" id="who"></div>
-      <button type="button" class="shelfbtn" id="shelfbtn"
+<header class="strip">
+  <div class="wrap">
+    <a class="brand-block" href="./">
+      <span class="brand">Grant Sift</span>
+      <span class="tagline">Funding watch</span>
+    </a>
+    <!-- One page, so no tab nav: everything here opens a panel or a menu. -->
+    <div class="tools" id="whoami" hidden>
+      <button type="button" class="tbtn" id="shelfbtn" aria-haspopup="dialog" aria-label="Idea match"
               title="Describe an idea, find matching calls, and keep a shortlist — private to this browser">
-        Idea match <span class="n" id="shelf-n" hidden></span>
+        <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z"/></svg>
+        <span class="lbl">Idea match</span>
+        <span class="n" id="shelf-n" hidden></span>
       </button>
-      <button type="button" class="cfgbtn" id="cfgbtn" aria-expanded="false"
-              aria-controls="cfgpop">Personalize</button>
-      <div class="cfgpop" id="cfgpop" role="dialog" aria-label="Personalize">
-        <div class="cfgsec">
-          <h3>Chat gateway</h3>
-          <p class="desc">Any OpenAI-compatible endpoint (Lumen, OpenAI, OpenRouter
-            for Claude, Gemini’s OpenAI bridge, Groq, …). Key stays in this tab only.</p>
-          <label for="k-key">API key</label>
-          <input id="k-key" type="password" placeholder="API key" autocomplete="off">
-          <label for="k-base">Base URL</label>
-          <input id="k-base" type="text" placeholder="https://lumen.ncsa.illinois.edu/v1"
-                 value="https://lumen.ncsa.illinois.edu/v1">
-          <label for="k-model">Model</label>
-          <input id="k-model" type="text" placeholder="e.g. gemma-4-31b-it, gpt-4o, anthropic/claude-sonnet-4"
-                 value="gemma-4-31b-it">
-          <div class="offline" id="k-note">Must speak /v1/chat/completions. Extend hosts via
-            GRANT_SIFT_CHAT_ALLOWED_HOSTS if needed.</div>
-        </div>
-        <div class="cfgsec">
-          <h3>Collaborator roster</h3>
-          <p class="desc">Add past collaborations used when scoring new calls.
-            Dashboard entries merge with the reviewed YAML baseline on the next
-            assess run.</p>
-          <button type="button" class="vote" id="open-roster">Who we know</button>
-          <button type="button" class="vote" id="open-sources">Where calls come from</button>
-        </div>
-        <div class="cfgsec">
-          <h3>Email digests</h3>
-          <p class="desc">Nightly digests of new high-relevance calls. Sent to
-            your NCSA / Illinois address after the overnight run. Uncheck all and
-            save to unsubscribe.</p>
-          <label for="sub-email">Email</label>
-          <input id="sub-email" type="email" readonly
-                 placeholder="signed-in address">
-          <div class="subfeeds" id="sub-feeds"></div>
-          <button type="button" class="vote" id="sub-save">Save subscriptions</button>
-          <div class="offline" id="sub-hint"></div>
+      <div class="menuwrap">
+        <button type="button" class="tbtn" id="databtn" aria-haspopup="menu" aria-expanded="false"
+                aria-controls="datamenu" aria-label="Data">
+          <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+          <span class="lbl">Data</span>
+          <svg class="ico chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="menu" id="datamenu" role="menu" aria-labelledby="databtn" hidden>
+          <div class="mhead">What scoring is based on</div>
+          <div class="mgrp">
+            <button type="button" class="mitem" role="menuitem" id="open-roster">
+              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></svg>
+              <span class="mtxt"><b>Who we know</b><small>Collaborator roster</small></span>
+            </button>
+            <button type="button" class="mitem" role="menuitem" id="open-sources">
+              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+              <span class="mtxt"><b>Sources</b><small>Funder pages and feeds we read</small></span>
+            </button>
+          </div>
+          <div class="mgrp" id="grafana-grp" hidden>
+            <a class="mitem" role="menuitem" id="grafana-link" href="#" target="_blank" rel="noopener">
+              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg>
+              <span class="mtxt"><b>Ops &amp; signal</b><small>Pipeline dashboard</small></span>
+              <svg class="ico ext" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#556070" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+            </a>
+          </div>
         </div>
       </div>
-    </div>
-    <div id="alarm"></div>
-  </header>
-
-  <div class="controls">
-    <input id="q" class="search" type="search" placeholder="Search titles, funders, people">
-    <div class="filters">
-      <button class="chip" data-filter="soon" aria-pressed="false">Closing soon</button>
-      <button class="chip" data-filter="match" aria-pressed="false">Roster match</button>
-      <button class="chip" data-filter="via-me" aria-pressed="false" hidden
-              title="Calls where you are the NCSA contact to introduce">Via me</button>
-      <button class="chip" data-filter="my-sources" aria-pressed="false" hidden
-              title="Calls from funder pages or feeds you added">My sources</button>
-      <button class="chip" data-filter="my-digests" aria-pressed="false" hidden
-              title="Calls in the email digests you subscribe to">My digests</button>
-      <button class="chip" data-filter="embedded" aria-pressed="false">Domain calls</button>
-      <button class="chip" data-filter="ci" aria-pressed="false">CI programs</button>
-      <button class="chip" data-filter="foundation" aria-pressed="false">Foundations</button>
-      <div class="daterange" role="group" aria-label="Filter by deadline">
-        <label class="dlbl" for="dl-from">Due</label>
-        <input id="dl-from" class="datesel" type="date" aria-label="Deadline from">
-        <label class="dlbl" for="dl-to">to</label>
-        <input id="dl-to" class="datesel" type="date" aria-label="Deadline to">
+      <button type="button" class="tbtn solid" id="chatbtn" aria-haspopup="dialog">
+        <span class="dot" aria-hidden="true"></span><span id="chatbtn-lbl">Set up AI chat</span>
+      </button>
+      <div class="menuwrap">
+        <button type="button" class="acct" id="acctbtn" aria-haspopup="menu" aria-expanded="false"
+                aria-controls="acctmenu" aria-label="Account">
+          <span class="av" id="acct-av" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+          <svg class="ico chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="menu" id="acctmenu" role="menu" aria-labelledby="acctbtn" hidden>
+          <div class="msigned" id="acct-who" hidden><small>Signed in as</small><b id="acct-name"></b></div>
+          <div class="mgrp">
+            <button type="button" class="mitem" role="menuitem" id="m-chat">
+              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
+              <span class="mtxt"><b>AI chat</b><small>Key for Ask and Idea match</small></span>
+              <span class="status" data-chatstatus>Not set up</span>
+            </button>
+            <button type="button" class="mitem" role="menuitem" id="m-digests">
+              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+              <span class="mtxt"><b>Email digests</b><small>Nightly emails of new calls</small></span>
+            </button>
+          </div>
+          <div class="mgrp">
+            <a class="mitem" role="menuitem" href="https://github.com/ncsa/grant-sift/wiki/Grant-Sift-in-Claude:-setup" target="_blank" rel="noopener">
+              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7V3M15 7V3"/><path d="M6 7h12v4a6 6 0 0 1-12 0z"/><path d="M12 17v4"/></svg>
+              <span class="mtxt"><b>Use in Claude, ChatGPT…</b><small>MCP setup guide</small></span>
+              <svg class="ico ext" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#556070" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+            </a>
+          </div>
+        </div>
       </div>
-      <select id="funder" class="sortsel" aria-label="Filter by funder">
-        <option value="">All funders</option>
-      </select>
-      <select id="area" class="sortsel" aria-label="Filter by roster area">
-        <option value="">All roster areas</option>
-      </select>
-      <select id="sort" class="sortsel">
-        <option value="score" selected>Sort: highest relevance</option>
-        <option value="deadline">Sort: soonest deadline</option>
-        <option value="award-desc">Sort: largest award</option>
-        <option value="award-asc">Sort: smallest award</option>
-        <option value="new">Sort: recently added</option>
-        <option value="relevance">Sort: best match to search</option>
-      </select>
     </div>
   </div>
+</header>
 
-  <div class="tally" id="tally"></div>
-  <main id="list"></main>
-  <nav class="pager" id="pager" hidden aria-label="Pagination"></nav>
+<main class="wrap">
+
+  <section class="overview" aria-label="Overview">
+    <div class="lede-block">
+      <h1>Open funding calls</h1>
+      <p><span id="asof">Loading</span> · Ranked for relevance to the Research Software Engineering group at NCSA. Scores and collaborator matches are a first pass, not a decision.</p>
+      <a class="mcp-card" href="https://github.com/ncsa/grant-sift/wiki/Grant-Sift-in-Claude:-setup" target="_blank" rel="noopener">
+        <svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7V3M15 7V3"/><path d="M6 7h12v4a6 6 0 0 1-12 0z"/><path d="M12 17v4"/></svg>
+        <span><b>Use Grant Sift in your AI assistant.</b>
+          <span class="sub">Connect Claude, ChatGPT or any MCP-compatible tool to search and ask about these calls.</span>
+          <span class="go">Setup guide →</span></span>
+      </a>
+    </div>
+    <dl class="stats">
+      <div class="stat"><dt>Open calls</dt><dd id="n-open">..</dd></div>
+      <div class="stat warn"><dt>Close within 30 days</dt><dd id="n-soon">..</dd></div>
+      <div class="stat"><dt>Match a past collaborator</dt><dd id="n-match">..</dd></div>
+    </dl>
+  </section>
+
+  <div id="alarm"></div>
+
+  <section class="controls" aria-label="Search and filters">
+    <div class="find">
+      <label class="field search-f">
+        <span class="flbl">Search</span>
+        <span class="searchbox">
+          <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#556070" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="q" class="search" type="search" placeholder="Titles, funders, people">
+        </span>
+      </label>
+      <label class="field funder-f">
+        <span class="flbl">Funder</span>
+        <select id="funder" class="sortsel"><option value="">All funders</option></select>
+      </label>
+      <label class="field area-f">
+        <span class="flbl">Roster area</span>
+        <select id="area" class="sortsel"><option value="">All roster areas</option></select>
+      </label>
+      <div class="field" role="group" aria-labelledby="dl-lbl">
+        <span class="flbl" id="dl-lbl">Due between</span>
+        <span class="daterange">
+          <input id="dl-from" class="datesel" type="date" aria-label="Due after">
+          <span aria-hidden="true">–</span>
+          <input id="dl-to" class="datesel" type="date" aria-label="Due before">
+        </span>
+      </div>
+    </div>
+    <div class="filters">
+      <div class="chipgroup" role="group" aria-labelledby="g-priority">
+        <span class="glbl" id="g-priority">Priority</span>
+        <button class="chip" data-filter="soon" aria-pressed="false">Closing soon</button>
+        <button class="chip" data-filter="match" aria-pressed="false">Roster match</button>
+      </div>
+      <div class="chipgroup" role="group" aria-labelledby="g-mine" id="grp-mine" hidden>
+        <span class="glbl" id="g-mine">Mine</span>
+        <button class="chip" data-filter="via-me" aria-pressed="false" hidden
+                title="Calls where you are the NCSA contact to introduce">Via me</button>
+        <button class="chip" data-filter="my-sources" aria-pressed="false" hidden
+                title="Calls from funder pages or feeds you added">My sources</button>
+        <button class="chip" data-filter="my-digests" aria-pressed="false" hidden
+                title="Calls in the email digests you subscribe to">My digests</button>
+        <button type="button" class="linkbtn" id="manage-digests">Manage digests</button>
+      </div>
+      <div class="chipgroup" role="group" aria-labelledby="g-type">
+        <span class="glbl" id="g-type">Call type</span>
+        <button class="chip" data-filter="embedded" aria-pressed="false">Domain calls</button>
+        <button class="chip" data-filter="ci" aria-pressed="false">CI programs</button>
+        <button class="chip" data-filter="foundation" aria-pressed="false">Foundations</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="resultbar">
+    <div class="tally" id="tally" aria-live="polite"></div>
+    <label class="sortlbl">Sort by
+      <select id="sort" class="sortsel">
+        <option value="score" selected>Highest relevance</option>
+        <option value="deadline">Soonest deadline</option>
+        <option value="award-desc">Largest award</option>
+        <option value="award-asc">Smallest award</option>
+        <option value="new">Recently added</option>
+        <option value="relevance">Best match to search</option>
+      </select>
+    </label>
+  </div>
+  <ol id="list"></ol>
+  <nav class="pager" id="pager" hidden aria-label="Pages"></nav>
 
   <footer id="foot"></footer>
+</main>
+
+<div class="modal-backdrop" id="chat-modal" hidden>
+  <div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="chat-title">
+    <header>
+      <h2 id="chat-title">AI chat</h2>
+      <button type="button" class="x" id="chat-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </header>
+    <section class="conn" id="conn" aria-labelledby="conn-h">
+      <div class="startnote" data-notready>
+        <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+        <span><b>Start here.</b> Add your Lumen key to turn on <b>Ask about this call</b> and <b>Idea match</b>.</span>
+      </div>
+      <div class="connbody">
+        <div class="connhead">
+          <h3 id="conn-h">Connection</h3>
+          <span class="status" data-chatstatus>Not set up</span>
+        </div>
+        <form id="k-form" class="keyf">
+          <label class="flbl2" for="k-key">Lumen API key</label>
+          <span class="keyrow">
+            <input id="k-key" type="password" placeholder="sk_…" autocomplete="off">
+            <button type="submit" class="primary">Save</button>
+          </span>
+          <span class="help" id="k-note">Your Lumen project key. Kept in this browser tab only; never stored on the server.</span>
+        </form>
+        <details class="provider" id="k-provider">
+          <summary>Use a different provider</summary>
+          <p class="help">Any OpenAI-compatible endpoint: Lumen, OpenAI, OpenRouter (for Claude),
+            Gemini’s OpenAI bridge, Groq. It must speak /v1/chat/completions; extend
+            hosts via GRANT_SIFT_CHAT_ALLOWED_HOSTS if needed.</p>
+          <label class="flbl2" for="k-base">Base URL</label>
+          <input id="k-base" type="url" placeholder="https://lumen.ncsa.illinois.edu/v1"
+                 value="https://lumen.ncsa.illinois.edu/v1">
+          <label class="flbl2" for="k-model">Model</label>
+          <input id="k-model" type="text" placeholder="e.g. gemma-4-31b-it, gpt-4o, anthropic/claude-sonnet-4"
+                 value="gemma-4-31b-it">
+        </details>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="digest-modal" hidden>
+  <div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="digest-title">
+    <header>
+      <h2 id="digest-title">Email digests</h2>
+      <button type="button" class="x" id="digest-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </header>
+    <div class="digestf">
+      <p class="help">New high-relevance calls, emailed nightly after the overnight run.</p>
+      <label class="flbl2" for="sub-email">Send to</label>
+      <input id="sub-email" type="email" readonly placeholder="Your NCSA / Illinois address"
+             title="Digests go to the address you are signed in with">
+      <fieldset class="subfeeds">
+        <legend class="flbl2">Digests</legend>
+        <div id="sub-feeds"></div>
+      </fieldset>
+      <div class="savebar">
+        <button type="button" class="secondary" id="sub-save">Save digests</button>
+        <span class="help">Uncheck all and save to unsubscribe.</span>
+      </div>
+      <div class="help" id="sub-hint" aria-live="polite"></div>
+    </div>
+  </div>
 </div>
 
 <div class="modal-backdrop" id="sources-modal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="sources-title">
     <header>
       <h2 id="sources-title">Where calls come from</h2>
-      <button type="button" class="x" id="sources-close" aria-label="Close">Close</button>
+      <button type="button" class="x" id="sources-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </header>
     <details class="addbox">
       <summary>Add a source the tool does not read yet</summary>
@@ -573,8 +292,12 @@
 <div class="modal-backdrop" id="shelf-modal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shelf-title">
     <header>
-      <h2 id="shelf-title">Idea match</h2>
-      <button type="button" class="x" id="shelf-close" aria-label="Close">Close</button>
+      <div>
+        <h2 id="shelf-title">Idea match</h2>
+        <p>Describe an idea, find matching calls, and keep a shortlist. Nothing is
+          sent to or stored on the server — ideas stay in this browser only.</p>
+      </div>
+      <button type="button" class="x" id="shelf-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </header>
     <div id="shelf-body"></div>
   </div>
@@ -584,7 +307,7 @@
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="roster-title">
     <header>
       <h2 id="roster-title">Who we know</h2>
-      <button type="button" class="x" id="roster-close" aria-label="Close">Close</button>
+      <button type="button" class="x" id="roster-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </header>
     <details class="addbox">
       <summary>Add a collaborator who is not listed above</summary>
@@ -623,1419 +346,6 @@
   </div>
 </div>
 
-<script>
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-// Search, filters, sort and paging are the server's (/api/opportunities,
-// grant_sift/catalogue.py): the page, the API and the MCP tools share one
-// implementation. SEEN keeps every row this tab has been sent, so the Idea
-// match shelf can paint a call without asking again.
-let SEEN = new Map(), GONE = new Set(), ACTIVE = new Set(), QUERY = "", SORT = "score", AREA = "", FUNDER = "";
-let SORT_CHOSEN = false;
-const PERSONAL = ["via-me", "my-sources", "my-digests"];
-let DL_FROM = "", DL_TO = "", DL_MIN = "", DL_MAX = "";
-let PAGE = 1, PAGE_SIZE = 25;
-
-const daysAway = d => d ? Math.ceil((new Date(d + "T00:00:00") - new Date().setHours(0,0,0,0)) / 864e5) : null;
-const esc = s => (s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-
-// Illinois Experts areas are often long comma-joined concept lists. Keep the
-// full string as the filter value; shorten only what the browser paints.
-function shortArea(d, max = 42) {
-  if (!d) return "";
-  if (d.length <= max) return d;
-  const first = d.split(",")[0].trim();
-  if (first.length >= 10 && first.length <= max) return first;
-  return d.slice(0, max - 1).replace(/\s+\S*$/, "").trimEnd() + "…";
-}
-
-function shortDate(iso) {
-  if (!iso) return "";
-  const dt = new Date(iso + "T00:00:00");
-  return `${dt.getDate()} ${MONTHS[dt.getMonth()]} ${String(dt.getFullYear()).slice(2)}`;
-}
-
-function deadlineRangeLabel() {
-  if (!DL_FROM && !DL_TO) return "";
-  if (DL_FROM && DL_TO) return ` due ${shortDate(DL_FROM)}–${shortDate(DL_TO)}`;
-  if (DL_FROM) return ` due from ${shortDate(DL_FROM)}`;
-  return ` due by ${shortDate(DL_TO)}`;
-}
-
-// Both ends of the introduction: the researcher to approach, and whoever here
-// already has a line to them. A match that leaves you hunting for an address
-// in a spreadsheet has not saved anyone any work.
-function mailto(name, email, extra) {
-  // Name links, address shown beside it. The address used to live only in a
-  // title attribute: invisible on touch, uncopyable, and useless to anyone
-  // who wanted to paste it somewhere.
-  const link = email
-    ? `<a href="mailto:${esc(email)}">${esc(name)}</a>` +
-      ` <a class="addr" href="mailto:${esc(email)}">${esc(email)}</a>`
-    : `${esc(name)} <span class="noaddr">no address on file</span>`;
-  return link + (extra ? ` <span class="cold">${esc(extra)}</span>` : "");
-}
-
-function reach(o) {
-  const c = o.contact;
-  if (!c) return "";
-  // Nothing to act on: no address, nobody here who knows them, nothing to
-  // check. A row saying "no address on file" under a match that is a team
-  // rather than a person is just a line of grey text.
-  const anyInternal = (c.ncsa_contact || []).some(p => p.name);
-  if (!c.email && !anyInternal && !c.review) return "";
-  const lines = [];
-  const where = [c.unit, c.org && c.org !== "UIUC" ? c.org : null]
-    .filter(Boolean).join(", ");
-  // A program is something we run, so there is no "them" to write to. Showing
-  // one anyway produced "reach out to Luigi Marini, via us: Luigi Marini".
-  // The internal row below is the whole answer.
-  if (c.kind !== "program") {
-    lines.push(`<div><span class="who">them</span><span>${
-      mailto(o.match_name, c.email, where)}</span></div>`);
-  }
-
-  if (c.ncsa_contact && c.ncsa_contact.length) {
-    lines.push(`<div><span class="who">via us</span><span>${
-      c.ncsa_contact.map(p => mailto(p.name, p.email)).join(", ")}</span></div>`);
-  }
-  // Only shown when it changes what you would do: a bad address, or a person
-  // who has left. Never sent to the model.
-  if (c.review) {
-    lines.push(`<div><span class="who">check</span><span class="flag">${
-      esc(c.review)}</span></div>`);
-  }
-  return `<div class="reach">${lines.join("")}</div>`;
-}
-
-const SCORE_BANDS = [
-  [80, "hi", 4, "strong fit"],
-  [60, "mid", 3, "good fit"],
-  [40, "lo", 2, "partial fit"],
-  [0, "min", 1, "weak fit"],
-];
-function scoreSignal(score) {
-  const [, cls, lit, word] = SCORE_BANDS.find(([min]) => score >= min) || SCORE_BANDS[3];
-  const bars = [1, 2, 3, 4].map(n => `<i class="${n <= lit ? "on" : ""}"></i>`).join("");
-  return `<div class="score ${cls}" title="How well this matches the group's work, scored 0 to 100 by the model">
-        <span class="sig" role="img" aria-label="Relevance ${score} of 100, ${word}">${bars}</span>
-        <span class="band">${word}</span><span class="num">${score}/100</span>
-      </div>`;
-}
-
-function rowHTML(o, opts = {}) {
-  const away = daysAway(o.deadline);
-  const soon = away !== null && away <= 30;
-  let when;
-  if (o.deadline) {
-    const dt = new Date(o.deadline + "T00:00:00");
-    when = `<span class="d">${dt.getDate()}</span>
-            <span class="m">${MONTHS[dt.getMonth()]} ${String(dt.getFullYear()).slice(2)}</span>
-            <span class="away">${away < 0 ? "passed" : away + (away === 1 ? " day" : " days")}</span>`;
-  } else {
-    when = `<span class="rolling">rolling</span>`;
-  }
-
-  const bits = [esc(o.agency || o.source)];
-  // "not stated" and "small" are different facts, and an empty slot reads as
-  // the second. Say which it is, so a sort by award is interpretable.
-  bits.push(o.award_ceiling
-    ? `<span class="amt">award ${esc(o.award_ceiling)}</span>`
-    : `<span class="noamt">award not stated</span>`);
-  const cap = o.indirect_cap
-    ? `<span class="cap">indirect capped at ${esc(o.indirect_cap)}</span>` : "";
-
-  const hv = o.human;
-  const verdict = hv
-    ? `<span class="verdict ${hv.verdict === "down" ? "down" : ""}">your group: ${
-        hv.verdict === "down"
-          ? "not for us" + (hv.aspect && hv.aspect !== "score" ? ` (${esc(hv.aspect)})` : "")
-          : "useful"}</span>`
-    : "";
-  const area = o.match_domain
-    ? `<button class="areatag" data-area="${esc(o.match_domain)}" title="${esc(o.match_domain)}">${esc(shortArea(o.match_domain))}</button>`
-    : "";
-  // The name in bold moss reads as a link because every link on this page is
-  // bold moss. Make it one when there is an address behind it, rather than
-  // leaving a click target that silently does nothing.
-  const fitName = (o.contact && o.contact.email)
-    ? `<a href="mailto:${esc(o.contact.email)}"><b>${esc(o.match_name)}</b></a>`
-    : `<b>${esc(o.match_name)}</b>`;
-  const fit = o.match_name ? `
-    <div class="fit">${area}Closest fit: ${fitName}
-      ${o.match_project ? ": " + esc(o.match_project) : ""}
-      ${o.match_status && o.match_status !== "warm"
-        ? `<span class="cold">(${esc(o.match_status)})</span>` : ""}
-      ${o.match_kind === "contact"
-        ? `<span class="lead" title="On the outreach list. We have emailed them; we have not worked with them.">lead, not a past project</span>`
-        : ""}
-      ${o.match_kind === "program"
-        ? `<span class="ours" title="Something we run. There is no outside partner to approach; this call could fund work on it.">our own program</span>`
-        : ""}
-      ${o.match_rationale ? "<br>" + esc(o.match_rationale) : ""}
-      ${reach(o)}</div>` : "";
-
-  return `<article class="row${soon ? " soon" : ""}">
-    <div class="when">${when}</div>
-    <div>
-      ${scoreSignal(o.score)}
-      ${verdict}
-      <h2 class="title">${o.url
-        ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.title)}</a>`
-        : esc(o.title)}</h2>
-      <div class="meta">${bits.join(" &nbsp;·&nbsp; ")}${cap ? " &nbsp;·&nbsp; " + cap : ""}</div>
-      ${o.summary ? `<p class="sumry">${esc(o.summary)}</p>` : ""}
-      <p class="why"><span class="tag">why</span>${esc(o.rationale)}</p>
-      ${fit}
-      <div class="acts">
-        <button class="vote" data-vote="up"   data-id="${esc(o.id)}" aria-pressed="false" title="Good find: score it higher next time">&#9651; useful</button>
-        <button class="vote" data-vote="down" data-id="${esc(o.id)}" aria-pressed="false" title="Not for us: score it lower next time">&#9661; not for us</button>
-        <button class="act" data-chat="${esc(o.id)}">Ask about this call</button>
-        ${opts.shelf
-          ? `<button class="act" data-shrm="${esc(o.id)}">Remove</button>`
-          : (shelfHas(o.id) ? `<span class="kept">in Idea match</span>` : "")}
-        <span class="votenote" data-fb="${esc(o.id)}"></span>
-      </div>
-      <div class="fbbox" data-fbbox="${esc(o.id)}">
-        <select data-fbaspect="${esc(o.id)}" aria-label="what was wrong">
-          <option value="score">the score</option>
-          <option value="category">the category</option>
-          <option value="match">the named collaborator</option>
-        </select>
-        <input type="text" maxlength="500" placeholder="one comment, optional: why?" data-fbnote="${esc(o.id)}">
-        <button class="vote" data-fbsend="${esc(o.id)}">Send</button>
-      </div>
-      <div class="chat" data-chatbox="${esc(o.id)}">
-        <div class="chathead">
-          <b>Ask about this call</b>
-          <span class="meta">model <span class="model" data-chatmodel="${esc(o.id)}"></span>
-            · not stored on the server</span>
-        </div>
-        <div class="privacy">Not recorded. This conversation lives only in this
-          browser tab, goes to your own API key through a proxy that stores
-          nothing, and is gone when you close or reload the tab. Copy or export
-          it if you want to keep it.</div>
-        <div class="log" data-chatlog="${esc(o.id)}"></div>
-        <form data-chatform="${esc(o.id)}">
-          <input type="text" placeholder="e.g. what would we need a domain PI for here?" data-chatinput="${esc(o.id)}">
-          <button class="vote" type="submit">Ask</button>
-        </form>
-        <div class="chatfoot">
-          <button class="vote" data-copy="${esc(o.id)}" type="button">Copy</button>
-          <button class="vote" data-export="${esc(o.id)}" type="button">Export .md</button>
-          <button class="vote" data-clear="${esc(o.id)}" type="button">Clear</button>
-          <span class="hint" data-chathint="${esc(o.id)}"></span>
-        </div>
-      </div>
-    </div>
-  </article>`;
-}
-
-function queryParams() {
-  const p = new URLSearchParams({ sort: SORT, page: PAGE, page_size: PAGE_SIZE });
-  if (QUERY) p.set("q", QUERY);
-  if (AREA) p.set("area", AREA);
-  if (FUNDER) p.set("funder", FUNDER);
-  if (DL_FROM) p.set("deadline_from", DL_FROM);
-  if (DL_TO) p.set("deadline_to", DL_TO);
-  if (ACTIVE.size) p.set("filters", [...ACTIVE].join(","));
-  return p;
-}
-
-let RENDER_SEQ = 0;
-
-async function render() {
-  // Typing fires a query per keystroke; only the newest answer may paint, or
-  // a slow early response would overwrite the results for what was typed last.
-  const seq = ++RENDER_SEQ;
-  let data;
-  try {
-    const r = await fetch("api/opportunities?" + queryParams());
-    data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.detail || `search failed (${r.status})`);
-  } catch (e) {
-    if (seq !== RENDER_SEQ) return;
-    document.getElementById("list").innerHTML =
-      `<div class="empty"><b>Could not load calls.</b> ${esc(String(e.message || e))}</div>`;
-    return;
-  }
-  if (seq !== RENDER_SEQ) return;
-  PAGE = data.page;
-  data.opportunities.forEach(o => SEEN.set(o.id, o));
-
-  document.getElementById("tally").textContent =
-    `${data.total} of ${data.of} shown` +
-    (AREA ? ` in "${AREA}"` : "") +
-    deadlineRangeLabel() +
-    (data.total ? ` · page ${data.page} of ${data.pages}` : "");
-
-  document.getElementById("list").innerHTML = data.opportunities.length
-    ? data.opportunities.map(o => rowHTML(o)).join("")
-    : `<div class="empty"><b>Nothing matches those filters.</b>
-         Clear a filter, or widen the search.</div>`;
-
-  renderPager(data.pages, data.total);
-
-  // Restore open chat panels that were on this page before re-render.
-  for (const id of Object.keys(CHATS)) {
-    const box = document.querySelector(`[data-chatbox="${CSS.escape(id)}"]`);
-    const log = document.querySelector(`[data-chatlog="${CSS.escape(id)}"]`);
-    if (!box || !log || !(CHATS[id] || []).length) continue;
-    box.classList.add("on");
-    paintChatModel(id);
-    log.innerHTML = CHATS[id].map(turnHTML).join("");
-  }
-
-  if (API) { paintFeedback(); } else {
-    document.querySelectorAll("[data-vote],[data-chat],[data-fbsend]")
-      .forEach(b => { b.disabled = true; });
-  }
-}
-
-function renderPager(pages, total) {
-  const nav = document.getElementById("pager");
-  if (total <= PAGE_SIZE) {
-    nav.hidden = true;
-    nav.innerHTML = "";
-    return;
-  }
-  nav.hidden = false;
-  const btns = [];
-  btns.push(`<button type="button" data-page="${PAGE - 1}" ${PAGE <= 1 ? "disabled" : ""}>Previous</button>`);
-  btns.push(`<span class="pages">`);
-  const window = 2;
-  for (let p = 1; p <= pages; p++) {
-    if (p === 1 || p === pages || (p >= PAGE - window && p <= PAGE + window)) {
-      btns.push(`<button type="button" data-page="${p}" ${p === PAGE ? 'aria-current="page"' : ""}>${p}</button>`);
-    } else if (p === PAGE - window - 1 || p === PAGE + window + 1) {
-      btns.push(`<span>…</span>`);
-    }
-  }
-  btns.push(`</span>`);
-  btns.push(`<button type="button" data-page="${PAGE + 1}" ${PAGE >= pages ? "disabled" : ""}>Next</button>`);
-  nav.innerHTML = btns.join("");
-}
-
-document.getElementById("pager").addEventListener("click", e => {
-  const b = e.target.closest("[data-page]");
-  if (!b || b.disabled) return;
-  const p = Number(b.dataset.page);
-  if (!p || p === PAGE) return;
-  PAGE = p;
-  render();
-  document.getElementById("list").scrollIntoView({ behavior: "smooth", block: "start" });
-});
-
-
-// ---------------------------------------------------------------------------
-// Writes and chat. The list above already needs `run.py serve`; these also
-// need a signed-in identity when auth is on. Without one the controls disable
-// themselves rather than failing on click, so the list stays usable.
-// ---------------------------------------------------------------------------
-let API = false;
-const CHATS = {};                       // opportunity id -> [{role, content}]
-
-const keyBar = () => ({
-  key:   document.getElementById("k-key").value.trim(),
-  model: document.getElementById("k-model").value.trim(),
-  base:  document.getElementById("k-base").value.trim(),
-});
-
-function saveChatSettings() {
-  try {
-    const { model, base } = keyBar();
-    sessionStorage.setItem("gs.chat", JSON.stringify({ model, base }));
-  } catch (e) {}
-  document.querySelectorAll("[data-chatmodel]").forEach(el => {
-    el.textContent = keyBar().model || "—";
-  });
-}
-
-// sessionStorage, not localStorage: the key should not outlive the tab.
-try {
-  const saved = JSON.parse(sessionStorage.getItem("gs.chat") || "{}");
-  if (saved.base) document.getElementById("k-base").value = saved.base;
-  if (saved.model) document.getElementById("k-model").value = saved.model;
-} catch (e) {}
-
-["k-base", "k-model"].forEach(id =>
-  document.getElementById(id).addEventListener("change", saveChatSettings));
-document.getElementById("k-key").addEventListener("input", () => {
-  document.getElementById("k-key").classList.remove("hilite");
-});
-
-// ---- Idea match: idea text -> matching calls -> shortlist (browser-only) --
-//
-// Lives in this browser and nowhere else. The server stores no part of it -
-// not the idea, not the calls, not the notes. Search results stay inside this
-// panel and do not filter the homepage list.
-
-const SHELF_KEY = "gs.shortlist";
-let SHELF = { idea: "", items: [], recommendation: "" };
-let _scoreBusy = false;
-let _scoredIdea = "";
-let _searchBusy = false;
-
-function loadShelf() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(SHELF_KEY) || "null");
-    if (raw && Array.isArray(raw.items)) SHELF = { recommendation: "", ...raw };
-    _scoredIdea = SHELF.idea || "";
-  } catch (e) {}
-}
-function saveShelf() {
-  try { localStorage.setItem(SHELF_KEY, JSON.stringify(SHELF)); } catch (e) {}
-}
-const shelfHas = id => SHELF.items.some(i => i.id === id);
-
-function paintShelfBtn() {
-  const n = SHELF.items.length;
-  const el = document.getElementById("shelf-n");
-  if (!el) return;
-  if (n) {
-    el.hidden = false;
-    el.textContent = `(${n})`;
-  } else {
-    el.hidden = true;
-    el.textContent = "";
-  }
-}
-
-function setShelfHint(text, busy) {
-  const hint = document.getElementById("sh-hint");
-  const btn = document.getElementById("sh-search");
-  if (hint) hint.textContent = text || "";
-  if (btn) {
-    btn.disabled = !!busy;
-    btn.textContent = busy ? "Matching\u2026" : "Match with all open calls";
-  }
-}
-
-function shelfCardHTML(it) {
-  const o = SEEN.get(it.id);
-  if (!o) {
-    return `<article class="row">
-      <div class="when"><span class="rolling">gone</span></div>
-      <div>
-        <h2 class="title">${esc(it.id)}</h2>
-        <p class="mute">No longer in the open catalogue.</p>
-        <div class="acts">
-          <button class="act" data-shrm="${esc(it.id)}">Remove</button>
-        </div>
-      </div>
-    </article>`;
-  }
-  return rowHTML(o, { shelf: true });
-}
-
-function renderShelf() {
-  // Shelf ids come from localStorage or a focus run, so they may not be on
-  // any page this tab has loaded. Fetch those once, then paint again; an id
-  // the server no longer returns has closed and paints as "gone".
-  const missing = SHELF.items.map(it => it.id).filter(id => !SEEN.has(id) && !GONE.has(id));
-  if (missing.length) {
-    fetch("api/opportunities?" + new URLSearchParams({ ids: missing.join(","), page_size: 200 }))
-      .then(r => r.ok ? r.json() : { opportunities: [] })
-      .then(d => {
-        d.opportunities.forEach(o => SEEN.set(o.id, o));
-        missing.filter(id => !SEEN.has(id)).forEach(id => GONE.add(id));
-        renderShelf();
-      })
-      .catch(() => {});
-  }
-  const body = document.getElementById("shelf-body");
-  const cards = SHELF.items.length
-    ? `<div id="shelf-list">${SHELF.items.map(shelfCardHTML).join("")}</div>`
-    : "";
-  body.innerHTML = `
-    <p class="mute">Nothing is sent to or stored on the server, so your ideas
-      stay private to you. Clear your browser data and they&rsquo;re gone, and
-      they won&rsquo;t follow you to another device.</p>
-    <textarea id="sh-idea" rows="7" maxlength="4000"
-      placeholder="What are you working on? Describe the idea in your own words.">${esc(SHELF.idea || "")}</textarea>
-    <div class="shelfacts">
-      <button type="button" class="act" id="sh-search"
-        title="Describe the work, then match. Rematches the catalogue and ranks what it finds (~1 min). Editing the idea and leaving the field also re-ranks kept calls.">Match with all open calls</button>
-      <span class="hint" id="sh-hint"></span>
-    </div>
-    ${SHELF.recommendation
-      ? `<div class="bkout"><span class="tag">Recommendation</span>${esc(SHELF.recommendation)}</div>`
-      : ""}
-    ${cards}`;
-}
-
-async function runShelfSearch() {
-  if (_searchBusy) return;
-  const ideaEl = document.getElementById("sh-idea");
-  const idea = (ideaEl ? ideaEl.value : SHELF.idea).trim();
-  SHELF.idea = idea;
-  saveShelf();
-  if (!idea) { setShelfHint("Describe the idea first."); return; }
-  const { key, model, base } = keyBar();
-  if (!key) {
-    setShelfHint("Add your API key in Personalize first.");
-    openConfig({
-      focusKey: true,
-      prompt: "Matching calls needs your Lumen project key (sk_...). It stays in this tab only.",
-    });
-    return;
-  }
-  _searchBusy = true;
-  // The /api/focus call is one long request (parallel catalogue chunks, then
-  // a rank pass). Until we stream stages from the server, rotate honest
-  // status copy and show elapsed time so the wait does not look stuck.
-  const matchStages = [
-    "Scanning open calls against your idea\u2026",
-    "Reading the catalogue in parallel\u2026",
-    "Gathering the strongest candidates\u2026",
-    "Ranking matches by fit to your idea\u2026",
-  ];
-  const matchStarted = Date.now();
-  let matchStage = 0;
-  const paintMatchProgress = () => {
-    const hint = document.getElementById("sh-hint");
-    if (!hint) return;
-    const sec = Math.max(1, Math.round((Date.now() - matchStarted) / 1000));
-    hint.textContent = `${sec}s \u00b7 ${matchStages[matchStage]}`;
-  };
-  setShelfHint("", true);
-  paintMatchProgress();
-  const matchTimer = setInterval(() => {
-    if (matchStage < matchStages.length - 1) matchStage++;
-    paintMatchProgress();
-  }, 12000);
-  const matchClock = setInterval(paintMatchProgress, 1000);
-  try {
-    const r = await fetch("/api/focus", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idea, api_key: key, model, base_url: base }),
-    });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.detail || `focus failed (${r.status})`);
-
-    clearInterval(matchTimer);
-    clearInterval(matchClock);
-    _searchBusy = false;
-    const btn = document.getElementById("sh-search");
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = "Match with all open calls";
-    }
-
-    const results = data.results || [];
-    // Replace, don't merge: this panel is the result set, not a side filter
-    // on the homepage.
-    SHELF.items = results.map(row => ({
-      id: row.id, affinity: row.affinity, why: row.why,
-    }));
-    SHELF.recommendation = "";
-    saveShelf();
-    paintShelfBtn();
-    renderShelf();
-    if (!results.length) {
-      setShelfHint(`Nothing matched, out of ${data.searched} open calls. `
-        + "Try describing the work rather than the field.");
-      return;
-    }
-    setShelfHint(`${results.length} of ${data.searched} open calls relate to this`
-      + (data.trimmed ? ` (${data.trimmed} not searched)` : ""));
-    await scoreShelf();
-  } catch (e) {
-    clearInterval(matchTimer);
-    clearInterval(matchClock);
-    setShelfHint(String(e.message || e).slice(0, 160));
-  } finally {
-    clearInterval(matchTimer);
-    clearInterval(matchClock);
-    _searchBusy = false;
-    const btn = document.getElementById("sh-search");
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = "Match with all open calls";
-    }
-  }
-}
-
-async function scoreShelf() {
-  if (_scoreBusy) return;
-  const hint = document.getElementById("sh-hint");
-  const ideaEl = document.getElementById("sh-idea");
-  if (ideaEl) SHELF.idea = ideaEl.value.trim();
-  saveShelf();
-  if (!SHELF.idea) {
-    if (hint) hint.textContent = "Write the idea first.";
-    return;
-  }
-  if (!SHELF.items.length) {
-    if (hint) hint.textContent = "Nothing kept yet to rank.";
-    return;
-  }
-  const { key, model, base } = keyBar();
-  if (!key) {
-    if (hint) hint.textContent = "Add your API key in Personalize first.";
-    openConfig({
-      focusKey: true,
-      prompt: "Ranking needs your Lumen project key (sk_...). It stays in this tab only.",
-    });
-    return;
-  }
-  _scoreBusy = true;
-  if (hint) hint.textContent = "Generating recommendation\u2026";
-  try {
-    const r = await fetch("/api/rescore", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idea: SHELF.idea, ids: SHELF.items.map(i => i.id),
-                             api_key: key, model, base_url: base }),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.detail || `${r.status}`);
-    const by = Object.fromEntries((d.items || []).map(i => [i.id, i]));
-    for (const it of SHELF.items) {
-      if (by[it.id]) { it.affinity = by[it.id].affinity; it.why = by[it.id].why; }
-    }
-    SHELF.items.sort((a, b) => (b.affinity ?? 0) - (a.affinity ?? 0));
-    SHELF.recommendation = d.recommendation || "";
-    _scoredIdea = SHELF.idea;
-    saveShelf();
-    paintShelfBtn();
-    renderShelf();
-    const done = document.getElementById("sh-hint");
-    if (done) done.textContent = `scored ${d.scored} of ${d.of}`;
-  } catch (e) {
-    const err = document.getElementById("sh-hint");
-    if (err) err.textContent = String(e.message || e).slice(0, 140);
-  } finally {
-    _scoreBusy = false;
-  }
-}
-
-document.getElementById("shelf-body").addEventListener("click", async e => {
-  const b = e.target.closest("button");
-  if (!b) return;
-  if (b.dataset.shrm) {
-    SHELF.items = SHELF.items.filter(i => i.id !== b.dataset.shrm);
-    if (!SHELF.items.length) SHELF.recommendation = "";
-    saveShelf(); paintShelfBtn(); renderShelf(); render();
-    if (SHELF.items.length) scoreShelf();
-    return;
-  }
-  if (b.id === "sh-search") return runShelfSearch();
-});
-
-document.getElementById("shelf-body").addEventListener("input", e => {
-  if (e.target.id === "sh-idea") { SHELF.idea = e.target.value; saveShelf(); }
-});
-
-// Re-rank when the idea is edited and the field is left — not on every
-// keystroke, which would thrash the model while someone is still typing.
-document.getElementById("shelf-body").addEventListener("focusout", e => {
-  if (e.target.id !== "sh-idea") return;
-  const next = e.target.value.trim();
-  if (next === _scoredIdea) return;
-  SHELF.idea = next;
-  saveShelf();
-  if (next && SHELF.items.length) scoreShelf();
-});
-
-function openShelf() {
-  closeConfig();
-  const m = document.getElementById("shelf-modal");
-  m.hidden = false; m.classList.add("on");
-  renderShelf();
-}
-function closeShelf() {
-  const m = document.getElementById("shelf-modal");
-  m.hidden = true; m.classList.remove("on");
-}
-document.getElementById("shelfbtn").addEventListener("click", e => {
-  e.stopPropagation();
-  openShelf();
-});
-document.getElementById("shelf-close").addEventListener("click", closeShelf);
-document.getElementById("shelf-modal").addEventListener("click", e => {
-  if (e.target === e.currentTarget) closeShelf();
-});
-
-function turnHTML(t) {
-  const role = t.role === "user" ? "user" : "assistant";
-  const label = role === "user" ? "You" : (t.model || keyBar().model || "Model");
-  return `<div class="turn ${role}"><span class="from">${esc(label)}</span>${esc(t.content)}</div>`;
-}
-
-function paintChatModel(id, root) {
-  root = root || document;
-  const el = root.querySelector(`[data-chatmodel="${CSS.escape(id)}"]`);
-  if (el) el.textContent = keyBar().model || "—";
-}
-
-function cardRoot(el) {
-  return el.closest("article.row") || document;
-}
-
-function openConfig(opts = {}) {
-  const pop = document.getElementById("cfgpop");
-  const btn = document.getElementById("cfgbtn");
-  const who = document.getElementById("whoami");
-  if (who) who.hidden = false;
-  pop.classList.add("on");
-  btn.setAttribute("aria-expanded", "true");
-  const note = document.getElementById("k-note");
-  const key = document.getElementById("k-key");
-  key.classList.remove("hilite");
-  if (opts.prompt) {
-    note.textContent = typeof opts.prompt === "string"
-      ? opts.prompt
-      : "Chat needs your Lumen project key (sk_...). It stays in this tab only.";
-  }
-  if (opts.focusKey) {
-    key.classList.add("hilite");
-    // Defer focus so it isn't stolen by the click that opened this panel.
-    setTimeout(() => { key.focus(); key.select?.(); }, 0);
-  }
-}
-
-function closeConfig() {
-  const pop = document.getElementById("cfgpop");
-  const btn = document.getElementById("cfgbtn");
-  pop.classList.remove("on");
-  btn.setAttribute("aria-expanded", "false");
-  document.getElementById("k-key").classList.remove("hilite");
-}
-
-document.getElementById("cfgbtn").addEventListener("click", e => {
-  e.stopPropagation();
-  const open = document.getElementById("cfgpop").classList.contains("on");
-  if (open) closeConfig(); else openConfig();
-});
-document.addEventListener("click", e => {
-  const wrap = document.getElementById("whoami");
-  if (!wrap || wrap.hidden) return;
-  if (!wrap.contains(e.target)) closeConfig();
-});
-document.addEventListener("keydown", e => {
-  if (e.key === "Escape") {
-    closeConfig();
-    closeShelf();
-    closeRoster();
-    closeSources();
-  }
-});
-
-function openRoster() {
-  closeConfig();
-  const m = document.getElementById("roster-modal");
-  m.hidden = false;
-  m.classList.add("on");
-  document.getElementById("r-search").focus();
-  loadRoster();
-}
-function closeRoster() {
-  const m = document.getElementById("roster-modal");
-  m.classList.remove("on");
-  m.hidden = true;
-}
-function openSources() {
-  closeConfig();
-  const m = document.getElementById("sources-modal");
-  m.hidden = false;
-  m.classList.add("on");
-  document.getElementById("s-search").focus();
-  loadSources();
-}
-function closeSources() {
-  const m = document.getElementById("sources-modal");
-  m.classList.remove("on");
-  m.hidden = true;
-}
-document.getElementById("open-sources").addEventListener("click", openSources);
-document.getElementById("sources-close").addEventListener("click", closeSources);
-document.getElementById("sources-modal").addEventListener("click", e => {
-  if (e.target === e.currentTarget) closeSources();
-});
-
-document.getElementById("open-roster").addEventListener("click", openRoster);
-document.getElementById("roster-close").addEventListener("click", closeRoster);
-document.getElementById("roster-modal").addEventListener("click", e => {
-  if (e.target === e.currentTarget) closeRoster();
-});
-
-let AUTH = { mode: "off", enforced: false, authenticated: false, username: null };
-
-async function probeAPI() {
-  try {
-    const r = await fetch("api/health");
-    API = r.ok;
-  } catch (e) { API = false; }
-
-  if (API) {
-    try {
-      AUTH = await (await fetch("api/whoami")).json();
-    } catch (e) {}
-    const who = document.getElementById("who");
-    if (AUTH.enforced) {
-      who.textContent = AUTH.authenticated
-        ? `signed in as ${AUTH.username}`
-        : `not signed in${AUTH.error ? ": " + AUTH.error : ""}`;
-    } else {
-      who.textContent = "";
-    }
-    // "Me" only means something to a signed-in person.
-    for (const f of PERSONAL) {
-      const chip = document.querySelector(`.chip[data-filter="${f}"]`);
-      if (!chip) continue;
-      chip.hidden = !AUTH.authenticated;
-      if (!AUTH.authenticated && ACTIVE.has(f)) {
-        ACTIVE.delete(f);
-        chip.setAttribute("aria-pressed", "false");
-      }
-    }
-    // Writes will be refused without an identity once the gate is on, so do
-    // not offer controls that are certain to fail.
-    if (AUTH.enforced && !AUTH.authenticated) API = false;
-    loadRoster();
-    loadSubscriptions();
-  }
-  document.getElementById("whoami").hidden = !API;
-  document.querySelectorAll("[data-vote],[data-chat],[data-fbsend]")
-    .forEach(b => { b.disabled = !API; });
-  if (!API) {
-    document.querySelectorAll(".votenote").forEach(n => {
-      n.textContent = "read only: start run.py serve for feedback and chat";
-    });
-  } else {
-    loadFeedback();
-  }
-}
-
-async function loadSubscriptions() {
-  const hint = document.getElementById("sub-hint");
-  const box = document.getElementById("sub-feeds");
-  const emailEl = document.getElementById("sub-email");
-  try {
-    const r = await fetch("api/subscriptions");
-    if (!r.ok) {
-      hint.textContent = "Could not load subscriptions.";
-      return;
-    }
-    const data = await r.json();
-    emailEl.value = data.email || "";
-    const on = new Set(data.feeds || []);
-    box.innerHTML = (data.available || []).map(f =>
-      `<label><input type="checkbox" data-feed="${esc(f.id)}"${on.has(f.id) ? " checked" : ""}>` +
-      `<span>${esc(f.label)}</span></label>`).join("");
-    hint.textContent = on.size
-      ? `Subscribed to ${on.size} digest${on.size === 1 ? "" : "s"}.`
-      : "Not subscribed yet.";
-  } catch (e) {
-    hint.textContent = "Could not load subscriptions.";
-  }
-}
-
-document.getElementById("sub-save").addEventListener("click", async () => {
-  const hint = document.getElementById("sub-hint");
-  const feeds = [...document.querySelectorAll("#sub-feeds input[data-feed]:checked")]
-    .map(el => el.dataset.feed);
-  hint.textContent = "Saving…";
-  try {
-    const r = await fetch("api/subscriptions", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ feeds }),
-    });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      hint.textContent = data.detail || `Save failed (${r.status})`;
-      return;
-    }
-    hint.textContent = feeds.length
-      ? `Saved. Digests go to ${data.email} after the nightly run.`
-      : `Unsubscribed ${data.email}.`;
-  } catch (e) {
-    hint.textContent = "Save failed.";
-  }
-});
-
-let FB = {};                            // opportunity id -> {up, down, note}
-
-async function loadFeedback() {
-  try {
-    const r = await fetch("api/feedback");
-    if (!r.ok) return;
-    FB = (await r.json()).summary || {};
-  } catch (e) { return; }
-  paintFeedback();
-}
-
-// Painted from the cached summary, so re-rendering on a keystroke costs
-// nothing. One request per page load, not one per visible row.
-function paintFeedback() {
-  document.querySelectorAll("[data-fb]").forEach(node => {
-    const f = FB[node.dataset.fb];
-    node.textContent = f
-      ? `recorded: ${f.up} useful, ${f.down} not for us` + (f.note ? ` (latest: ${f.note})` : "")
-      : "";
-  });
-}
-
-// The roster and source lists are browsable, not just writable. A form you
-// cannot read back is one people fill in twice: without seeing that Sarita
-// Adve is already on the roster, the reasonable thing to do is add her again.
-let ROSTER = [], SOURCES = [];
-// Both lists open short and grow on demand. Rendering 285 collaborators at
-// once buries the search box and makes the panel feel like a data dump rather
-// than something you look things up in. "Show all" is always one click away
-// for the times you do want the whole thing.
-const PAGE_STEP = 5;
-let R_SHOWN = PAGE_STEP, S_SHOWN = PAGE_STEP;
-
-function moreBar(total, shown, id, noun) {
-  if (total <= shown) {
-    return total > PAGE_STEP
-      ? `<div class="morebar"><span>all ${total} ${noun} shown</span>
-           <button class="vote" data-collapse="${id}">Show fewer</button></div>`
-      : "";
-  }
-  const next = Math.min(PAGE_STEP, total - shown);
-  return `<div class="morebar">
-      <span>showing ${shown} of ${total} ${noun}</span>
-      <span><button class="vote" data-more="${id}">Show ${next} more</button>
-      <button class="vote" data-all="${id}">Show all ${total}</button></span>
-    </div>`;
-}
-
-// A search should start from the top of the results, not from wherever the
-// previous query had been expanded to.
-function resetRosterPage() { R_SHOWN = PAGE_STEP; renderRoster(); }
-function resetSourcePage() { S_SHOWN = PAGE_STEP; renderSources(); }
-
-document.addEventListener("click", e => {
-  const b = e.target.closest("[data-more],[data-all],[data-collapse]");
-  if (!b) return;
-  const which = b.dataset.more || b.dataset.all || b.dataset.collapse;
-  const isRoster = which === "r-more";
-  const total = isRoster ? ROSTER.length : SOURCES.length;
-  if (b.dataset.all) { if (isRoster) R_SHOWN = total; else S_SHOWN = total; }
-  else if (b.dataset.collapse) { if (isRoster) R_SHOWN = PAGE_STEP; else S_SHOWN = PAGE_STEP; }
-  else { if (isRoster) R_SHOWN += PAGE_STEP; else S_SHOWN += PAGE_STEP; }
-  if (isRoster) renderRoster(); else renderSources();
-});
-
-function statusPill(st) {
-  return `<span class="pill ${esc(st)}">${esc(st)}</span>`;
-}
-
-function renderRoster() {
-  const q = (document.getElementById("r-search").value || "").trim().toLowerCase();
-  const hit = ROSTER.filter(e => {
-    if (!q) return true;
-    return [e.name, e.unit, e.org, (e.areas || []).join(" "),
-            (e.projects || []).map(p => p.title).join(" "), e.email]
-      .join(" ").toLowerCase().includes(q);
-  });
-  document.getElementById("r-count").textContent =
-    q ? `${hit.length} of ${ROSTER.length}` : `${ROSTER.length} on the roster`;
-
-  R_SHOWN = Math.min(R_SHOWN, Math.max(PAGE_STEP, hit.length));
-  const page = hit.slice(0, R_SHOWN);
-  document.getElementById("rlist").innerHTML = hit.length
-    ? page.map(e => {
-        const areas = (e.areas || []).slice(0, 4).join(", ");
-        const projects = (e.projects || []).map(p =>
-          esc(p.title) + (p.years ? ` <span class="pill">${esc(p.years)}</span>` : "")).join(" · ");
-        const via = (e.ncsa_contact || []).filter(c => c.name).map(c =>
-          c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.name)}</a>` : esc(c.name)).join(", ");
-        return `<div class="rrow">
-          <span class="nm">${esc(e.name)}</span>
-          ${statusPill(e.status)}
-          ${e.origin === "dashboard" ? '<span class="pill added">added here</span>' : ""}
-          ${e.email ? `<a href="mailto:${esc(e.email)}">${esc(e.email)}</a>` : ""}
-          ${e.origin === "dashboard" && e.id
-            ? `<button class="vote" data-retire="${e.id}">retire</button>` : ""}
-          <span class="sub">${esc(e.unit || "")}${areas ? (e.unit ? " · " : "") + esc(areas) : ""}${
-            projects ? "<br>" + projects : ""}${via ? "<br>via us: " + via : ""}</span>
-        </div>`;
-      }).join("") + moreBar(hit.length, R_SHOWN, "r-more", "collaborators")
-    : "<i>nothing matches that search</i>";
-}
-
-async function loadRoster() {
-  try {
-    const r = await fetch("api/roster");
-    if (!r.ok) {
-      document.getElementById("rlist").innerHTML =
-        `<i>${r.status === 401 || r.status === 403
-          ? "sign in to browse the roster" : "could not load the roster"}</i>`;
-      return;
-    }
-    ROSTER = (await r.json()).entries || [];
-    // Warm first, then cold, then leads: the useful end of a 285-entry list.
-    const rank = { warm: 0, cold: 1, prospect: 2, departed: 3 };
-    ROSTER.sort((a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9)
-                       || a.name.localeCompare(b.name));
-    renderRoster();
-  } catch (e) {
-    document.getElementById("rlist").innerHTML = "<i>could not reach the server</i>";
-  }
-}
-
-function renderSources() {
-  const q = (document.getElementById("s-search").value || "").trim().toLowerCase();
-  const hit = SOURCES.filter(s =>
-    !q || [s.name, s.url, s.kind].join(" ").toLowerCase().includes(q));
-  document.getElementById("s-count").textContent =
-    q ? `${hit.length} of ${SOURCES.length}` : `${SOURCES.length} sources`;
-
-  S_SHOWN = Math.min(S_SHOWN, Math.max(PAGE_STEP, hit.length));
-  document.getElementById("slist").innerHTML = hit.length
-    ? hit.slice(0, S_SHOWN).map(s => {
-        // Health sits next to the source because a source that quietly stopped
-        // yielding is the failure this tool exists to catch.
-        const when = s.last_success
-          ? `last success ${s.last_success.slice(0, 10)}` + (s.last_yield != null ? `, ${s.last_yield} kept` : "")
-          : "never succeeded";
-        return `<div class="rrow">
-          <span class="nm">${esc(s.name)}</span>
-          <span class="pill">${esc(s.kind)}</span>
-          ${s.origin === "dashboard" ? '<span class="pill added">added here</span>' : ""}
-          ${s.stale ? '<span class="pill stale">stale</span>' : ""}
-          ${s.origin === "dashboard" && s.id
-            ? `<button class="vote" data-sretire="${s.id}">retire</button>` : ""}
-          <span class="sub"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a>
-            <br>${esc(when)}${s.cadence ? " · " + esc(s.cadence) : ""}${
-              s.last_error ? ' · <span style="color:var(--ember)">' + esc(s.last_error.slice(0, 90)) + "</span>" : ""}</span>
-        </div>`;
-      }).join("") + moreBar(hit.length, S_SHOWN, "s-more", "sources")
-    : "<i>nothing matches that search</i>";
-}
-
-async function loadSources() {
-  try {
-    const r = await fetch("api/sources");
-    if (!r.ok) {
-      document.getElementById("slist").innerHTML =
-        `<i>${r.status === 401 || r.status === 403
-          ? "sign in to browse sources" : "could not load sources"}</i>`;
-      return;
-    }
-    const d = await r.json();
-    SOURCES = d.sources || [];
-    renderSources();
-  } catch (e) {
-    document.getElementById("slist").innerHTML = "<i>could not reach the server</i>";
-  }
-}
-
-document.getElementById("r-search").addEventListener("input", resetRosterPage);
-document.getElementById("s-search").addEventListener("input", resetSourcePage);
-
-document.getElementById("sform").addEventListener("submit", async e => {
-  e.preventDefault();
-  const hint = document.getElementById("s-hint");
-  const body = {
-    name: document.getElementById("s-name").value,
-    url: document.getElementById("s-url").value,
-    kind: document.getElementById("s-kind").value,
-    cadence: document.getElementById("s-cadence").value,
-    notes: document.getElementById("s-notes").value,
-  };
-  hint.textContent = "adding...";
-  try {
-    const r = await fetch("api/sources", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body), signal: AbortSignal.timeout(45000),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) { hint.textContent = d.detail || `failed (${r.status})`; return; }
-    hint.textContent = d.note || "added";
-    ["s-name", "s-url", "s-notes"].forEach(i => { document.getElementById(i).value = ""; });
-    loadSources();
-  } catch (err) {
-    hint.textContent = err.name === "TimeoutError" ? "timed out" : "could not reach the server";
-  }
-});
-
-document.getElementById("slist").addEventListener("click", async e => {
-  const b = e.target.closest("[data-sretire]");
-  if (!b) return;
-  b.disabled = true;
-  try {
-    await fetch(`api/sources/${b.dataset.sretire}/retire`, { method: "POST" });
-    loadSources();
-  } catch (err) { b.disabled = false; }
-});
-
-document.getElementById("rform").addEventListener("submit", async e => {
-  e.preventDefault();
-  const hint = document.getElementById("r-hint");
-  const body = {
-    domain: document.getElementById("r-domain").value,
-    collaborator: document.getElementById("r-collab").value,
-    project: document.getElementById("r-project").value,
-    years: document.getElementById("r-years").value,
-    our_role: document.getElementById("r-role").value,
-    funders: document.getElementById("r-funders").value,
-    status: document.getElementById("r-status").value,
-    notes: document.getElementById("r-notes").value,
-  };
-  hint.textContent = "adding...";
-  try {
-    const r = await fetch("api/roster", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body), signal: AbortSignal.timeout(45000),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) { hint.textContent = d.detail || `failed (${r.status})`; return; }
-    hint.textContent = d.note || "added";
-    ["r-domain","r-collab","r-project","r-years","r-role","r-funders","r-notes"]
-      .forEach(i => { document.getElementById(i).value = ""; });
-    loadRoster();
-  } catch (err) {
-    hint.textContent = err.name === "TimeoutError" ? "timed out" : "could not reach the server";
-  }
-});
-
-document.getElementById("rlist").addEventListener("click", async e => {
-  const b = e.target.closest("[data-retire]");
-  if (!b) return;
-  b.disabled = true;
-  try {
-    await fetch(`api/roster/${b.dataset.retire}/retire`, { method: "POST" });
-    loadRoster();
-  } catch (err) { b.disabled = false; }
-});
-
-// Thumbs reveal the comment box; the vote is only sent on Send, so one click
-// cannot post an empty judgement by accident. Scoped to the card so a call
-// on both the homepage and Idea match does not cross-wire.
-function onCardClick(e) {
-  const vote = e.target.closest("[data-vote]");
-  if (vote && API) {
-    const id = vote.dataset.id;
-    const root = cardRoot(vote);
-    const box = root.querySelector(`[data-fbbox="${CSS.escape(id)}"]`);
-    root.querySelectorAll(`[data-id="${CSS.escape(id)}"]`)
-      .forEach(b => b.setAttribute("aria-pressed", b === vote));
-    box.classList.add("on");
-    box.dataset.verdict = vote.dataset.vote;
-    box.querySelector("input").focus();
-    return;
-  }
-
-  const send = e.target.closest("[data-fbsend]");
-  if (send && API) { sendFeedback(send.dataset.fbsend, cardRoot(send)); return; }
-
-  const chat = e.target.closest("[data-chat]");
-  if (chat) {
-    if (!keyBar().key) {
-      e.stopPropagation();
-      openConfig({ focusKey: true, prompt: true });
-      return;
-    }
-    const id = chat.dataset.chat;
-    const root = cardRoot(chat);
-    const box = root.querySelector(`[data-chatbox="${CSS.escape(id)}"]`);
-    box.classList.toggle("on");
-    if (box.classList.contains("on")) {
-      paintChatModel(id, root);
-      const pv = box.querySelector(".privacy");
-      if (pv && AUTH.enforced && AUTH.authenticated) {
-        pv.textContent = "Not stored. This conversation lives only in this browser"
-          + " tab, goes to your own API key through a proxy that keeps nothing,"
-          + " and is gone when you reload. Your sign-in is known to the proxy in"
-          + " front of this app, so it is private rather than anonymous."
-          + " Copy or export it to keep it.";
-      }
-      box.querySelector("input").focus();
-    }
-  }
-}
-document.getElementById("list").addEventListener("click", onCardClick);
-document.getElementById("shelf-body").addEventListener("click", onCardClick);
-
-async function sendFeedback(id, root) {
-  root = root || document;
-  const box  = root.querySelector(`[data-fbbox="${CSS.escape(id)}"]`)
-            || document.querySelector(`[data-fbbox="${CSS.escape(id)}"]`);
-  const note = box.querySelector("input").value.trim();
-  const aspect = box.querySelector("[data-fbaspect]").value;
-  const verdict = box.dataset.verdict;
-  const label = root.querySelector(`[data-fb="${CSS.escape(id)}"]`)
-             || document.querySelector(`[data-fb="${CSS.escape(id)}"]`);
-  if (!verdict) return;
-  label.textContent = "sending...";
-  try {
-    // The nightly job can hold SQLite's writer briefly, so allow for a wait,
-    // but never leave the button saying "sending..." forever.
-    const r = await fetch("api/feedback", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ opportunity_id: id, verdict, aspect, note }),
-      signal: AbortSignal.timeout(45000),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) { label.textContent = d.detail || `failed (${r.status})`; return; }
-    const f = FB[id] || { up: 0, down: 0, note: "" };
-    if (verdict === "up") f.up++; else f.down++;
-    f.note = note;
-    FB[id] = f;
-    // Say what actually happens, on all three timescales. The old message
-    // claimed a calibration example even when the rule discarded the click.
-    label.textContent = verdict === "down"
-      ? "Recorded. Excluded from digests now; re-scored in tonight's run; "
-        + "and it will inform how similar calls are scored."
-      : "Recorded as confirmation. Re-scored in tonight's run, and kept as an "
-        + "anchor for future scoring.";
-    box.classList.remove("on");
-    box.querySelector("input").value = "";
-  } catch (err) {
-    label.textContent = err.name === "TimeoutError"
-      ? "timed out; the nightly job may be writing. Try again shortly."
-      : "could not reach the server";
-  }
-}
-
-// The transcript is deliberately not persisted anywhere, so these three are
-// the only way to keep one. Built from the in-memory turns, not from the DOM.
-function transcript(id) {
-  const row = [...document.querySelectorAll(".row")]
-    .find(r => r.querySelector(`[data-chatlog="${CSS.escape(id)}"]`));
-  const title = row ? row.querySelector(".title").textContent.trim() : id;
-  const head = [`# ${title}`, "", `Opportunity: ${id}`,
-                `Exported: ${new Date().toISOString()}`,
-                "", "Not stored server side. Exported from the browser tab.", "", "---", ""];
-  const body = (CHATS[id] || []).map(t =>
-    `**${t.role === "user" ? "You" : "Model"}**\n\n${t.content}\n`);
-  return head.concat(body).join("\n");
-}
-
-async function onChatTools(e) {
-  const copy = e.target.closest("[data-copy]");
-  const exp  = e.target.closest("[data-export]");
-  const clr  = e.target.closest("[data-clear]");
-  if (!copy && !exp && !clr) return;
-  const id = (copy || exp || clr).dataset.copy
-          || (exp || clr).dataset.export || clr.dataset.clear;
-  const root = cardRoot(copy || exp || clr);
-  const hint = root.querySelector(`[data-chathint="${CSS.escape(id)}"]`);
-
-  if (clr) {
-    delete CHATS[id];
-    root.querySelector(`[data-chatlog="${CSS.escape(id)}"]`).innerHTML = "";
-    hint.textContent = "cleared from this tab";
-    return;
-  }
-  if (!(CHATS[id] || []).length) { hint.textContent = "nothing to save yet"; return; }
-
-  if (copy) {
-    try {
-      await navigator.clipboard.writeText(transcript(id));
-      hint.textContent = "copied to clipboard";
-    } catch (err) {
-      // Clipboard needs a secure context, so plain http on a LAN address fails.
-      hint.textContent = "clipboard blocked here; use Export .md";
-    }
-    return;
-  }
-
-  const blob = new Blob([transcript(id)], { type: "text/markdown" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `grant-sift-${id.replace(/[^A-Za-z0-9]+/g, "-")}.md`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  hint.textContent = "exported";
-}
-document.getElementById("list").addEventListener("click", onChatTools);
-document.getElementById("shelf-body").addEventListener("click", onChatTools);
-
-async function onChatSubmit(e) {
-  const form = e.target.closest("[data-chatform]");
-  if (!form) return;
-  e.preventDefault();
-  const id = form.dataset.chatform;
-  const root = cardRoot(form);
-  const input = form.querySelector("input");
-  const q = input.value.trim();
-  if (!q) return;
-
-  const { key, model, base } = keyBar();
-  const hint = root.querySelector(`[data-chathint="${CSS.escape(id)}"]`);
-  if (!key) {
-    hint.textContent = "Add your API key in Personalize first.";
-    e.stopPropagation();
-    openConfig({ focusKey: true, prompt: true });
-    return;
-  }
-
-  paintChatModel(id, root);
-  const log = root.querySelector(`[data-chatlog="${CSS.escape(id)}"]`);
-  CHATS[id] = CHATS[id] || [];
-  CHATS[id].push({ role: "user", content: q });
-  log.insertAdjacentHTML("beforeend", turnHTML({ role: "user", content: q }));
-  input.value = "";
-  hint.textContent = "thinking...";
-  log.scrollTop = log.scrollHeight;
-
-  try {
-    const r = await fetch("api/chat", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        opportunity_id: id, api_key: key, model, base_url: base,
-        messages: CHATS[id],
-      }),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) { hint.textContent = d.detail || `failed (${r.status})`; return; }
-    CHATS[id].push({ role: "assistant", content: d.content, model });
-    log.insertAdjacentHTML("beforeend", turnHTML({ role: "assistant", content: d.content, model }));
-    const u = d.usage || {};
-    hint.textContent = u.prompt_tokens
-      ? `${u.prompt_tokens} in / ${u.completion_tokens} out tokens · ${model}`
-      : model;
-    log.scrollTop = log.scrollHeight;
-  } catch (err) {
-    hint.textContent = "could not reach the server";
-  }
-}
-document.getElementById("list").addEventListener("submit", onChatSubmit);
-document.getElementById("shelf-body").addEventListener("submit", onChatSubmit);
-
-function boot(cat) {
-  document.getElementById("n-open").textContent  = cat.open;
-  document.getElementById("n-soon").textContent  = cat.soon;
-  document.getElementById("n-match").textContent = cat.matched;
-  document.getElementById("asof").textContent =
-    "updated " + (cat.updated_at || "").slice(0, 10);
-
-  // Built from the data, not from a hardcoded list, so it always reflects the
-  // roster as it actually matched. Commonest first, counted by the server.
-  const sel = document.getElementById("area");
-  cat.areas.forEach(({ name, count }) => {
-    const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = `${shortArea(name, 36)} (${count})`;
-    opt.title = name;
-    sel.appendChild(opt);
-  });
-  if (!cat.areas.length) sel.disabled = true;
-
-  const fsel = document.getElementById("funder");
-  cat.funders.forEach(({ name, count }) => {
-    const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = `${name} (${count})`;
-    fsel.appendChild(opt);
-  });
-  if (!cat.funders.length) fsel.disabled = true;
-
-  // Bound the pickers to the live catalogue so they are not scrolling
-  // through 1990. Tightened further as each end of the range is set.
-  if (cat.deadline_min) {
-    DL_MIN = cat.deadline_min;
-    DL_MAX = cat.deadline_max;
-    syncDateBounds();
-  }
-
-  const stale = cat.stale_sources || [];
-  if (stale.length) {
-    document.getElementById("alarm").innerHTML =
-      `<div class="alarm">Coverage: <b>${stale.map(s => esc(s.name)).join(", ")}</b>
-       ${stale.length > 1 ? "have" : "has"} not updated in over 30 days &mdash;
-       this list may be incomplete.</div>`;
-  }
-  document.getElementById("foot").textContent =
-    `Scored ${cat.updated_at || "unknown"}. Scores and collaborator matches are model-generated; treat them as a first pass, not a decision.`;
-  loadShelf();
-  paintShelfBtn();
-  render();
-  probeAPI();
-}
-
-// One query per pause in typing, not per keystroke.
-let QUERY_TIMER = null;
-document.getElementById("q").addEventListener("input", e => {
-  clearTimeout(QUERY_TIMER);
-  QUERY_TIMER = setTimeout(() => {
-    QUERY = e.target.value.trim();
-    // A search is ranked by how well it matches, until the reader picks a
-    // sort themselves; clearing the search goes back to the score.
-    if (!SORT_CHOSEN) {
-      SORT = QUERY ? "relevance" : "score";
-      document.getElementById("sort").value = SORT;
-    }
-    PAGE = 1;
-    render();
-  }, 200);
-});
-document.getElementById("sort").addEventListener("change", e => {
-  SORT = e.target.value; SORT_CHOSEN = true; PAGE = 1; render();
-});
-document.getElementById("area").addEventListener("change", e => {
-  AREA = e.target.value; PAGE = 1; render();
-});
-document.getElementById("funder").addEventListener("change", e => {
-  FUNDER = e.target.value; PAGE = 1; render();
-});
-function syncDateBounds() {
-  const from = document.getElementById("dl-from");
-  const to = document.getElementById("dl-to");
-  from.min = DL_MIN;
-  to.max = DL_MAX;
-  from.max = DL_TO || DL_MAX;
-  to.min = DL_FROM || DL_MIN;
-}
-function onDeadlineRange() {
-  DL_FROM = document.getElementById("dl-from").value;
-  DL_TO = document.getElementById("dl-to").value;
-  syncDateBounds();
-  PAGE = 1;
-  render();
-}
-["change", "input"].forEach(ev => {
-  document.getElementById("dl-from").addEventListener(ev, onDeadlineRange);
-  document.getElementById("dl-to").addEventListener(ev, onDeadlineRange);
-});
-// Clicking an area tag on a row filters to it, and keeps the picker in sync.
-document.getElementById("list").addEventListener("click", e => {
-  const tag = e.target.closest(".areatag");
-  if (!tag) return;
-  AREA = AREA === tag.dataset.area ? "" : tag.dataset.area;
-  document.getElementById("area").value = AREA;
-  PAGE = 1;
-  render();
-});
-document.querySelectorAll(".chip").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const f = btn.dataset.filter;
-    ACTIVE.has(f) ? ACTIVE.delete(f) : ACTIVE.add(f);
-    btn.setAttribute("aria-pressed", ACTIVE.has(f));
-    PAGE = 1;
-    render();
-  });
-});
-
-fetch("api/catalogue")
-  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-  .then(boot)
-  .catch(() => {
-    document.getElementById("list").innerHTML =
-      `<div class="empty"><b>Could not reach the catalogue.</b>
-       Start the server with <code>python run.py serve</code>; if it is running,
-       run <code>python run.py daily</code> to fill it.</div>`;
-    document.getElementById("asof").textContent = "no data";
-  });
-
-// Optional Grafana link in the header strip (same row as open/soon/match).
-fetch("/api/config")
-  .then(r => r.ok ? r.json() : null)
-  .then(cfg => {
-    const url = cfg && (cfg.grafana_url || cfg.grafana_embed_url);
-    if (!url) return;
-    const link = document.getElementById("grafana-link");
-    // Prefer a normal dashboard URL (drop kiosk if present).
-    link.href = url.replace(/([?&])kiosk(=[^&]*)?/, "$1").replace(/\?&/, "?").replace(/[?&]$/, "") || url;
-    link.hidden = false;
-  })
-  .catch(() => {});
-</script>
+<script src="app.js?v=1"></script>
 </body>
 </html>
