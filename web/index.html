@@ -4,532 +4,785 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Grant Sift: funding watch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
 <style>
+  /* Illinois brand palette (brand.illinois.edu/web/web-color). Orange is for
+     non-text marks only: it fails contrast as body text on white, so orange
+     text is always Altgeld. */
   :root {
-    --paper:      #f3f5f2;
-    --card:       #fbfcfa;
-    --ink:        #19211e;
-    --ink-soft:   #5d6763;
-    --ink-faint:  #8b948f;
-    --rule:       #dbe0da;
-    --moss:       #2f5d50;
-    --ember:      #9c3b22;
-    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
-    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --il-blue:        #13294B;
+    --il-orange:      #FF5F05;
+    --il-altgeld:     #C84113;
+    --il-industrial:  #1D58A7;
+    --text-2:         #3D4A5E;
+    --text-3:         #556070;
+    --on-blue-muted:  #C9D3E3;
+    --border:         #D5D9E0;
+    --border-strong:  #C9CED6;
+    --rule:           #E6E8EC;
+    --surface:        #FFFFFF;
+    --surface-2:      #F6F7F9;
+    --tint-blue:      #EAF0F8;
+    --notice-bg:      #FFF1E8;
+    --notice-fg:      #8A2E0D;
+    --serif: "Source Serif 4", Georgia, serif;
+    --sans: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
 
   * { box-sizing: border-box; }
 
   body {
     margin: 0;
-    background: var(--paper);
-    color: var(--ink);
+    background: var(--surface);
+    color: var(--il-blue);
     font-family: var(--sans);
     font-size: 15px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
+  a { color: var(--il-industrial); text-decoration: none; }
+  a:hover { color: var(--il-blue); text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--il-industrial); outline-offset: 2px; }
+  [hidden] { display: none !important; }
 
-  .shell { max-width: 1180px; margin: 0 auto; padding: 40px 28px 80px; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
+  .eyebrow {
+    font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-3);
+  }
+  .ico { flex: none; }
 
-  /* ---- status strip: the operationally characteristic thing ---- */
-  .strip {
-    display: flex; flex-wrap: wrap; align-items: baseline; gap: 34px;
-    padding-bottom: 10px; border-bottom: 2px solid var(--ink);
+  /* ---- top bar: title plus tools, no tab nav ---- */
+  .strip { background: var(--il-blue); border-top: 4px solid var(--il-orange); }
+  .strip .wrap {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px;
+    min-height: 64px; padding-top: 12px; padding-bottom: 12px;
   }
-  .brand { font-family: var(--serif); font-size: 30px; letter-spacing: -0.01em; margin-right: auto; }
-  .brand span { color: var(--ink-faint); font-size: 14px; font-family: var(--sans); margin-left: 12px; }
-  .brand-block { margin-right: auto; }
-  .brand-block .brand { margin-right: 0; display: block; }
-  .brand-block .grafana-link {
-    display: inline-block; margin-top: 4px;
-    font-size: 12.5px; color: var(--ink-faint); text-decoration: none;
+  .brand-block { display: flex; align-items: baseline; gap: 10px; flex: 1 1 auto; }
+  .brand-block:hover { text-decoration: none; }
+  .brand { font-family: var(--serif); font-size: 22px; font-weight: 600;
+           letter-spacing: -0.01em; color: #fff; }
+  .tagline { font-size: 13px; color: var(--on-blue-muted); }
+  .strip :focus-visible { outline-color: #fff; }
+  .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .menuwrap { position: relative; }
+  .tbtn {
+    font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+    height: 38px; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px;
+    color: #fff; background: rgba(255, 255, 255, 0.06);
+    border: 1px solid #4A6290; border-radius: 8px;
   }
-  .brand-block .grafana-link:hover { color: var(--moss); text-decoration: underline; }
-  .brand-block .grafana-link:focus-visible {
-    outline: 2px solid var(--moss); outline-offset: 2px;
+  .tbtn:hover, .tbtn[aria-expanded="true"] { background: rgba(255, 255, 255, 0.14); }
+  .tbtn.solid { color: var(--il-blue); background: #fff; border-color: #fff; font-weight: 600;
+                padding: 0 14px 0 12px; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); }
+  .tbtn.solid:hover { background: var(--tint-blue); }
+  .tbtn .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--il-orange); }
+  .tbtn:not(.solid) .dot { display: none; }
+  #shelfbtn .n {
+    font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+    color: var(--il-blue); background: #fff; border-radius: 999px;
+    min-width: 20px; padding: 1px 7px; text-align: center;
   }
-  .stat b { font-family: var(--serif); font-size: 26px; font-weight: 600; display: block; line-height: 1.1; }
-  .stat i { font-style: normal; font-size: 12.5px; color: var(--ink-soft); }
-  .stat.warn b { color: var(--ember); }
+  .acct {
+    font: inherit; cursor: pointer; margin-left: 4px;
+    height: 38px; padding: 0 8px 0 4px; display: inline-flex; align-items: center; gap: 6px;
+    color: #fff; background: transparent; border: 1px solid #4A6290; border-radius: 999px;
+  }
+  .acct:hover, .acct[aria-expanded="true"] { background: rgba(255, 255, 255, 0.10); }
+  .acct .av {
+    width: 30px; height: 30px; border-radius: 999px; background: #fff; color: var(--il-blue);
+    font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;
+  }
 
-  /* Sits inside the strip, so it lands above the rule rather than pushing the
-     list down. Muted on purpose: this is a standing caveat about coverage, not
-     an emergency, and an alarm-coloured band that is always on gets ignored -
-     which is the one thing a staleness warning cannot afford. */
-  .strip #alarm { flex: 1 1 100%; }
+  .menu {
+    position: absolute; right: 0; top: calc(100% + 8px); z-index: 45; width: 300px;
+    background: #fff; color: var(--il-blue); border: 1px solid #E0E3E8; border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(19, 41, 75, .16); overflow: hidden; font-size: 14px;
+  }
+  .menu .mhead { padding: 12px 16px 8px; font-size: 12px; font-weight: 600; color: var(--text-3); }
+  .menu .msigned { padding: 14px 16px; border-bottom: 1px solid var(--rule); }
+  .menu .msigned small { display: block; font-size: 12px; color: var(--text-3); }
+  .menu .msigned b { font-weight: 600; word-break: break-all; }
+  .menu .mgrp { padding: 6px; }
+  .menu .mhead + .mgrp { padding-top: 0; }
+  .menu .mgrp + .mgrp { border-top: 1px solid var(--rule); }
+  .mitem {
+    width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px;
+    font: inherit; text-align: left; color: var(--il-blue); background: transparent;
+    border: 0; border-radius: 8px; cursor: pointer;
+  }
+  .mitem:hover, .mitem:focus-visible { background: var(--surface-2); text-decoration: none; color: var(--il-blue); }
+  .mitem:focus-visible { outline-offset: -2px; }
+  .mitem .mtxt { flex: 1; min-width: 0; }
+  .mitem .mtxt b { display: block; font-weight: 600; }
+  .mitem .mtxt small { display: block; font-size: 12.5px; color: var(--text-3); }
+
+  /* Chat-key status, wherever it shows: top bar, Account menu, AI chat panel. */
+  .status { flex: none; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 10px;
+            color: var(--notice-fg); background: var(--notice-bg); }
+  .status.ready { color: var(--il-blue); background: var(--tint-blue); }
+
+  /* ---- overview ---- */
+  main.wrap { padding-top: 40px; padding-bottom: 64px; }
+  .overview { display: flex; flex-wrap: wrap; gap: 28px 48px; align-items: flex-end; padding-bottom: 28px; }
+  .overview .lede-block { flex: 1 1 320px; }
+  .overview h1 { margin: 0; font-family: var(--serif); font-size: 40px; line-height: 1.1;
+                 font-weight: 500; letter-spacing: -0.02em; }
+  .overview p { margin: 10px 0 0; color: var(--text-3); }
+  .mcp-card {
+    margin-top: 16px; display: inline-flex; align-items: center; gap: 12px;
+    padding: 10px 14px; min-height: 44px; font-size: 14px; line-height: 1.4;
+    border: 1px solid var(--border); border-radius: 10px; color: var(--il-blue);
+  }
+  .mcp-card:hover { text-decoration: none; border-color: var(--il-industrial); color: var(--il-blue); }
+  .mcp-card b { font-weight: 600; }
+  .mcp-card .sub { color: var(--text-2); }
+  .mcp-card .go { color: var(--il-industrial); font-weight: 600; white-space: nowrap; }
+  .stats { margin: 0; display: flex; gap: 40px; flex-wrap: wrap; }
+  .stat dt { font-size: 13px; color: var(--text-3); }
+  .stat dd { margin: 2px 0 0; font-family: var(--serif); font-size: 34px; line-height: 1;
+             font-weight: 500; font-variant-numeric: tabular-nums; }
+  .stat.warn dd { color: var(--il-altgeld); }
+
+  /* Coverage notice: a standing caveat, so it stays one quiet line. */
+  #alarm:not(:empty) { margin-bottom: 4px; }
   .alarm {
-    margin: 12px 0 0; padding: 7px 0 0; border-top: 1px solid var(--rule);
-    font-size: 12.5px; color: var(--ink-faint);
+    display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px;
+    background: var(--notice-bg); color: var(--notice-fg);
+    border-radius: 8px; font-size: 13.5px;
   }
-  .alarm b { font-weight: 600; color: var(--ink-soft); }
+  .alarm svg { margin-top: 2px; }
+  .alarm b { font-weight: 600; }
 
-  /* ---- controls ---- */
-  .controls {
-    display: flex; flex-direction: column; gap: 10px;
-    margin: 26px 0 8px;
+  /* ---- find row + quick views ---- */
+  .controls { margin-top: 32px; display: flex; flex-direction: column; gap: 20px; }
+  .find { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field > .flbl { font-size: 12px; font-weight: 600; color: var(--text-3); }
+  .field.search-f { flex: 1 1 320px; }
+  .field.funder-f { flex: 0 1 190px; min-width: 0; }
+  .field.area-f { flex: 0 1 210px; min-width: 0; }
+  .searchbox {
+    display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px;
+    border: 1px solid var(--border-strong); border-radius: 10px; background: #fff;
   }
+  .searchbox:focus-within { outline: 2px solid var(--il-industrial); outline-offset: 1px; }
   .controls .search {
-    width: 100%; box-sizing: border-box;
-    padding: 9px 12px; font: inherit; color: var(--ink);
-    background: var(--card); border: 1px solid var(--rule); border-radius: 3px;
+    flex: 1; min-width: 0; border: 0; outline: none; padding: 0;
+    font: inherit; font-size: 15px; color: var(--il-blue); background: transparent;
   }
-  .affinity { font-size: 12.5px; color: var(--ink-soft); margin: 2px 0 8px; }
-  .kept { font-size: 12.5px; color: var(--moss); }
-  .tight { color: var(--rust, #9a3b23); }
-  .affinity b { color: var(--ink); font-weight: 500; }
+  .sortsel, .datesel {
+    font: inherit; font-size: 14px; height: 44px; padding: 0 12px; width: 100%;
+    color: var(--il-blue); background: #fff;
+    border: 1px solid var(--border-strong); border-radius: 10px;
+  }
+  .datesel { width: auto; padding: 0 10px; color-scheme: light; }
+  .daterange { display: flex; align-items: center; gap: 6px; color: var(--text-3); font-size: 14px; }
+
   .filters {
-    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 28px;
+    padding-top: 16px; border-top: 1px solid var(--rule);
   }
-  .search:focus, .chip:focus-visible, .sortsel:focus, .datesel:focus {
-    outline: 2px solid var(--moss); outline-offset: 1px;
-  }
+  .chipgroup { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .chipgroup .glbl { font-size: 12px; font-weight: 600; color: var(--text-3); margin-right: 2px; }
   .chip {
-    padding: 7px 13px; font: inherit; font-size: 13.5px;
-    background: transparent; color: var(--ink-soft);
-    border: 1px solid var(--rule); border-radius: 999px; cursor: pointer;
+    font: inherit; font-size: 13.5px; font-weight: 500; height: 34px; padding: 0 14px;
+    border-radius: 999px; cursor: pointer;
+    background: #fff; color: var(--il-blue); border: 1px solid var(--border);
   }
-  .chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-  .sortsel { padding: 8px 10px; font: inherit; font-size: 13.5px;
-             max-width: 220px;
-             background: var(--card); border: 1px solid var(--rule); border-radius: 3px; }
-  .daterange {
-    display: inline-flex; align-items: center; gap: 6px; flex-wrap: nowrap;
+  .chip:hover { border-color: var(--il-blue); }
+  .chip[aria-pressed="true"] { background: var(--il-blue); color: #fff; border-color: var(--il-blue); }
+
+  /* ---- result bar ---- */
+  .resultbar {
+    margin-top: 36px; display: flex; flex-wrap: wrap; justify-content: space-between;
+    align-items: flex-end; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--il-blue);
   }
-  .daterange .dlbl { font-size: 13.5px; color: var(--ink-soft); white-space: nowrap; }
-  .datesel {
-    padding: 7px 8px; font: inherit; font-size: 13.5px;
-    color: var(--ink); background: var(--card);
-    border: 1px solid var(--rule); border-radius: 3px;
-    color-scheme: light;
+  .tally { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+  .tally .cnt { font-family: var(--serif); font-size: 24px; font-weight: 500; }
+  .tally .ctx { font-size: 13.5px; color: var(--text-3); }
+  .sortlbl { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-3); }
+  .sortlbl .sortsel { width: auto; height: 38px; font-size: 13.5px; font-weight: 500;
+                      padding: 0 10px; border-color: var(--border); border-radius: 8px; }
+
+  /* ---- call list ---- */
+  #list { list-style: none; margin: 0; padding: 0; }
+  .row { border-bottom: 1px solid var(--rule); padding: 28px 0;
+         display: flex; flex-wrap: wrap; gap: 20px 32px; }
+
+  .when { flex: 0 0 104px; }
+  .when .d { font-family: var(--serif); font-size: 30px; line-height: 1; font-weight: 500;
+             font-variant-numeric: tabular-nums; }
+  .when .d .u { font-family: var(--sans); font-size: 13px; font-weight: 500;
+                color: var(--text-3); margin-left: 4px; }
+  .when .d.word { font-size: 22px; line-height: 1.1; }
+  .when .m { font-size: 13px; color: var(--text-3); margin-top: 6px; }
+  .row.soon .when .d, .row.soon .when .d .u { color: var(--il-altgeld); }
+
+  .body { flex: 999 1 480px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+          font-size: 12.5px; color: var(--text-3); }
+  .meta .funder { font-weight: 600; letter-spacing: 0.04em; color: var(--il-blue); }
+  .cap { color: var(--il-altgeld); }
+  .kept, .verdict {
+    font-size: 12px; font-weight: 500; border-radius: 999px; padding: 2px 9px;
+    color: var(--il-industrial); background: var(--tint-blue);
   }
-  #area { max-width: 200px; }
-  .tally { font-size: 13px; color: var(--ink-faint); padding: 6px 0 14px; }
+  .verdict.down { color: var(--il-altgeld); background: var(--notice-bg); }
 
-  /* ---- the list: an agenda, not cards ---- */
-  .row {
-    display: grid; grid-template-columns: 96px 1fr; gap: 22px;
-    padding: 20px 0; border-bottom: 1px solid var(--rule);
-  }
-  .when { font-family: var(--serif); text-align: right; padding-top: 2px; }
-  .when .d { font-size: 21px; line-height: 1.05; display: block; }
-  .when .m { font-size: 12.5px; color: var(--ink-soft); font-family: var(--sans); }
-  .when .away { font-size: 12px; color: var(--ink-faint); font-family: var(--sans); display: block; margin-top: 3px; }
-  .row.soon .when .d, .row.soon .when .away { color: var(--ember); }
-  .when .rolling { font-size: 13px; color: var(--ink-faint); font-family: var(--sans); }
+  h2.title { margin: 0; font-family: var(--serif); font-size: 23px; line-height: 1.25;
+             font-weight: 600; letter-spacing: -0.01em; }
+  h2.title a { color: var(--il-blue); }
 
-  h2.title { font-family: var(--serif); font-size: 19.5px; font-weight: 600;
-             margin: 0 0 5px; line-height: 1.3; }
-  h2.title a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--rule); }
-  h2.title a:hover { border-bottom-color: var(--ink); }
+  .why { margin: 0; font-size: 16px; line-height: 1.55; }
+  .tag { font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+         color: var(--il-industrial); margin-right: 8px; white-space: nowrap; }
+  .sumry { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--text-2); max-width: 72ch; }
 
-  .meta { font-size: 13px; color: var(--ink-soft); margin-bottom: 9px; }
-  .meta em { font-style: normal; color: var(--ink-faint); }
-  .cap { color: var(--ember); }
-
-  .why { margin: 0 0 10px; }
-  /* What the call funds, written to be read. Sits above .why, which is the
-     model's justification of the score and answers a different question. */
-  .sumry { margin: 0 0 8px; color: var(--ink); }
-  /* The two paragraphs answer different questions and used to sit adjacent
-     and unlabelled, which reads as one run-on thought. Only the rationale is
-     tagged: the summary is the plain description and needs no introduction,
-     and tagging both would be twice the furniture for half the clarity.
-
-     "why", not "relevance" or "why this score": the badge directly above
-     already reads "good fit 75/100", so labelling it "relevance" names the
-     paragraph with the thing next to it rather than with what it says. */
-  .tag { font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase;
-         color: var(--ink-faint); margin-right: 8px; white-space: nowrap; }
-
+  /* Closest-fit panel: who to approach, and who here already knows them. */
   .fit {
-    padding: 9px 12px; background: var(--card);
-    border-left: 2px solid var(--moss); font-size: 13.5px; color: var(--ink-soft);
-  }
-  .fit b { color: var(--moss); font-weight: 600; }
-  .fit a { text-decoration: none; }
-  .fit a:hover b { text-decoration: underline; }
-  .fit .cold { color: var(--ink-faint); font-weight: 400; }
-
-  /* Who to email, and who here already knows them. A match is only useful if
-     it ends in a message being sent, so both addresses are one click away. */
-  .reach { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--rule);
-           font-size: 12.5px; line-height: 1.75; }
-  .reach div { display: flex; gap: 6px; }
-  .reach .who { color: var(--ink-faint); flex: 0 0 5.5em; }
-  .reach a { color: var(--moss); text-decoration: none; }
-  .reach a:hover { text-decoration: underline; }
-  .reach .noaddr { color: var(--ink-faint); font-style: italic; }
-  .reach .addr { color: var(--ink-soft); font-size: 12px; }
-  .reach .addr:hover { color: var(--moss); }
-  .lead { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 9px;
-          font-size: 11px; color: var(--ember); border: 1px solid var(--ember); }
-  .ours { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 9px;
-          font-size: 11px; color: var(--moss); border: 1px solid var(--moss); }
-  .reach .flag { color: var(--ember); flex: 1 1 auto; }
-
-  /* ---- browse panes inside the roster / sources modals ---- */
-  .lede { margin: 2px 0 12px; font-size: 13px; color: var(--ink-soft); max-width: 68ch; }
-  .browsebar { display: flex; align-items: center; gap: 10px; margin: 4px 0 6px; }
-  .morebar { display: flex; align-items: center; justify-content: space-between;
-             gap: 12px; padding: 10px 0 2px; font-size: 12.5px; color: var(--ink-faint); }
-  .addbox { margin: 2px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
-  .addbox summary { cursor: pointer; color: var(--moss); font-size: 13.5px; }
-  .addbox form { margin-top: 10px; }
-  .browsebar input { flex: 1 1 auto; padding: 7px 10px; font: inherit; font-size: 13.5px;
-                     background: #fff; color: var(--ink); border: 1px solid var(--rule);
-                     border-radius: 3px; }
-  .rrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 9px;
-          padding: 7px 0; border-bottom: 1px solid var(--rule); font-size: 13px; }
-  .rrow .nm { font-weight: 600; color: var(--ink); }
-  .rrow .sub { color: var(--ink-faint); flex: 1 1 100%; font-size: 12.5px; }
-  .rrow a { color: var(--moss); text-decoration: none; }
-  .rrow a:hover { text-decoration: underline; }
-  .pill { padding: 0 7px; border-radius: 9px; font-size: 11px; border: 1px solid var(--rule);
-          color: var(--ink-soft); }
-  .pill.warm { color: var(--moss); border-color: var(--moss); }
-  .pill.prospect { color: var(--ink-faint); }
-  .pill.departed, .pill.stale { color: var(--ember); border-color: var(--ember); }
-  .pill.added { color: var(--moss); border-color: var(--moss); }
-
-  /* Relevance as a four-step signal, not a progress bar. A bar filling
-     left-to-right reads as "how far along", which is the wrong question; rising
-     steps read as strength. Banded rather than a continuous ramp: the score is
-     a model estimate, and a smooth fill implies a precision it does not have.
-     Four bands say "pursue / look / marginal / no" and that is the real
-     resolution, so the band gets a word and the number stays secondary. */
-  .score { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .score .sig { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
-  .score .sig i { display: block; width: 4px; border-radius: 1px; background: var(--rule); }
-  .score .sig i:nth-child(1) { height: 5px; }
-  .score .sig i:nth-child(2) { height: 8px; }
-  .score .sig i:nth-child(3) { height: 11px; }
-  .score .sig i:nth-child(4) { height: 14px; }
-  .score .sig i.on { background: var(--moss); }
-  .score.lo .sig i.on, .score.min .sig i.on { background: var(--ink-faint); }
-  .score .band { font-size: 12.5px; font-weight: 500; color: var(--moss); }
-  .score.lo .band, .score.min .band { color: var(--ink-soft); font-weight: 400; }
-  .score .num { font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
-
-  .acts { margin-top: 8px; }
-  .act { font-size: 13px; color: var(--moss); text-decoration: none; }
-  button.act {
-    background: none; border: none; padding: 0; cursor: pointer; font: inherit;
-  }
-  button.act:disabled { opacity: .45; cursor: not-allowed; }
-  .act:hover { text-decoration: underline; }
-  .amt { color: var(--ink); font-weight: 500; }
-  .noamt { color: var(--ink-faint); }
-  .areatag { display: inline-block; float: right; margin: 0 0 4px 8px; padding: 1px 7px;
-             max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-             vertical-align: bottom;
-             font: inherit; font-size: 11.5px; color: var(--ink-soft); cursor: pointer;
-             background: var(--paper); border: 1px solid var(--rule); border-radius: 9px; }
-  .areatag:hover { color: var(--moss); border-color: var(--moss); }
-
-  .acts { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-  .vote { font: inherit; font-size: 13px; padding: 2px 9px; cursor: pointer;
-          color: var(--ink-soft); background: var(--paper);
-          border: 1px solid var(--rule); border-radius: 11px; }
-  .vote:hover:not(:disabled) { color: var(--moss); border-color: var(--moss); }
-  .vote[aria-pressed="true"] { color: var(--moss); border-color: var(--moss); font-weight: 500; }
-  .vote:disabled { opacity: .45; cursor: not-allowed; }
-  .votenote { font-size: 12px; color: var(--ink-faint); }
-  .fbbox { margin-top: 8px; display: none; gap: 6px; }
-  .fbbox.on { display: flex; flex-wrap: wrap; }
-  .fbbox input { flex: 1 1 260px; font: inherit; font-size: 13px; padding: 4px 7px;
-                 border: 1px solid var(--rule); background: #fff; color: var(--ink); }
-
-  .chat {
-    display: none; margin-top: 14px; padding: 14px 14px 12px;
-    background: #fff; border: 1px solid var(--rule); border-left: 3px solid var(--moss);
-  }
-  .chat.on { display: block; }
-  .chat .chathead {
-    display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px;
-    margin-bottom: 8px;
-  }
-  .chat .chathead b { font-size: 13.5px; font-weight: 600; color: var(--moss); }
-  .chat .chathead .meta { font-size: 12px; color: var(--ink-faint); }
-  .chat .chathead .model { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-  .chat .log {
+    margin-top: 4px; padding: 16px 18px; background: var(--surface-2); border-radius: 10px;
     display: flex; flex-direction: column; gap: 10px;
-    max-height: 360px; overflow-y: auto; font-size: 13.5px;
-    padding: 4px 0; background: transparent; border: none; min-height: 0;
   }
+  .fit .fithead { display: flex; flex-wrap: wrap; justify-content: space-between;
+                  align-items: baseline; gap: 8px; }
+  .fit .fitwho { font-size: 14.5px; }
+  .fit .fitwho .eyebrow { margin-right: 8px; }
+  .fit .fitwho b { font-weight: 600; }
+  .fit .proj { color: var(--text-2); }
+  .fit .cold { color: var(--text-3); font-size: 13px; }
+  .fit .reason { margin: 0; font-size: 14px; line-height: 1.55; color: var(--text-2); }
+  .areatag {
+    font: inherit; font-size: 12px; color: var(--text-2); cursor: pointer;
+    background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px;
+    max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .areatag:hover { color: var(--il-blue); border-color: var(--il-blue); }
+  .reach { display: flex; flex-wrap: wrap; gap: 8px 32px; padding-top: 10px;
+           border-top: 1px solid #E3E6EB; font-size: 13.5px; }
+  .reach > div { display: flex; gap: 10px; align-items: baseline; }
+  .reach .who { flex: 0 0 52px; color: var(--text-3); padding: 0; border: 0; font-size: inherit; }
+  .reach b { font-weight: 500; }
+  .reach .noaddr { color: var(--text-3); font-style: italic; }
+  .reach .dept { color: var(--text-3); }
+  .reach .flag { color: var(--il-altgeld); }
+  .reach .rosterlink { margin-left: auto; padding: 0; min-height: 0; }
+  .alarm .linkbtn { color: var(--notice-fg); text-decoration: underline; padding: 0; min-height: 0; font-size: inherit; }
+
+  /* Actions: ask on the left, the two verdicts quiet on the right. */
+  .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
+  .acts .spacer { flex: 1 1 0; }
+  .acts .votes { display: flex; gap: 8px; }
+  .act {
+    font: inherit; font-size: 13.5px; font-weight: 500; color: var(--il-industrial);
+    background: transparent; border: 0; padding: 0 2px; height: 36px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .act:hover:not(:disabled) { text-decoration: underline; }
+  .act[aria-expanded="true"] { color: var(--il-blue); background: var(--tint-blue); font-weight: 600;
+                               padding: 0 12px; border-radius: 8px; text-decoration: none; }
+  .act:disabled { opacity: .45; cursor: not-allowed; }
+  .vote {
+    font: inherit; font-size: 13px; color: var(--text-2); cursor: pointer;
+    background: #fff; border: 1px solid #E0E3E8; border-radius: 8px;
+    height: 34px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .vote:hover:not(:disabled) { border-color: var(--il-blue); color: var(--il-blue); }
+  .vote[aria-pressed="true"] { border-color: var(--il-blue); color: var(--il-blue); font-weight: 600; }
+  .vote:disabled { opacity: .45; cursor: not-allowed; }
+  .votenote { flex: 1 1 100%; font-size: 12px; color: var(--text-3); text-align: right; }
+  .votenote:empty { display: none; }
+
+  .fbbox { display: none; gap: 6px; }
+  .fbbox.on { display: flex; flex-wrap: wrap; }
+  .fbbox input, .fbbox select {
+    font: inherit; font-size: 13px; height: 34px; padding: 0 10px;
+    border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--il-blue);
+  }
+  .fbbox input { flex: 1 1 260px; }
+
+  /* Award & fit: their own column, so both scan straight down the page. */
+  .side { flex: 1 0 180px; max-width: 220px; display: flex; flex-direction: column; gap: 14px; }
+  .amt { font-family: var(--serif); font-size: 20px; line-height: 1.2; font-weight: 500; margin-top: 3px; }
+  .amtnote { font-size: 12.5px; color: var(--text-3); margin-top: 3px; line-height: 1.4; }
+  .noamt { font-size: 15px; color: var(--text-3); margin-top: 3px; }
+  /* Fit is a score and a word, not a bar: a filling bar reads as progress. */
+  .score .num { display: flex; align-items: baseline; gap: 2px; margin-top: 3px; }
+  .score .num b { font-family: var(--serif); font-size: 20px; line-height: 1.2; font-weight: 500;
+                  font-variant-numeric: tabular-nums; }
+  .score .num span { font-size: 12.5px; color: var(--text-3); }
+  .fitpill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600;
+             color: var(--il-blue); background: var(--tint-blue); border-radius: 999px; padding: 3px 10px 3px 8px; }
+  /* The dot steps down by band in hue and in fill, so it reads without
+     colour vision too; the printed label is still the real signal. */
+  .fitpill::before { content: ""; box-sizing: border-box; width: 8px; height: 8px; border-radius: 999px;
+                     background: var(--il-orange); }
+  .fitpill.mid::before { background: transparent; border: 2px solid var(--il-orange); }
+  .fitpill.lo::before { background: #8A93A3; }
+  .fitpill.min::before { background: transparent; border: 2px solid #8A93A3; }
+  .score .fitpill { margin-top: 6px; }
+
+  /* ---- inline chat ---- */
+  .chat { display: none; padding: 16px 18px; background: #fff;
+          border: 1px solid var(--border); border-radius: 10px; }
+  .chat.on { display: block; }
+  .chat .chathead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-bottom: 8px; }
+  .chat .chathead b { font-size: 14px; font-weight: 600; color: var(--il-industrial); }
+  .chat .chathead .meta { font-size: 12px; }
+  .chat .chathead .model { color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .chat .log { display: flex; flex-direction: column; gap: 10px; max-height: 360px; overflow-y: auto;
+               font-size: 14px; padding: 4px 0; }
   .chat .log:empty { display: none; }
-  .chat .turn {
-    max-width: min(92%, 520px); padding: 9px 12px; white-space: pre-wrap;
-    line-height: 1.45; border: 1px solid var(--rule);
-  }
-  .chat .turn .from {
-    display: block; font-size: 11.5px; font-weight: 600; margin-bottom: 4px;
-    color: var(--ink-faint); letter-spacing: 0.02em;
-  }
-  .chat .turn.user {
-    align-self: flex-end; background: #eef3f0; border-color: #d2ddd7;
-  }
-  .chat .turn.user .from { color: var(--moss); }
-  .chat .turn.assistant {
-    align-self: flex-start; background: #fff; border-color: var(--rule);
-  }
-  .chat .turn.assistant .from { color: var(--ink-soft); }
+  .chat .turn { max-width: min(92%, 520px); padding: 10px 12px; white-space: pre-wrap;
+                line-height: 1.5; border: 1px solid var(--rule); border-radius: 10px; }
+  .chat .turn .from { display: block; font-size: 11.5px; font-weight: 600; margin-bottom: 4px;
+                      color: var(--text-3); letter-spacing: 0.02em; }
+  .chat .turn.user { align-self: flex-end; background: var(--tint-blue); border-color: #D3DEEE; }
+  .chat .turn.user .from { color: var(--il-industrial); }
+  .chat .turn.assistant { align-self: flex-start; background: #fff; }
   .chat form { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-  .chat input[type=text] { flex: 1 1 240px; font: inherit; font-size: 13px; padding: 6px 8px;
-                 border: 1px solid var(--rule); background: #fff; color: var(--ink); }
-  .chat .hint { font-size: 12px; color: var(--ink-faint); }
-  .chat .privacy { font-size: 12px; color: var(--ink-faint); margin-bottom: 10px;
-                   max-width: 68ch; line-height: 1.45; }
+  .chat input[type=text] { flex: 1 1 240px; font: inherit; font-size: 14px; height: 36px; padding: 0 10px;
+                           border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--il-blue); }
+  .chat .hint { font-size: 12px; color: var(--text-3); }
+  .chat .privacy { font-size: 12px; color: var(--text-3); margin-bottom: 10px; max-width: 68ch; line-height: 1.45; }
   .chatfoot { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
 
-  .cfgpop input.hilite {
-    outline: 2px solid var(--moss); outline-offset: 1px;
-    border-color: var(--moss);
-    box-shadow: 0 0 0 3px rgba(47, 93, 80, 0.15);
+  /* ---- AI chat and Email digests panels (480 px) ---- */
+  .modal.panel { width: min(480px, 100%); padding: 0; }
+  .modal.panel header { padding: 20px 24px 16px; margin: 0; border-bottom: 1px solid var(--rule); align-items: center; }
+  .flbl2 { display: block; font-size: 13px; font-weight: 600; color: var(--il-blue); }
+  .help { font-size: 12.5px; color: var(--text-3); line-height: 1.45; }
+  .conn { margin: 20px 24px 24px; border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; }
+  .conn.notready { border-color: #F2B48F; }
+  .conn .startnote { display: flex; gap: 10px; align-items: flex-start; padding: 12px 16px;
+                     background: var(--notice-bg); color: var(--notice-fg); font-size: 13.5px; }
+  .conn .startnote b { font-weight: 600; }
+  .conn:not(.notready) .startnote { display: none; }
+  .connbody { padding: 16px 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+  .connhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .connhead h3 { margin: 0; font-size: 16px; font-weight: 600; }
+  .keyf, .modal .keyf { display: flex; flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: 6px; }
+  .modal .keyrow input { height: 44px; border-color: var(--border-strong); border-radius: 10px; }
+  .keyrow { display: flex; gap: 8px; }
+  .keyrow input {
+    flex: 1; min-width: 0; font: inherit; font-size: 14px; height: 44px; padding: 0 12px;
+    color: var(--il-blue); background: #fff; border: 1px solid var(--border-strong); border-radius: 10px;
   }
+  .keyrow .primary { border-radius: 10px; }
+  .provider { border-top: 1px solid var(--rule); padding-top: 12px; display: flex; flex-direction: column; }
+  .provider summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--il-industrial);
+                      min-height: 28px; display: flex; align-items: center; }
+  .provider[open] { gap: 0; }
+  .provider .help { margin: 10px 0 2px; }
+  .provider .flbl2 { margin: 10px 0 6px; }
+  .modal .provider input { width: 100%; height: 40px; }
+  .digestf { padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 12px; }
+  .digestf .help { margin: 0; }
+  .digestf input[type=email] { width: 100%; height: 40px; margin-top: -6px; background: var(--surface-2); }
+  .subfeeds { margin: 0; padding: 0; border: 0; }
+  .subfeeds legend { margin-bottom: 4px; padding: 0; }
+  .subfeeds label { display: flex; align-items: center; gap: 10px; min-height: 36px; font-size: 14px; cursor: pointer; }
+  .modal .subfeeds input[type=checkbox] { width: 18px; height: 18px; margin: 0; accent-color: var(--il-blue); }
+  .savebar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .secondary {
+    font: inherit; font-size: 13.5px; font-weight: 600; height: 40px; padding: 0 16px; cursor: pointer;
+    color: var(--il-blue); background: #fff; border: 1px solid var(--border-strong); border-radius: 8px;
+  }
+  .secondary:hover { background: var(--tint-blue); }
+  .linkbtn {
+    font: inherit; font-size: 13px; font-weight: 600; color: var(--il-industrial);
+    background: none; border: 0; padding: 0 4px; min-height: 28px; cursor: pointer;
+  }
+  .linkbtn:hover { text-decoration: underline; color: var(--il-blue); }
 
-  .whoami { margin-left: auto; display: flex; align-items: center; gap: 10px; position: relative; }
-  .who { font-size: 12.5px; color: var(--ink-faint); }
-  .cfgbtn, .shelfbtn {
-    font: inherit; font-size: 13px; padding: 5px 11px; cursor: pointer;
-    border: 1px solid var(--rule); border-radius: 3px;
-    background: #fff; color: var(--ink-soft);
-  }
-  .cfgbtn:hover, .cfgbtn[aria-expanded="true"],
-  .shelfbtn:hover {
-    color: var(--moss); border-color: var(--moss);
-  }
-  .shelfbtn .n {
-    font-variant-numeric: tabular-nums; color: var(--moss); font-weight: 600;
-  }
-  .shelfbtn:disabled { opacity: 0.45; cursor: default; }
-  .cfgpop {
-    display: none; position: absolute; right: 0; top: calc(100% + 8px); z-index: 40;
-    width: min(440px, calc(100vw - 36px)); padding: 0;
-    background: #fff; border: 1px solid var(--rule); box-shadow: 0 8px 24px rgba(25,33,30,.08);
-    font-size: 13px;
-  }
-  .cfgpop.on { display: block; }
-  .cfgpop .cfgsec { padding: 14px 16px; border-bottom: 1px solid var(--rule); }
-  .cfgpop .cfgsec:last-child { border-bottom: none; }
-  .cfgpop .cfgsec h3 { margin: 0 0 4px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
-  .cfgpop .cfgsec .desc { margin: 0 0 10px; font-size: 12.5px; color: var(--ink-faint); line-height: 1.45; }
-  .cfgpop label { display: block; font-size: 12px; color: var(--ink-soft); margin: 8px 0 3px; }
-  .cfgpop label:first-of-type { margin-top: 0; }
-  .cfgpop input, .cfgpop select { width: 100%; font: inherit; font-size: 13px; padding: 6px 8px;
-                  border: 1px solid var(--rule); background: #fff; color: var(--ink); }
-  .cfgpop .offline { color: var(--ink-faint); font-size: 12px; margin-top: 8px; line-height: 1.4; }
-  .cfgpop .cfgsec .vote { margin-top: 4px; }
-  .cfgpop .subfeeds { margin: 8px 0 10px; display: flex; flex-direction: column; gap: 6px; }
-  .cfgpop .subfeeds label {
-    display: flex; align-items: flex-start; gap: 8px; margin: 0;
-    font-size: 13px; color: var(--ink); cursor: pointer; line-height: 1.35;
-  }
-  .cfgpop .subfeeds input[type="checkbox"] {
-    width: auto; margin-top: 2px; flex-shrink: 0;
-  }
+  /* Asking without a key: the key field, in place of the chat box. */
+  .keycard { border: 1px solid #F2B48F; border-radius: 12px; padding: 18px 20px 20px;
+             display: flex; flex-direction: column; gap: 14px; }
+  .keycard h3 { margin: 0; font-size: 16px; font-weight: 600; }
+  .keycard p { margin: 4px 0 0; font-size: 13.5px; color: var(--text-2); }
+  .keycard .keyrow input { border: 2px solid var(--il-industrial); }
+  .keycard .linkbtn { align-self: flex-start; padding: 0; }
 
-  .verdict { display: inline-block; margin-right: 8px; padding: 1px 7px; font-size: 11.5px;
-             border-radius: 9px; border: 1px solid var(--moss); color: var(--moss); }
-  .verdict.down { border-color: #a4453a; color: #a4453a; }
-  .fbbox select { font: inherit; font-size: 13px; padding: 4px 6px;
-                  border: 1px solid var(--rule); background: #fff; color: var(--ink); }
-
-  input, select, textarea {
-    background: #fff; color: var(--ink);
-  }
-  .search, .sortsel, .datesel { background: #fff; }
-
-  .pager {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-    margin: 18px 0 8px; font-size: 13px; color: var(--ink-soft);
-  }
-  .pager .pages { display: flex; flex-wrap: wrap; gap: 4px; }
+  /* ---- pager ---- */
+  .pager { margin-top: 32px; display: flex; flex-wrap: wrap; justify-content: center;
+           align-items: center; gap: 6px; font-size: 14px; }
+  .pager .pages { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .pager .pages span { color: var(--text-3); padding: 0 4px; }
   .pager button {
-    font: inherit; font-size: 13px; padding: 4px 10px; cursor: pointer;
-    border: 1px solid var(--rule); border-radius: 3px;
-    background: #fff; color: var(--ink-soft);
+    font: inherit; min-width: 40px; height: 40px; padding: 0 10px; cursor: pointer;
+    border: 0; border-radius: 8px; background: transparent; color: var(--il-blue);
   }
-  .pager button:hover:not(:disabled) { color: var(--moss); border-color: var(--moss); }
-  .pager button[aria-current="page"] {
-    background: var(--ink); color: var(--paper); border-color: var(--ink);
-  }
-  .pager button:disabled { opacity: .4; cursor: not-allowed; }
+  .pager > button { padding: 0 14px; border: 1px solid #E0E3E8; background: #fff; }
+  .pager button:hover:not(:disabled) { background: var(--tint-blue); }
+  .pager button[aria-current="page"] { background: var(--il-blue); color: #fff; font-weight: 600; }
+  .pager button:disabled { color: #8A909C; cursor: not-allowed; }
 
+  /* ---- modals ---- */
   .modal-backdrop {
     display: none; position: fixed; inset: 0; z-index: 50;
-    background: rgba(25, 33, 30, 0.35);
+    background: rgba(19, 41, 75, 0.45);
     align-items: center; justify-content: center; padding: 24px;
   }
   .modal-backdrop.on { display: flex; }
   .modal {
-    width: min(640px, 100%); max-height: min(84vh, 720px); overflow: auto;
-    background: #fff; border: 1px solid var(--rule); padding: 18px 20px 20px;
+    width: min(640px, 100%); max-height: min(86vh, 760px); overflow: auto;
+    background: #fff; border-top: 6px solid var(--il-orange); border-radius: 4px;
+    padding: 24px 28px 28px; color: var(--il-blue);
   }
-  #shelf-modal .modal {
-    width: min(980px, 100%); max-height: min(92vh, 920px);
-    padding: 22px 28px 28px;
-  }
-  .modal header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
-  .shelfacts { display: flex; align-items: center; gap: 14px; margin: 10px 0 4px; flex-wrap: wrap; }
-  #shelf-body .mute {
-    font-size: 12px; color: var(--ink-faint); margin: 0 0 10px; line-height: 1.45;
-  }
-  #shelf-body .mute b { font-weight: 600; color: var(--ink-faint); }
-  #shelf-body textarea {
-    width: 100%; box-sizing: border-box; font: inherit; font-size: 14px;
-    padding: 12px 14px; margin: 4px 0 2px; resize: vertical; min-height: 140px;
-    border: 1px solid var(--rule); border-radius: 3px; background: #fff; color: var(--ink);
-  }
-  #shelf-body .bkout {
-    white-space: pre-wrap; font-size: 14px; margin: 14px 0 6px; line-height: 1.5;
-    color: var(--ink);
-  }
-  #shelf-body .bkout .tag { margin-right: 8px; }
-  #shelf-body .hint { font-size: 12px; color: var(--ink-faint); }
-  #shelf-list { margin-top: 8px; }
-  #shelf-list .row:last-child { border-bottom: none; }
-  .modal header h2 { margin: 0; font-family: var(--serif); font-size: 20px; font-weight: 600; }
+  #shelf-modal .modal { width: min(880px, 100%); max-height: min(92vh, 960px); padding: 0; }
+  .modal header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+  .modal header h2 { margin: 0; font-family: var(--serif); font-size: 24px; font-weight: 500; letter-spacing: -0.01em; }
   .modal .x {
-    margin-left: auto; font: inherit; font-size: 13px; cursor: pointer;
-    color: var(--ink-soft); background: transparent; border: none; padding: 4px 6px;
+    flex: none; margin-left: auto; width: 40px; height: 40px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: #fff; border: 1px solid #E0E3E8; border-radius: 8px; color: var(--il-blue);
   }
-  .modal .x:hover { color: var(--moss); }
+  .modal .x:hover { background: var(--tint-blue); }
   .modal form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .modal input, .modal select { font: inherit; font-size: 13px; padding: 6px 8px;
-           border: 1px solid var(--rule); background: #fff; color: var(--ink); }
+  .modal input, .modal select { font: inherit; font-size: 13.5px; height: 36px; padding: 0 10px;
+           border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--il-blue); }
   .modal .wide { flex: 1 1 220px; }
-  .modal .rlist { margin-top: 12px; font-size: 12.5px; color: var(--ink-soft); }
-  .modal .rlist div { padding: 3px 0; }
-  .modal .note { font-size: 12px; color: var(--ink-faint); margin-top: 10px; max-width: 74ch;
-                 line-height: 1.45; }
+  .modal .rlist { margin-top: 12px; font-size: 13px; color: var(--text-2); }
+  .modal .note { font-size: 12px; color: var(--text-3); margin-top: 12px; max-width: 74ch; line-height: 1.45; }
+  .modal .hint { font-size: 12px; color: var(--text-3); }
 
-  .empty { padding: 60px 0; text-align: center; color: var(--ink-soft); }
-  .empty b { font-family: var(--serif); font-size: 19px; display: block; color: var(--ink); margin-bottom: 6px; }
+  .lede { margin: 2px 0 12px; font-size: 13.5px; color: var(--text-3); max-width: 68ch; }
+  .browsebar { display: flex; align-items: center; gap: 10px; margin: 4px 0 6px; }
+  .browsebar input { flex: 1 1 auto; height: 40px; }
+  .morebar { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+             padding: 10px 0 2px; font-size: 12.5px; color: var(--text-3); }
+  .addbox { margin: 2px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
+  .addbox summary { cursor: pointer; color: var(--il-industrial); font-size: 14px; font-weight: 500; }
+  .addbox form { margin-top: 10px; }
+  .rrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 9px;
+          padding: 9px 0; border-bottom: 1px solid var(--rule); font-size: 13.5px; }
+  .rrow .nm { font-weight: 600; color: var(--il-blue); }
+  .rrow .sub { color: var(--text-3); flex: 1 1 100%; font-size: 12.5px; }
+  .rrow .err { color: var(--il-altgeld); }
+  .pill { padding: 1px 8px; border-radius: 999px; font-size: 11.5px; border: 1px solid var(--border); color: var(--text-2); }
+  .pill.warm, .pill.added { color: var(--il-industrial); border-color: var(--il-industrial); }
+  .pill.prospect { color: var(--text-3); }
+  .pill.departed, .pill.stale { color: var(--il-altgeld); border-color: var(--il-altgeld); }
 
-  footer { margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--rule);
-           font-size: 12.5px; color: var(--ink-faint); }
-
-  @media (max-width: 620px) {
-    .shell { padding: 26px 18px 60px; }
-    .row { grid-template-columns: 1fr; gap: 8px; }
-    .when { text-align: left; }
-    .when .d, .when .m { display: inline; font-size: 14px; }
-    .brand { font-size: 24px; }
-    .daterange { flex-wrap: wrap; }
+  /* ---- Idea match panel ---- */
+  #shelf-modal header { padding: 32px 40px 20px; margin: 0; border-bottom: 1px solid var(--rule); }
+  #shelf-modal header h2 { font-size: 30px; line-height: 1.15; }
+  #shelf-modal header p { margin: 6px 0 0; font-size: 13.5px; color: var(--text-3); max-width: 60ch; }
+  #shelf-body { padding: 28px 40px 40px; display: flex; flex-direction: column; gap: 24px; }
+  #shelf-body .ideaf { display: flex; flex-direction: column; gap: 8px; }
+  #shelf-body textarea {
+    width: 100%; font: inherit; font-size: 15px; line-height: 1.6; color: var(--il-blue);
+    padding: 14px 16px; resize: vertical; min-height: 140px;
+    border: 1px solid var(--border); border-radius: 10px; background: #fff;
   }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  .shelfacts { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .primary {
+    font: inherit; font-size: 14px; font-weight: 600; color: #fff; background: var(--il-blue);
+    border: 0; border-radius: 8px; height: 44px; padding: 0 18px; cursor: pointer;
+  }
+  .primary:hover:not(:disabled) { background: #0C1C36; }
+  .primary:disabled { opacity: .6; cursor: progress; }
+  #shelf-body .hint { font-size: 12.5px; color: var(--text-3); }
+  .bkout { background: var(--tint-blue); border-radius: 12px; padding: 20px 22px; }
+  .bkout .tag { display: block; margin: 0; }
+  .bkout .pick { margin: 8px 0 0; font-family: var(--serif); font-size: 19px; line-height: 1.45; }
+  .bkout .rest { margin: 10px 0 0; font-size: 14px; line-height: 1.55; color: var(--text-2); }
+  .bkout a { color: var(--il-blue); font-weight: 600; text-decoration: underline;
+             text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
+  .shelfhead { display: flex; justify-content: space-between; align-items: baseline;
+               padding-bottom: 10px; border-bottom: 1px solid var(--il-blue);
+               font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
+  #shelf-list { margin: -24px 0 0; padding: 0; list-style: none; }
+  #shelf-list .row:last-child { border-bottom: none; }
+  #shelf-list .when { flex-basis: 92px; }
+  #shelf-list .body { flex-basis: 420px; }
+  #shelf-list h2.title { font-size: 22px; }
+  #shelf-list .why { font-size: 15.5px; }
+  #shelf-list .meta .mininum { display: inline-flex; align-items: baseline; gap: 2px; }
+  #shelf-list .meta .mininum b { font-family: var(--serif); font-size: 17px; font-weight: 500;
+                                 color: var(--il-blue); font-variant-numeric: tabular-nums; }
+  #shelf-list .mute { margin: 0; color: var(--text-3); font-size: 14px; }
+
+  .empty { padding: 60px 0; text-align: center; color: var(--text-3); list-style: none; }
+  .empty b { font-family: var(--serif); font-size: 20px; font-weight: 500; display: block;
+             color: var(--il-blue); margin-bottom: 6px; }
+
+  footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--rule);
+           font-size: 12.5px; color: var(--text-3); }
+  footer a { margin-left: 6px; }
+
+  /* Medium widths: award & fit drop under the body, side by side. */
+  @media (max-width: 900px) {
+    .side { flex: 1 1 100%; max-width: none; flex-direction: row; gap: 40px; margin-left: 136px; }
+    .side > div { flex: 0 1 200px; }
+  }
+  /* Phones: one column, Deadline then Body then Award & fit. */
+  @media (max-width: 760px) {
+    #shelfbtn .lbl, #databtn .lbl { display: none; }
+    .strip .wrap { gap: 10px 16px; }
+    .wrap { padding: 0 16px; }
+    main.wrap { padding-top: 28px; }
+    .overview h1 { font-size: 32px; }
+    .stats { gap: 24px; }
+    .stat dd { font-size: 28px; }
+    .find .field { flex: 1 1 100%; }
+    .daterange .datesel { flex: 1 1 0; min-width: 0; }
+    .row { flex-direction: column; gap: 12px; padding: 22px 0; }
+    .when { flex: none; display: flex; align-items: baseline; gap: 10px; }
+    .when .m { margin-top: 0; }
+    .body { flex: none; }
+    .side { margin-left: 0; gap: 32px; }
+    h2.title { font-size: 20px; }
+    #shelf-modal header { padding: 24px 20px 16px; }
+    #shelf-body { padding: 20px; }
+    .modal { padding: 20px; }
+    .modal-backdrop { padding: 8px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
 </style>
 </head>
 <body>
-<div class="shell">
-
-  <header class="strip">
-    <div class="brand-block">
-      <div class="brand">Grant Sift<span id="asof">loading</span></div>
-      <a class="grafana-link" id="grafana-link" hidden href="#" target="_blank" rel="noopener">Ops &amp; signal</a>
-    </div>
-    <div class="stat"><b id="n-open">..</b><i>open calls</i></div>
-    <div class="stat warn"><b id="n-soon">..</b><i>close within 30 days</i></div>
-    <div class="stat"><b id="n-match">..</b><i>match a past collaborator</i></div>
-    <div class="whoami" id="whoami" hidden>
-      <div class="who" id="who"></div>
-      <button type="button" class="shelfbtn" id="shelfbtn"
+<header class="strip">
+  <div class="wrap">
+    <a class="brand-block" href="./">
+      <span class="brand">Grant Sift</span>
+      <span class="tagline">Funding watch</span>
+    </a>
+    <!-- One page, so no tab nav: everything here opens a panel or a menu. -->
+    <div class="tools" id="whoami" hidden>
+      <button type="button" class="tbtn" id="shelfbtn" aria-haspopup="dialog" aria-label="Idea match"
               title="Describe an idea, find matching calls, and keep a shortlist — private to this browser">
-        Idea match <span class="n" id="shelf-n" hidden></span>
+        <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z"/></svg>
+        <span class="lbl">Idea match</span>
+        <span class="n" id="shelf-n" hidden></span>
       </button>
-      <button type="button" class="cfgbtn" id="cfgbtn" aria-expanded="false"
-              aria-controls="cfgpop">Personalize</button>
-      <div class="cfgpop" id="cfgpop" role="dialog" aria-label="Personalize">
-        <div class="cfgsec">
-          <h3>Chat gateway</h3>
-          <p class="desc">Any OpenAI-compatible endpoint (Lumen, OpenAI, OpenRouter
-            for Claude, Gemini’s OpenAI bridge, Groq, …). Key stays in this tab only.</p>
-          <label for="k-key">API key</label>
-          <input id="k-key" type="password" placeholder="API key" autocomplete="off">
-          <label for="k-base">Base URL</label>
-          <input id="k-base" type="text" placeholder="https://lumen.ncsa.illinois.edu/v1"
-                 value="https://lumen.ncsa.illinois.edu/v1">
-          <label for="k-model">Model</label>
-          <input id="k-model" type="text" placeholder="e.g. gemma-4-31b-it, gpt-4o, anthropic/claude-sonnet-4"
-                 value="gemma-4-31b-it">
-          <div class="offline" id="k-note">Must speak /v1/chat/completions. Extend hosts via
-            GRANT_SIFT_CHAT_ALLOWED_HOSTS if needed.</div>
-        </div>
-        <div class="cfgsec">
-          <h3>Collaborator roster</h3>
-          <p class="desc">Add past collaborations used when scoring new calls.
-            Dashboard entries merge with the reviewed YAML baseline on the next
-            assess run.</p>
-          <button type="button" class="vote" id="open-roster">Who we know</button>
-          <button type="button" class="vote" id="open-sources">Where calls come from</button>
-        </div>
-        <div class="cfgsec">
-          <h3>Email digests</h3>
-          <p class="desc">Nightly digests of new high-relevance calls. Sent to
-            your NCSA / Illinois address after the overnight run. Uncheck all and
-            save to unsubscribe.</p>
-          <label for="sub-email">Email</label>
-          <input id="sub-email" type="email" readonly
-                 placeholder="signed-in address">
-          <div class="subfeeds" id="sub-feeds"></div>
-          <button type="button" class="vote" id="sub-save">Save subscriptions</button>
-          <div class="offline" id="sub-hint"></div>
+      <div class="menuwrap">
+        <button type="button" class="tbtn" id="databtn" aria-haspopup="menu" aria-expanded="false"
+                aria-controls="datamenu" aria-label="Data">
+          <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+          <span class="lbl">Data</span>
+          <svg class="ico chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="menu" id="datamenu" role="menu" aria-labelledby="databtn" hidden>
+          <div class="mhead">What scoring is based on</div>
+          <div class="mgrp">
+            <button type="button" class="mitem" role="menuitem" id="open-roster">
+              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></svg>
+              <span class="mtxt"><b>Who we know</b><small>Collaborator roster</small></span>
+            </button>
+            <button type="button" class="mitem" role="menuitem" id="open-sources">
+              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+              <span class="mtxt"><b>Sources</b><small>Funder pages and feeds we read</small></span>
+            </button>
+          </div>
+          <div class="mgrp" id="grafana-grp" hidden>
+            <a class="mitem" role="menuitem" id="grafana-link" href="#" target="_blank" rel="noopener">
+              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg>
+              <span class="mtxt"><b>Ops &amp; signal</b><small>Pipeline dashboard</small></span>
+              <svg class="ico ext" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#556070" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+            </a>
+          </div>
         </div>
       </div>
-    </div>
-    <div id="alarm"></div>
-  </header>
-
-  <div class="controls">
-    <input id="q" class="search" type="search" placeholder="Search titles, funders, people">
-    <div class="filters">
-      <button class="chip" data-filter="soon" aria-pressed="false">Closing soon</button>
-      <button class="chip" data-filter="match" aria-pressed="false">Roster match</button>
-      <button class="chip" data-filter="via-me" aria-pressed="false" hidden
-              title="Calls where you are the NCSA contact to introduce">Via me</button>
-      <button class="chip" data-filter="my-sources" aria-pressed="false" hidden
-              title="Calls from funder pages or feeds you added">My sources</button>
-      <button class="chip" data-filter="my-digests" aria-pressed="false" hidden
-              title="Calls in the email digests you subscribe to">My digests</button>
-      <button class="chip" data-filter="embedded" aria-pressed="false">Domain calls</button>
-      <button class="chip" data-filter="ci" aria-pressed="false">CI programs</button>
-      <button class="chip" data-filter="foundation" aria-pressed="false">Foundations</button>
-      <div class="daterange" role="group" aria-label="Filter by deadline">
-        <label class="dlbl" for="dl-from">Due</label>
-        <input id="dl-from" class="datesel" type="date" aria-label="Deadline from">
-        <label class="dlbl" for="dl-to">to</label>
-        <input id="dl-to" class="datesel" type="date" aria-label="Deadline to">
+      <button type="button" class="tbtn solid" id="chatbtn" aria-haspopup="dialog">
+        <span class="dot" aria-hidden="true"></span><span id="chatbtn-lbl">Set up AI chat</span>
+      </button>
+      <div class="menuwrap">
+        <button type="button" class="acct" id="acctbtn" aria-haspopup="menu" aria-expanded="false"
+                aria-controls="acctmenu" aria-label="Account">
+          <span class="av" id="acct-av" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+          <svg class="ico chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="menu" id="acctmenu" role="menu" aria-labelledby="acctbtn" hidden>
+          <div class="msigned" id="acct-who" hidden><small>Signed in as</small><b id="acct-name"></b></div>
+          <div class="mgrp">
+            <button type="button" class="mitem" role="menuitem" id="m-chat">
+              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
+              <span class="mtxt"><b>AI chat</b><small>Key for Ask and Idea match</small></span>
+              <span class="status" data-chatstatus>Not set up</span>
+            </button>
+            <button type="button" class="mitem" role="menuitem" id="m-digests">
+              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+              <span class="mtxt"><b>Email digests</b><small>Nightly emails of new calls</small></span>
+            </button>
+          </div>
+          <div class="mgrp">
+            <a class="mitem" role="menuitem" href="https://github.com/ncsa/grant-sift/wiki/Grant-Sift-in-Claude:-setup" target="_blank" rel="noopener">
+              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7V3M15 7V3"/><path d="M6 7h12v4a6 6 0 0 1-12 0z"/><path d="M12 17v4"/></svg>
+              <span class="mtxt"><b>Use in Claude, ChatGPT…</b><small>MCP setup guide</small></span>
+              <svg class="ico ext" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#556070" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+            </a>
+          </div>
+        </div>
       </div>
-      <select id="funder" class="sortsel" aria-label="Filter by funder">
-        <option value="">All funders</option>
-      </select>
-      <select id="area" class="sortsel" aria-label="Filter by roster area">
-        <option value="">All roster areas</option>
-      </select>
-      <select id="sort" class="sortsel">
-        <option value="score" selected>Sort: highest relevance</option>
-        <option value="deadline">Sort: soonest deadline</option>
-        <option value="award-desc">Sort: largest award</option>
-        <option value="award-asc">Sort: smallest award</option>
-        <option value="new">Sort: recently added</option>
-        <option value="relevance">Sort: best match to search</option>
-      </select>
     </div>
   </div>
+</header>
 
-  <div class="tally" id="tally"></div>
-  <main id="list"></main>
-  <nav class="pager" id="pager" hidden aria-label="Pagination"></nav>
+<main class="wrap">
+
+  <section class="overview" aria-label="Overview">
+    <div class="lede-block">
+      <h1>Open funding calls</h1>
+      <p><span id="asof">Loading</span> · Ranked for relevance to the Research Software Engineering group at NCSA. Scores and collaborator matches are a first pass, not a decision.</p>
+      <a class="mcp-card" href="https://github.com/ncsa/grant-sift/wiki/Grant-Sift-in-Claude:-setup" target="_blank" rel="noopener">
+        <svg class="ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7V3M15 7V3"/><path d="M6 7h12v4a6 6 0 0 1-12 0z"/><path d="M12 17v4"/></svg>
+        <span><b>Use Grant Sift in your AI assistant.</b>
+          <span class="sub">Connect Claude, ChatGPT or any MCP-compatible tool to search and ask about these calls.</span>
+          <span class="go">Setup guide →</span></span>
+      </a>
+    </div>
+    <dl class="stats">
+      <div class="stat"><dt>Open calls</dt><dd id="n-open">..</dd></div>
+      <div class="stat warn"><dt>Close within 30 days</dt><dd id="n-soon">..</dd></div>
+      <div class="stat"><dt>Match a past collaborator</dt><dd id="n-match">..</dd></div>
+    </dl>
+  </section>
+
+  <div id="alarm"></div>
+
+  <section class="controls" aria-label="Search and filters">
+    <div class="find">
+      <label class="field search-f">
+        <span class="flbl">Search</span>
+        <span class="searchbox">
+          <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#556070" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="q" class="search" type="search" placeholder="Titles, funders, people">
+        </span>
+      </label>
+      <label class="field funder-f">
+        <span class="flbl">Funder</span>
+        <select id="funder" class="sortsel"><option value="">All funders</option></select>
+      </label>
+      <label class="field area-f">
+        <span class="flbl">Roster area</span>
+        <select id="area" class="sortsel"><option value="">All roster areas</option></select>
+      </label>
+      <div class="field" role="group" aria-labelledby="dl-lbl">
+        <span class="flbl" id="dl-lbl">Due between</span>
+        <span class="daterange">
+          <input id="dl-from" class="datesel" type="date" aria-label="Due after">
+          <span aria-hidden="true">–</span>
+          <input id="dl-to" class="datesel" type="date" aria-label="Due before">
+        </span>
+      </div>
+    </div>
+    <div class="filters">
+      <div class="chipgroup" role="group" aria-labelledby="g-priority">
+        <span class="glbl" id="g-priority">Priority</span>
+        <button class="chip" data-filter="soon" aria-pressed="false">Closing soon</button>
+        <button class="chip" data-filter="match" aria-pressed="false">Roster match</button>
+      </div>
+      <div class="chipgroup" role="group" aria-labelledby="g-mine" id="grp-mine" hidden>
+        <span class="glbl" id="g-mine">Mine</span>
+        <button class="chip" data-filter="via-me" aria-pressed="false" hidden
+                title="Calls where you are the NCSA contact to introduce">Via me</button>
+        <button class="chip" data-filter="my-sources" aria-pressed="false" hidden
+                title="Calls from funder pages or feeds you added">My sources</button>
+        <button class="chip" data-filter="my-digests" aria-pressed="false" hidden
+                title="Calls in the email digests you subscribe to">My digests</button>
+        <button type="button" class="linkbtn" id="manage-digests">Manage digests</button>
+      </div>
+      <div class="chipgroup" role="group" aria-labelledby="g-type">
+        <span class="glbl" id="g-type">Call type</span>
+        <button class="chip" data-filter="embedded" aria-pressed="false">Domain calls</button>
+        <button class="chip" data-filter="ci" aria-pressed="false">CI programs</button>
+        <button class="chip" data-filter="foundation" aria-pressed="false">Foundations</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="resultbar">
+    <div class="tally" id="tally" aria-live="polite"></div>
+    <label class="sortlbl">Sort by
+      <select id="sort" class="sortsel">
+        <option value="score" selected>Highest relevance</option>
+        <option value="deadline">Soonest deadline</option>
+        <option value="award-desc">Largest award</option>
+        <option value="award-asc">Smallest award</option>
+        <option value="new">Recently added</option>
+        <option value="relevance">Best match to search</option>
+      </select>
+    </label>
+  </div>
+  <ol id="list"></ol>
+  <nav class="pager" id="pager" hidden aria-label="Pages"></nav>
 
   <footer id="foot"></footer>
+</main>
+
+<div class="modal-backdrop" id="chat-modal" hidden>
+  <div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="chat-title">
+    <header>
+      <h2 id="chat-title">AI chat</h2>
+      <button type="button" class="x" id="chat-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </header>
+    <section class="conn" id="conn" aria-labelledby="conn-h">
+      <div class="startnote" data-notready>
+        <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+        <span><b>Start here.</b> Add your Lumen key to turn on <b>Ask about this call</b> and <b>Idea match</b>.</span>
+      </div>
+      <div class="connbody">
+        <div class="connhead">
+          <h3 id="conn-h">Connection</h3>
+          <span class="status" data-chatstatus>Not set up</span>
+        </div>
+        <form id="k-form" class="keyf">
+          <label class="flbl2" for="k-key">Lumen API key</label>
+          <span class="keyrow">
+            <input id="k-key" type="password" placeholder="sk_…" autocomplete="off">
+            <button type="submit" class="primary">Save</button>
+          </span>
+          <span class="help" id="k-note">Your Lumen project key. Kept in this browser tab only; never stored on the server.</span>
+        </form>
+        <details class="provider" id="k-provider">
+          <summary>Use a different provider</summary>
+          <p class="help">Any OpenAI-compatible endpoint: Lumen, OpenAI, OpenRouter (for Claude),
+            Gemini’s OpenAI bridge, Groq. It must speak /v1/chat/completions; extend
+            hosts via GRANT_SIFT_CHAT_ALLOWED_HOSTS if needed.</p>
+          <label class="flbl2" for="k-base">Base URL</label>
+          <input id="k-base" type="url" placeholder="https://lumen.ncsa.illinois.edu/v1"
+                 value="https://lumen.ncsa.illinois.edu/v1">
+          <label class="flbl2" for="k-model">Model</label>
+          <input id="k-model" type="text" placeholder="e.g. gemma-4-31b-it, gpt-4o, anthropic/claude-sonnet-4"
+                 value="gemma-4-31b-it">
+        </details>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="digest-modal" hidden>
+  <div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="digest-title">
+    <header>
+      <h2 id="digest-title">Email digests</h2>
+      <button type="button" class="x" id="digest-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </header>
+    <div class="digestf">
+      <p class="help">New high-relevance calls, emailed nightly after the overnight run.</p>
+      <label class="flbl2" for="sub-email">Send to</label>
+      <input id="sub-email" type="email" readonly placeholder="Your NCSA / Illinois address"
+             title="Digests go to the address you are signed in with">
+      <fieldset class="subfeeds">
+        <legend class="flbl2">Digests</legend>
+        <div id="sub-feeds"></div>
+      </fieldset>
+      <div class="savebar">
+        <button type="button" class="secondary" id="sub-save">Save digests</button>
+        <span class="help">Uncheck all and save to unsubscribe.</span>
+      </div>
+      <div class="help" id="sub-hint" aria-live="polite"></div>
+    </div>
+  </div>
 </div>
 
 <div class="modal-backdrop" id="sources-modal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="sources-title">
     <header>
       <h2 id="sources-title">Where calls come from</h2>
-      <button type="button" class="x" id="sources-close" aria-label="Close">Close</button>
+      <button type="button" class="x" id="sources-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </header>
     <details class="addbox">
       <summary>Add a source the tool does not read yet</summary>
@@ -573,8 +826,12 @@
 <div class="modal-backdrop" id="shelf-modal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shelf-title">
     <header>
-      <h2 id="shelf-title">Idea match</h2>
-      <button type="button" class="x" id="shelf-close" aria-label="Close">Close</button>
+      <div>
+        <h2 id="shelf-title">Idea match</h2>
+        <p>Describe an idea, find matching calls, and keep a shortlist. Nothing is
+          sent to or stored on the server — ideas stay in this browser only.</p>
+      </div>
+      <button type="button" class="x" id="shelf-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </header>
     <div id="shelf-body"></div>
   </div>
@@ -584,7 +841,7 @@
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="roster-title">
     <header>
       <h2 id="roster-title">Who we know</h2>
-      <button type="button" class="x" id="roster-close" aria-label="Close">Close</button>
+      <button type="button" class="x" id="roster-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </header>
     <details class="addbox">
       <summary>Add a collaborator who is not listed above</summary>
@@ -638,6 +895,56 @@ let PAGE = 1, PAGE_SIZE = 25;
 const daysAway = d => d ? Math.ceil((new Date(d + "T00:00:00") - new Date().setHours(0,0,0,0)) / 864e5) : null;
 const esc = s => (s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
+// Some feeds hand over titles already entity-encoded ("Systems &amp; Services"),
+// which esc() would then double. Decode once, before escaping for display.
+const _ent = document.createElement("textarea");
+function decode(s) {
+  if (!s || !/&(#\d+|#x[0-9a-f]+|[a-z]+);/i.test(s)) return s;
+  _ent.innerHTML = s;
+  return _ent.value;
+}
+
+// "Oct 23, 2026", from an ISO date or timestamp.
+function longDate(iso) {
+  if (!iso) return "";
+  const dt = new Date(iso.length === 10 ? iso + "T00:00:00" : iso);
+  return isNaN(dt) ? iso : `${MONTHS[dt.getMonth()]} ${dt.getDate()}, ${dt.getFullYear()}`;
+}
+
+// A deadline decades out is a placeholder some listings use for "open until
+// further notice"; a countdown of 18,000 days reads as a bug, not a date.
+const SENTINEL_DAYS = 3650;
+
+// "$4,000,000 – $12,000,000 per award over 5 years" -> head "$4M – $12M",
+// note "per award over 5 years". The headline figure is what gets scanned;
+// whatever qualifies it stays readable underneath.
+function money(cur, n) {
+  const fix = (v, u) => `${cur}${+v.toFixed(v < 10 ? 1 : 0)}${u}`;
+  if (n >= 1e9) return fix(n / 1e9, "B");
+  if (n >= 1e6) return fix(n / 1e6, "M");
+  if (n >= 1e3) return fix(n / 1e3, "K");
+  return `${cur}${n}`;
+}
+function awardParts(s) {
+  if (!s) return null;
+  const re = /([$€£])\s?(\d[\d,]*(?:\.\d+)?)/g;
+  const hits = [...s.matchAll(re)];
+  if (!hits.length) return { head: s, note: "" };
+  const fig = h => money(h[1], Number(h[2].replace(/,/g, "")));
+  const first = hits[0];
+  let head = fig(first), end = first.index + first[0].length;
+  const second = hits[1];
+  if (second && /^\s*(to|–|—|-)\s*$/i.test(s.slice(end, second.index))) {
+    head += " – " + fig(second);
+    end = second.index + second[0].length;
+  }
+  const pre = s.slice(0, first.index).trim();
+  if (/^up to$/i.test(pre)) head = "Up to " + head;
+  else if (pre) return { head, note: s };
+  const note = s.slice(end).replace(/^[\s,;.]+/, "").trim();
+  return { head, note };
+}
+
 // Illinois Experts areas are often long comma-joined concept lists. Keep the
 // full string as the filter value; shorten only what the browser paints.
 function shortArea(d, max = 42) {
@@ -665,134 +972,183 @@ function deadlineRangeLabel() {
 // already has a line to them. A match that leaves you hunting for an address
 // in a spreadsheet has not saved anyone any work.
 function mailto(name, email, extra) {
-  // Name links, address shown beside it. The address used to live only in a
-  // title attribute: invisible on touch, uncopyable, and useless to anyone
-  // who wanted to paste it somewhere.
+  // Name, then the address as its own visible link: an address hidden in a
+  // title attribute is invisible on touch and cannot be copied.
   const link = email
-    ? `<a href="mailto:${esc(email)}">${esc(name)}</a>` +
-      ` <a class="addr" href="mailto:${esc(email)}">${esc(email)}</a>`
-    : `${esc(name)} <span class="noaddr">no address on file</span>`;
-  return link + (extra ? ` <span class="cold">${esc(extra)}</span>` : "");
+    ? `<b>${esc(name)}</b> · <a href="mailto:${esc(email)}">${esc(email)}</a>`
+    : `<b>${esc(name)}</b> <span class="noaddr">· no address on file</span>`;
+  return link + (extra ? ` <span class="dept">· ${esc(extra)}</span>` : "");
 }
 
 function reach(o) {
-  const c = o.contact;
-  if (!c) return "";
+  const c = o.contact || {};
+  const lines = [];
   // Nothing to act on: no address, nobody here who knows them, nothing to
   // check. A row saying "no address on file" under a match that is a team
   // rather than a person is just a line of grey text.
   const anyInternal = (c.ncsa_contact || []).some(p => p.name);
-  if (!c.email && !anyInternal && !c.review) return "";
-  const lines = [];
+  if (!c.email && !anyInternal && !c.review) {
+    return `<div class="reach">${ROSTER_LINK}</div>`;
+  }
   const where = [c.unit, c.org && c.org !== "UIUC" ? c.org : null]
     .filter(Boolean).join(", ");
   // A program is something we run, so there is no "them" to write to. Showing
   // one anyway produced "reach out to Luigi Marini, via us: Luigi Marini".
   // The internal row below is the whole answer.
   if (c.kind !== "program") {
-    lines.push(`<div><span class="who">them</span><span>${
+    lines.push(`<div><span class="who">Them</span><span>${
       mailto(o.match_name, c.email, where)}</span></div>`);
   }
 
   if (c.ncsa_contact && c.ncsa_contact.length) {
-    lines.push(`<div><span class="who">via us</span><span>${
+    lines.push(`<div><span class="who">Via us</span><span>${
       c.ncsa_contact.map(p => mailto(p.name, p.email)).join(", ")}</span></div>`);
   }
   // Only shown when it changes what you would do: a bad address, or a person
   // who has left. Never sent to the model.
   if (c.review) {
-    lines.push(`<div><span class="who">check</span><span class="flag">${
+    lines.push(`<div><span class="who">Check</span><span class="flag">${
       esc(c.review)}</span></div>`);
   }
-  return `<div class="reach">${lines.join("")}</div>`;
+  return `<div class="reach">${lines.join("")}${ROSTER_LINK}</div>`;
+}
+const ROSTER_LINK = `<button type="button" class="linkbtn rosterlink" data-open-roster>Who we know →</button>`;
+
+// Bands carry the meaning: the score is a model estimate, so the word
+// ("Strong fit") is the real resolution and the number sits beside it.
+const SCORE_BANDS = [
+  [80, "hi", "Strong fit"],
+  [60, "mid", "Good fit"],
+  [40, "lo", "Partial fit"],
+  [0, "min", "Weak fit"],
+];
+const band = score => SCORE_BANDS.find(([min]) => score >= min) || SCORE_BANDS[3];
+function scoreSignal(score) {
+  return `<div class="score ${band(score)[1]}" title="How well this matches the group's work, scored 0 to 100 by the model">
+      <div class="eyebrow">Fit</div>
+      <div class="num" aria-label="Fit score ${score} of 100"><b>${score}</b><span>/100</span></div>
+      <span class="fitpill ${band(score)[1]}">${band(score)[2]}</span>
+    </div>`;
 }
 
-const SCORE_BANDS = [
-  [80, "hi", 4, "strong fit"],
-  [60, "mid", 3, "good fit"],
-  [40, "lo", 2, "partial fit"],
-  [0, "min", 1, "weak fit"],
-];
-function scoreSignal(score) {
-  const [, cls, lit, word] = SCORE_BANDS.find(([min]) => score >= min) || SCORE_BANDS[3];
-  const bars = [1, 2, 3, 4].map(n => `<i class="${n <= lit ? "on" : ""}"></i>`).join("");
-  return `<div class="score ${cls}" title="How well this matches the group's work, scored 0 to 100 by the model">
-        <span class="sig" role="img" aria-label="Relevance ${score} of 100, ${word}">${bars}</span>
-        <span class="band">${word}</span><span class="num">${score}/100</span>
-      </div>`;
+const ICON_CHAT = `<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>`;
+const ICON_UP = `<svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>`;
+const ICON_DOWN = `<svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`;
+
+// Countdown first, date second: "13 days / Due Nov 4, 2026". The old layout
+// put the day of the month in the big figure, which read as a count.
+function whenHTML(o) {
+  const away = daysAway(o.deadline);
+  if (!o.deadline || away > SENTINEL_DAYS) {
+    return `<div class="d word">Rolling</div><div class="m">No fixed date</div>`;
+  }
+  const due = `<div class="m">Due ${esc(longDate(o.deadline))}</div>`;
+  if (away < 0) return `<div class="d word">Passed</div>${due}`;
+  if (away === 0) return `<div class="d word">Today</div>${due}`;
+  return `<div class="d">${away}<span class="u">${away === 1 ? "day" : "days"}</span></div>${due}`;
+}
+
+// Asking without a key opens the key field where the chat would have been,
+// rather than sending people off to a settings panel and back.
+function keycardHTML(id, kind) {
+  const ask = kind === "ask";
+  return `<section class="keycard" data-keycard="${esc(id)}" hidden aria-labelledby="kc-${esc(id)}">
+      <div>
+        <h3 id="kc-${esc(id)}">${ask ? "Connect AI chat to ask about this call" : "Connect AI chat to match your idea"}</h3>
+        <p>One-time step. The same key also turns on ${ask ? "Idea match" : "Ask about this call"}.</p>
+      </div>
+      <form class="keyf" data-keyform="${esc(id)}">
+        <label class="flbl2" for="kk-${esc(id)}">Lumen API key</label>
+        <span class="keyrow">
+          <input id="kk-${esc(id)}" type="password" placeholder="sk_…" autocomplete="off">
+          <button type="submit" class="primary">${ask ? "Save and ask" : "Save and match"}</button>
+        </span>
+        <span class="help">Your Lumen project key. Kept in this browser tab only; never stored on the server.</span>
+      </form>
+      <button type="button" class="linkbtn" data-provider>Use a different provider</button>
+    </section>`;
 }
 
 function rowHTML(o, opts = {}) {
   const away = daysAway(o.deadline);
-  const soon = away !== null && away <= 30;
-  let when;
-  if (o.deadline) {
-    const dt = new Date(o.deadline + "T00:00:00");
-    when = `<span class="d">${dt.getDate()}</span>
-            <span class="m">${MONTHS[dt.getMonth()]} ${String(dt.getFullYear()).slice(2)}</span>
-            <span class="away">${away < 0 ? "passed" : away + (away === 1 ? " day" : " days")}</span>`;
-  } else {
-    when = `<span class="rolling">rolling</span>`;
-  }
+  const soon = away !== null && away >= 0 && away <= 30;
+  // Idea match is narrower, so award and fit ride in the meta line there.
+  const compact = !!opts.shelf;
+  const title = decode(o.title);
 
-  const bits = [esc(o.agency || o.source)];
-  // "not stated" and "small" are different facts, and an empty slot reads as
-  // the second. Say which it is, so a sort by award is interpretable.
-  bits.push(o.award_ceiling
-    ? `<span class="amt">award ${esc(o.award_ceiling)}</span>`
-    : `<span class="noamt">award not stated</span>`);
+  const award = awardParts(o.award_ceiling);
   const cap = o.indirect_cap
-    ? `<span class="cap">indirect capped at ${esc(o.indirect_cap)}</span>` : "";
+    ? `<span class="cap">Indirect capped at ${esc(o.indirect_cap)}</span>` : "";
 
   const hv = o.human;
   const verdict = hv
-    ? `<span class="verdict ${hv.verdict === "down" ? "down" : ""}">your group: ${
+    ? `<span class="verdict ${hv.verdict === "down" ? "down" : ""}">Your group: ${
         hv.verdict === "down"
           ? "not for us" + (hv.aspect && hv.aspect !== "score" ? ` (${esc(hv.aspect)})` : "")
           : "useful"}</span>`
     : "";
-  const area = o.match_domain
-    ? `<button class="areatag" data-area="${esc(o.match_domain)}" title="${esc(o.match_domain)}">${esc(shortArea(o.match_domain))}</button>`
-    : "";
-  // The name in bold moss reads as a link because every link on this page is
-  // bold moss. Make it one when there is an address behind it, rather than
-  // leaving a click target that silently does nothing.
-  const fitName = (o.contact && o.contact.email)
-    ? `<a href="mailto:${esc(o.contact.email)}"><b>${esc(o.match_name)}</b></a>`
-    : `<b>${esc(o.match_name)}</b>`;
-  const fit = o.match_name ? `
-    <div class="fit">${area}Closest fit: ${fitName}
-      ${o.match_project ? ": " + esc(o.match_project) : ""}
-      ${o.match_status && o.match_status !== "warm"
-        ? `<span class="cold">(${esc(o.match_status)})</span>` : ""}
-      ${o.match_kind === "contact"
-        ? `<span class="lead" title="On the outreach list. We have emailed them; we have not worked with them.">lead, not a past project</span>`
-        : ""}
-      ${o.match_kind === "program"
-        ? `<span class="ours" title="Something we run. There is no outside partner to approach; this call could fund work on it.">our own program</span>`
-        : ""}
-      ${o.match_rationale ? "<br>" + esc(o.match_rationale) : ""}
-      ${reach(o)}</div>` : "";
+  const kept = !opts.shelf && shelfHas(o.id) ? `<span class="kept">In Idea match</span>` : "";
 
-  return `<article class="row${soon ? " soon" : ""}">
-    <div class="when">${when}</div>
-    <div>
+  const meta = [`<span class="funder">${esc(o.agency || o.source)}</span>`];
+  if (compact) {
+    meta.push(award ? `<span>${esc(award.head)}</span>` : `<span>Award not stated</span>`);
+    meta.push(`<span class="mininum" aria-label="Fit score ${o.score} of 100"><b>${o.score}</b>/100</span>`);
+    meta.push(`<span class="fitpill ${band(o.score)[1]}">${band(o.score)[2]}</span>`);
+  }
+  if (kept) meta.push(kept);
+  if (verdict) meta.push(verdict);
+  if (cap) meta.push(cap);
+
+  const area = o.match_domain
+    ? `<button class="areatag" data-area="${esc(o.match_domain)}" title="Show calls in ${esc(o.match_domain)}">${esc(shortArea(o.match_domain))}</button>`
+    : "";
+  const flags = [
+    o.match_status && o.match_status !== "warm" ? esc(o.match_status) : "",
+    o.match_kind === "contact"
+      ? `<span title="On the outreach list. We have emailed them; we have not worked with them.">lead, not a past project</span>` : "",
+    o.match_kind === "program"
+      ? `<span title="Something we run. There is no outside partner to approach; this call could fund work on it.">our own program</span>` : "",
+  ].filter(Boolean).map(f => `<span class="cold"> · ${f}</span>`).join("");
+  const fit = o.match_name ? `
+    <div class="fit">
+      <div class="fithead">
+        <div class="fitwho"><span class="eyebrow">Closest fit</span><b>${esc(o.match_name)}</b>${
+          o.match_project ? `<span class="proj"> — ${esc(o.match_project)}</span>` : ""}${flags}</div>
+        ${area}
+      </div>
+      ${o.match_rationale ? `<p class="reason">${esc(o.match_rationale)}</p>` : ""}
+      ${reach(o)}
+    </div>` : "";
+
+  const side = compact ? "" : `
+    <aside class="side">
+      <div>
+        <div class="eyebrow">Award</div>
+        ${award
+          ? `<div class="amt">${esc(award.head)}</div>${award.note ? `<div class="amtnote">${esc(award.note)}</div>` : ""}`
+          : `<div class="noamt">Not stated</div>`}
+      </div>
       ${scoreSignal(o.score)}
-      ${verdict}
+    </aside>`;
+
+  return `<li class="row${soon ? " soon" : ""}" id="${opts.shelf ? "sh-" : "c-"}${esc(o.id)}">
+    <div class="when">${whenHTML(o)}</div>
+    <div class="body">
+      <div class="meta">${meta.join("")}</div>
       <h2 class="title">${o.url
-        ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.title)}</a>`
-        : esc(o.title)}</h2>
-      <div class="meta">${bits.join(" &nbsp;·&nbsp; ")}${cap ? " &nbsp;·&nbsp; " + cap : ""}</div>
+        ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(title)}</a>`
+        : esc(title)}</h2>
+      ${o.rationale ? `<p class="why"><span class="tag">Why it fits</span>${esc(o.rationale)}</p>` : ""}
       ${o.summary ? `<p class="sumry">${esc(o.summary)}</p>` : ""}
-      <p class="why"><span class="tag">why</span>${esc(o.rationale)}</p>
       ${fit}
       <div class="acts">
-        <button class="vote" data-vote="up"   data-id="${esc(o.id)}" aria-pressed="false" title="Good find: score it higher next time">&#9651; useful</button>
-        <button class="vote" data-vote="down" data-id="${esc(o.id)}" aria-pressed="false" title="Not for us: score it lower next time">&#9661; not for us</button>
-        <button class="act" data-chat="${esc(o.id)}">Ask about this call</button>
-        ${opts.shelf
-          ? `<button class="act" data-shrm="${esc(o.id)}">Remove</button>`
-          : (shelfHas(o.id) ? `<span class="kept">in Idea match</span>` : "")}
+        <button class="act" data-chat="${esc(o.id)}" aria-expanded="false">${ICON_CHAT}Ask about this call</button>
+        ${opts.shelf ? `<button class="act" data-shrm="${esc(o.id)}">Remove</button>` : ""}
+        <span class="spacer"></span>
+        <span class="votes">
+          <button class="vote" data-vote="up"   data-id="${esc(o.id)}" aria-pressed="false" title="Good find: score it higher next time">${ICON_UP}Useful</button>
+          <button class="vote" data-vote="down" data-id="${esc(o.id)}" aria-pressed="false" title="Not for us: score it lower next time">${ICON_DOWN}Not for us</button>
+        </span>
         <span class="votenote" data-fb="${esc(o.id)}"></span>
       </div>
       <div class="fbbox" data-fbbox="${esc(o.id)}">
@@ -804,6 +1160,7 @@ function rowHTML(o, opts = {}) {
         <input type="text" maxlength="500" placeholder="one comment, optional: why?" data-fbnote="${esc(o.id)}">
         <button class="vote" data-fbsend="${esc(o.id)}">Send</button>
       </div>
+      ${keycardHTML(o.id, "ask")}
       <div class="chat" data-chatbox="${esc(o.id)}">
         <div class="chathead">
           <b>Ask about this call</b>
@@ -816,7 +1173,7 @@ function rowHTML(o, opts = {}) {
           it if you want to keep it.</div>
         <div class="log" data-chatlog="${esc(o.id)}"></div>
         <form data-chatform="${esc(o.id)}">
-          <input type="text" placeholder="e.g. what would we need a domain PI for here?" data-chatinput="${esc(o.id)}">
+          <input type="text" placeholder="e.g. what would we need a domain PI for here?" data-chatinput="${esc(o.id)}" aria-label="Your question">
           <button class="vote" type="submit">Ask</button>
         </form>
         <div class="chatfoot">
@@ -827,7 +1184,8 @@ function rowHTML(o, opts = {}) {
         </div>
       </div>
     </div>
-  </article>`;
+    ${side}
+  </li>`;
 }
 
 function queryParams() {
@@ -855,23 +1213,27 @@ async function render() {
   } catch (e) {
     if (seq !== RENDER_SEQ) return;
     document.getElementById("list").innerHTML =
-      `<div class="empty"><b>Could not load calls.</b> ${esc(String(e.message || e))}</div>`;
+      `<li class="empty"><b>Could not load calls.</b> ${esc(String(e.message || e))}</li>`;
     return;
   }
   if (seq !== RENDER_SEQ) return;
   PAGE = data.page;
   data.opportunities.forEach(o => SEEN.set(o.id, o));
 
-  document.getElementById("tally").textContent =
-    `${data.total} of ${data.of} shown` +
-    (AREA ? ` in "${AREA}"` : "") +
-    deadlineRangeLabel() +
-    (data.total ? ` · page ${data.page} of ${data.pages}` : "");
+  const ctx = [
+    data.total !== data.of ? `of ${data.of} open` : "",
+    AREA ? `in "${shortArea(AREA)}"` : "",
+    deadlineRangeLabel().trim(),
+    data.total ? `Page ${data.page} of ${data.pages}` : "",
+  ].filter(Boolean).join(" · ");
+  document.getElementById("tally").innerHTML =
+    `<span class="cnt">${data.total} ${data.total === 1 ? "call" : "calls"}</span>` +
+    (ctx ? `<span class="ctx">${esc(ctx)}</span>` : "");
 
   document.getElementById("list").innerHTML = data.opportunities.length
     ? data.opportunities.map(o => rowHTML(o)).join("")
-    : `<div class="empty"><b>Nothing matches those filters.</b>
-         Clear a filter, or widen the search.</div>`;
+    : `<li class="empty"><b>Nothing matches those filters.</b>
+         Clear a filter, or widen the search.</li>`;
 
   renderPager(data.pages, data.total);
 
@@ -934,8 +1296,11 @@ document.getElementById("pager").addEventListener("click", e => {
 let API = false;
 const CHATS = {};                       // opportunity id -> [{role, content}]
 
+// The key lives in this variable and nowhere else: not in storage, not on
+// the server. Saving it only makes it the one Ask and Idea match use.
+let CHAT_KEY = "";
 const keyBar = () => ({
-  key:   document.getElementById("k-key").value.trim(),
+  key:   CHAT_KEY,
   model: document.getElementById("k-model").value.trim(),
   base:  document.getElementById("k-base").value.trim(),
 });
@@ -959,9 +1324,36 @@ try {
 
 ["k-base", "k-model"].forEach(id =>
   document.getElementById(id).addEventListener("change", saveChatSettings));
-document.getElementById("k-key").addEventListener("input", () => {
-  document.getElementById("k-key").classList.remove("hilite");
+
+function saveKey(value) {
+  CHAT_KEY = (value || "").trim();
+  document.getElementById("k-key").value = CHAT_KEY;
+  paintChatStatus();
+  return !!CHAT_KEY;
+}
+
+// "Set up AI chat" stays the loudest thing in the top bar until a key is
+// saved; then it quietens to an ordinary "AI chat" button.
+function paintChatStatus() {
+  const ready = !!CHAT_KEY;
+  const btn = document.getElementById("chatbtn");
+  btn.classList.toggle("solid", !ready);
+  document.getElementById("chatbtn-lbl").textContent = ready ? "AI chat" : "Set up AI chat";
+  document.getElementById("conn").classList.toggle("notready", !ready);
+  document.querySelectorAll("[data-chatstatus]").forEach(el => {
+    el.classList.toggle("ready", ready);
+    el.textContent = ready ? "Ready" : "Not set up";
+  });
+}
+
+document.getElementById("k-form").addEventListener("submit", e => {
+  e.preventDefault();
+  const ok = saveKey(document.getElementById("k-key").value);
+  document.getElementById("k-note").textContent = ok
+    ? "Saved for this tab. Ask about this call and Idea match are on."
+    : "Your Lumen project key. Kept in this browser tab only; never stored on the server.";
 });
+paintChatStatus();
 
 // ---- Idea match: idea text -> matching calls -> shortlist (browser-only) --
 //
@@ -970,6 +1362,7 @@ document.getElementById("k-key").addEventListener("input", () => {
 // panel and do not filter the homepage list.
 
 const SHELF_KEY = "gs.shortlist";
+const SHELF_KEYCARD = "__idea";
 let SHELF = { idea: "", items: [], recommendation: "" };
 let _scoreBusy = false;
 let _scoredIdea = "";
@@ -989,11 +1382,14 @@ const shelfHas = id => SHELF.items.some(i => i.id === id);
 
 function paintShelfBtn() {
   const n = SHELF.items.length;
+  // The label carries the count, so it survives the button going icon-only.
+  document.getElementById("shelfbtn").setAttribute("aria-label",
+    n ? `Idea match, ${n} in shortlist` : "Idea match");
   const el = document.getElementById("shelf-n");
   if (!el) return;
   if (n) {
     el.hidden = false;
-    el.textContent = `(${n})`;
+    el.textContent = n;
   } else {
     el.hidden = true;
     el.textContent = "";
@@ -1013,16 +1409,16 @@ function setShelfHint(text, busy) {
 function shelfCardHTML(it) {
   const o = SEEN.get(it.id);
   if (!o) {
-    return `<article class="row">
-      <div class="when"><span class="rolling">gone</span></div>
-      <div>
+    return `<li class="row" id="sh-${esc(it.id)}">
+      <div class="when"><div class="d word">Closed</div></div>
+      <div class="body">
         <h2 class="title">${esc(it.id)}</h2>
         <p class="mute">No longer in the open catalogue.</p>
         <div class="acts">
           <button class="act" data-shrm="${esc(it.id)}">Remove</button>
         </div>
       </div>
-    </article>`;
+    </li>`;
   }
   return rowHTML(o, { shelf: true });
 }
@@ -1043,24 +1439,51 @@ function renderShelf() {
       .catch(() => {});
   }
   const body = document.getElementById("shelf-body");
-  const cards = SHELF.items.length
-    ? `<div id="shelf-list">${SHELF.items.map(shelfCardHTML).join("")}</div>`
+  const n = SHELF.items.length;
+  const cards = n
+    ? `<div class="shelfhead"><span>Matching calls</span><span>Shortlist · ${n}</span></div>
+       <ol id="shelf-list">${SHELF.items.map(shelfCardHTML).join("")}</ol>`
     : "";
   body.innerHTML = `
-    <p class="mute">Nothing is sent to or stored on the server, so your ideas
-      stay private to you. Clear your browser data and they&rsquo;re gone, and
-      they won&rsquo;t follow you to another device.</p>
-    <textarea id="sh-idea" rows="7" maxlength="4000"
-      placeholder="What are you working on? Describe the idea in your own words.">${esc(SHELF.idea || "")}</textarea>
-    <div class="shelfacts">
-      <button type="button" class="act" id="sh-search"
-        title="Describe the work, then match. Rematches the catalogue and ranks what it finds (~1 min). Editing the idea and leaving the field also re-ranks kept calls.">Match with all open calls</button>
-      <span class="hint" id="sh-hint"></span>
+    <div class="ideaf">
+      <label class="eyebrow" for="sh-idea">Your idea</label>
+      <textarea id="sh-idea" rows="6" maxlength="4000"
+        placeholder="What are you working on? Describe the idea in your own words.">${esc(SHELF.idea || "")}</textarea>
+      <div class="shelfacts">
+        <button type="button" class="primary" id="sh-search"
+          title="Describe the work, then match. Rematches the catalogue and ranks what it finds (~1 min). Editing the idea and leaving the field also re-ranks kept calls.">Match with all open calls</button>
+        <span class="hint" id="sh-hint" aria-live="polite"></span>
+      </div>
+      ${keycardHTML(SHELF_KEYCARD, "match")}
     </div>
-    ${SHELF.recommendation
-      ? `<div class="bkout"><span class="tag">Recommendation</span>${esc(SHELF.recommendation)}</div>`
-      : ""}
+    ${SHELF.recommendation ? recommendationHTML(SHELF.recommendation) : ""}
     ${cards}`;
+}
+
+// The model names calls by id ("gg:363852"). Swap each id it mentions for
+// the call's title, linked to its row below; the first sentence is the pick,
+// the rest (usually the runner-up) reads smaller.
+function recommendationHTML(text) {
+  const ids = SHELF.items.map(i => i.id).filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  const link = chunk => {
+    let out = esc(chunk);
+    for (const id of ids) {
+      const o = SEEN.get(id);
+      if (!o || !out.includes(esc(id))) continue;
+      out = out.split(esc(id)).join(
+        `<a href="#sh-${esc(id)}">${esc(decode(o.title))}</a>`);
+    }
+    // "(<a>…</a>)" once the id was parenthesised after a name; drop the parens.
+    return out.replace(/\(\s*(<a [^>]+>[^<]*<\/a>)\s*\)/g, "$1");
+  };
+  const m = text.match(/^(.+?[.!?])(\s+[\s\S]+)?$/);
+  const pick = m ? m[1] : text, rest = m && m[2] ? m[2].trim() : "";
+  return `<section class="bkout" aria-label="Recommendation">
+      <span class="tag">Recommendation</span>
+      <p class="pick">${link(pick)}</p>
+      ${rest ? `<p class="rest">${link(rest)}</p>` : ""}
+    </section>`;
 }
 
 async function runShelfSearch() {
@@ -1072,11 +1495,8 @@ async function runShelfSearch() {
   if (!idea) { setShelfHint("Describe the idea first."); return; }
   const { key, model, base } = keyBar();
   if (!key) {
-    setShelfHint("Add your API key in Personalize first.");
-    openConfig({
-      focusKey: true,
-      prompt: "Matching calls needs your Lumen project key (sk_...). It stays in this tab only.",
-    });
+    setShelfHint("");
+    showKeycard(document.getElementById("shelf-body"), SHELF_KEYCARD);
     return;
   }
   _searchBusy = true;
@@ -1172,11 +1592,8 @@ async function scoreShelf() {
   }
   const { key, model, base } = keyBar();
   if (!key) {
-    if (hint) hint.textContent = "Add your API key in Personalize first.";
-    openConfig({
-      focusKey: true,
-      prompt: "Ranking needs your Lumen project key (sk_...). It stays in this tab only.",
-    });
+    if (hint) hint.textContent = "";
+    showKeycard(document.getElementById("shelf-body"), SHELF_KEYCARD);
     return;
   }
   _scoreBusy = true;
@@ -1237,15 +1654,41 @@ document.getElementById("shelf-body").addEventListener("focusout", e => {
   if (next && SHELF.items.length) scoreShelf();
 });
 
-function openShelf() {
-  closeConfig();
-  const m = document.getElementById("shelf-modal");
+// Modals hold focus while open and hand it back to whatever opened them,
+// named explicitly rather than read from activeElement: Safari does not focus
+// a clicked button.
+let MODAL_RETURN = null;
+function showModal(m, focusEl, returnTo) {
+  MODAL_RETURN = returnTo;
   m.hidden = false; m.classList.add("on");
+  (focusEl || m.querySelector(".x")).focus();
+}
+function hideModal(m) {
+  if (m.hidden) return;
+  m.hidden = true; m.classList.remove("on");
+  if (MODAL_RETURN && MODAL_RETURN.isConnected) MODAL_RETURN.focus();
+  MODAL_RETURN = null;
+}
+document.addEventListener("keydown", e => {
+  if (e.key !== "Tab") return;
+  const m = document.querySelector(".modal-backdrop.on .modal");
+  if (!m) return;
+  const f = [...m.querySelectorAll("a[href], button, input, select, textarea, summary, [tabindex]")]
+    .filter(el => !el.disabled && el.tabIndex >= 0 && el.offsetParent !== null);
+  if (!f.length) return;
+  const first = f[0], last = f[f.length - 1];
+  if (!m.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+  else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
+
+function openShelf() {
+  closeMenus();
   renderShelf();
+  showModal(document.getElementById("shelf-modal"), null, document.getElementById("shelfbtn"));
 }
 function closeShelf() {
-  const m = document.getElementById("shelf-modal");
-  m.hidden = true; m.classList.remove("on");
+  hideModal(document.getElementById("shelf-modal"));
 }
 document.getElementById("shelfbtn").addEventListener("click", e => {
   e.stopPropagation();
@@ -1269,94 +1712,138 @@ function paintChatModel(id, root) {
 }
 
 function cardRoot(el) {
-  return el.closest("article.row") || document;
+  return el.closest(".row") || document;
 }
 
-function openConfig(opts = {}) {
-  const pop = document.getElementById("cfgpop");
-  const btn = document.getElementById("cfgbtn");
-  const who = document.getElementById("whoami");
-  if (who) who.hidden = false;
-  pop.classList.add("on");
-  btn.setAttribute("aria-expanded", "true");
-  const note = document.getElementById("k-note");
-  const key = document.getElementById("k-key");
-  key.classList.remove("hilite");
-  if (opts.prompt) {
-    note.textContent = typeof opts.prompt === "string"
-      ? opts.prompt
-      : "Chat needs your Lumen project key (sk_...). It stays in this tab only.";
-  }
-  if (opts.focusKey) {
-    key.classList.add("hilite");
-    // Defer focus so it isn't stolen by the click that opened this panel.
-    setTimeout(() => { key.focus(); key.select?.(); }, 0);
+// ---- top-bar menus: Data and Account ----
+const MENUS = [["databtn", "datamenu"], ["acctbtn", "acctmenu"]];
+function closeMenus(except) {
+  for (const [b, m] of MENUS) {
+    if (b === except) continue;
+    document.getElementById(m).hidden = true;
+    document.getElementById(b).setAttribute("aria-expanded", "false");
   }
 }
-
-function closeConfig() {
-  const pop = document.getElementById("cfgpop");
-  const btn = document.getElementById("cfgbtn");
-  pop.classList.remove("on");
-  btn.setAttribute("aria-expanded", "false");
-  document.getElementById("k-key").classList.remove("hilite");
+function menuItems(menu) {
+  return [...menu.querySelectorAll('[role="menuitem"]')].filter(el => el.offsetParent !== null);
 }
-
-document.getElementById("cfgbtn").addEventListener("click", e => {
-  e.stopPropagation();
-  const open = document.getElementById("cfgpop").classList.contains("on");
-  if (open) closeConfig(); else openConfig();
-});
+for (const [b, m] of MENUS) {
+  const btn = document.getElementById(b), menu = document.getElementById(m);
+  btn.addEventListener("click", e => {
+    e.stopPropagation();
+    const open = menu.hidden;
+    closeMenus(b);
+    menu.hidden = !open;
+    btn.setAttribute("aria-expanded", String(open));
+    if (open) menuItems(menu)[0]?.focus();
+  });
+  btn.addEventListener("keydown", e => {
+    if (e.key !== "ArrowDown" || !menu.hidden) return;
+    e.preventDefault();
+    btn.click();
+  });
+  menu.addEventListener("keydown", e => {
+    const items = menuItems(menu);
+    const i = items.indexOf(document.activeElement);
+    if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    else if (e.key === "Home") { e.preventDefault(); items[0].focus(); }
+    else if (e.key === "End") { e.preventDefault(); items[items.length - 1].focus(); }
+    else if (e.key === "Escape") { e.stopPropagation(); closeMenus(); btn.focus(); }
+    else if (e.key === "Tab") closeMenus();
+  });
+  // Choosing an item closes its menu; the item's own handler does the rest.
+  menu.addEventListener("click", e => { if (e.target.closest('[role="menuitem"]')) closeMenus(); });
+}
 document.addEventListener("click", e => {
-  const wrap = document.getElementById("whoami");
-  if (!wrap || wrap.hidden) return;
-  if (!wrap.contains(e.target)) closeConfig();
+  if (!e.target.closest(".menuwrap")) closeMenus();
 });
+
+// A panel opened from a menu item hands focus back to that menu's button,
+// since the item itself is hidden by then.
+function returnTarget(el) {
+  if (!el || !el.closest) return null;
+  const menu = el.closest(".menu");
+  return menu ? document.querySelector(`[aria-controls="${menu.id}"]`) : el;
+}
+
+function openChatPanel(from, opts = {}) {
+  closeMenus();
+  if (opts.provider) document.getElementById("k-provider").open = true;
+  showModal(document.getElementById("chat-modal"), document.getElementById("k-key"),
+            returnTarget(from) || document.getElementById("chatbtn"));
+}
+function closeChatPanel() { hideModal(document.getElementById("chat-modal")); }
+document.getElementById("chatbtn").addEventListener("click", e => openChatPanel(e.currentTarget));
+document.getElementById("m-chat").addEventListener("click", e => openChatPanel(e.currentTarget));
+document.getElementById("chat-close").addEventListener("click", closeChatPanel);
+document.getElementById("chat-modal").addEventListener("click", e => {
+  if (e.target === e.currentTarget) closeChatPanel();
+});
+
+function openDigests(from) {
+  closeMenus();
+  showModal(document.getElementById("digest-modal"), null,
+            returnTarget(from) || document.getElementById("acctbtn"));
+  loadSubscriptions();
+}
+function closeDigests() { hideModal(document.getElementById("digest-modal")); }
+document.getElementById("m-digests").addEventListener("click", e => openDigests(e.currentTarget));
+document.getElementById("manage-digests").addEventListener("click", e => openDigests(e.currentTarget));
+document.getElementById("digest-close").addEventListener("click", closeDigests);
+document.getElementById("digest-modal").addEventListener("click", e => {
+  if (e.target === e.currentTarget) closeDigests();
+});
+
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") {
-    closeConfig();
+    closeMenus();
     closeShelf();
     closeRoster();
     closeSources();
+    closeChatPanel();
+    closeDigests();
   }
 });
 
-function openRoster() {
-  closeConfig();
-  const m = document.getElementById("roster-modal");
-  m.hidden = false;
-  m.classList.add("on");
-  document.getElementById("r-search").focus();
+function openRoster(from) {
+  closeMenus();
+  showModal(document.getElementById("roster-modal"), document.getElementById("r-search"),
+            returnTarget(from) || document.getElementById("databtn"));
   loadRoster();
 }
 function closeRoster() {
-  const m = document.getElementById("roster-modal");
-  m.classList.remove("on");
-  m.hidden = true;
+  hideModal(document.getElementById("roster-modal"));
 }
-function openSources() {
-  closeConfig();
-  const m = document.getElementById("sources-modal");
-  m.hidden = false;
-  m.classList.add("on");
-  document.getElementById("s-search").focus();
+function openSources(from) {
+  closeMenus();
+  showModal(document.getElementById("sources-modal"), document.getElementById("s-search"),
+            returnTarget(from) || document.getElementById("databtn"));
   loadSources();
 }
 function closeSources() {
-  const m = document.getElementById("sources-modal");
-  m.classList.remove("on");
-  m.hidden = true;
+  hideModal(document.getElementById("sources-modal"));
 }
-document.getElementById("open-sources").addEventListener("click", openSources);
+document.getElementById("open-sources").addEventListener("click", e => openSources(e.currentTarget));
 document.getElementById("sources-close").addEventListener("click", closeSources);
 document.getElementById("sources-modal").addEventListener("click", e => {
   if (e.target === e.currentTarget) closeSources();
 });
 
-document.getElementById("open-roster").addEventListener("click", openRoster);
+document.getElementById("open-roster").addEventListener("click", e => openRoster(e.currentTarget));
 document.getElementById("roster-close").addEventListener("click", closeRoster);
 document.getElementById("roster-modal").addEventListener("click", e => {
   if (e.target === e.currentTarget) closeRoster();
+});
+// In-context ways in: "Who we know →" on a match, "Manage sources" on the
+// coverage notice, "Use a different provider" on a key card.
+document.addEventListener("click", e => {
+  const r = e.target.closest("[data-open-roster]");
+  if (r) return openRoster(r);
+  const s = e.target.closest("[data-open-sources]");
+  if (s) return openSources(s);
+  const p = e.target.closest("[data-provider]");
+  if (p) return openChatPanel(p, { provider: true });
 });
 
 let AUTH = { mode: "off", enforced: false, authenticated: false, username: null };
@@ -1371,14 +1858,7 @@ async function probeAPI() {
     try {
       AUTH = await (await fetch("api/whoami")).json();
     } catch (e) {}
-    const who = document.getElementById("who");
-    if (AUTH.enforced) {
-      who.textContent = AUTH.authenticated
-        ? `signed in as ${AUTH.username}`
-        : `not signed in${AUTH.error ? ": " + AUTH.error : ""}`;
-    } else {
-      who.textContent = "";
-    }
+    paintAccount();
     // "Me" only means something to a signed-in person.
     for (const f of PERSONAL) {
       const chip = document.querySelector(`.chip[data-filter="${f}"]`);
@@ -1389,6 +1869,7 @@ async function probeAPI() {
         chip.setAttribute("aria-pressed", "false");
       }
     }
+    document.getElementById("grp-mine").hidden = !AUTH.authenticated;
     // Writes will be refused without an identity once the gate is on, so do
     // not offer controls that are certain to fail.
     if (AUTH.enforced && !AUTH.authenticated) API = false;
@@ -1726,31 +2207,78 @@ function onCardClick(e) {
 
   const chat = e.target.closest("[data-chat]");
   if (chat) {
-    if (!keyBar().key) {
-      e.stopPropagation();
-      openConfig({ focusKey: true, prompt: true });
-      return;
-    }
     const id = chat.dataset.chat;
     const root = cardRoot(chat);
-    const box = root.querySelector(`[data-chatbox="${CSS.escape(id)}"]`);
-    box.classList.toggle("on");
-    if (box.classList.contains("on")) {
-      paintChatModel(id, root);
-      const pv = box.querySelector(".privacy");
-      if (pv && AUTH.enforced && AUTH.authenticated) {
-        pv.textContent = "Not stored. This conversation lives only in this browser"
-          + " tab, goes to your own API key through a proxy that keeps nothing,"
-          + " and is gone when you reload. Your sign-in is known to the proxy in"
-          + " front of this app, so it is private rather than anonymous."
-          + " Copy or export it to keep it.";
-      }
-      box.querySelector("input").focus();
+    if (!keyBar().key) {
+      const card = root.querySelector(`[data-keycard="${CSS.escape(id)}"]`);
+      if (card && !card.hidden) { card.hidden = true; chat.setAttribute("aria-expanded", "false"); }
+      else showKeycard(root, id);
+      return;
     }
+    openChat(root, id, true);
   }
+}
+
+// Open (or with toggle, flip) a row's chat box. Also the end of "Save and ask".
+function openChat(root, id, toggle) {
+  const box = root.querySelector(`[data-chatbox="${CSS.escape(id)}"]`);
+  const btn = root.querySelector(`[data-chat="${CSS.escape(id)}"]`);
+  const card = root.querySelector(`[data-keycard="${CSS.escape(id)}"]`);
+  if (card) card.hidden = true;
+  if (toggle) box.classList.toggle("on"); else box.classList.add("on");
+  if (btn) btn.setAttribute("aria-expanded", String(box.classList.contains("on")));
+  if (!box.classList.contains("on")) return;
+  paintChatModel(id, root);
+  const pv = box.querySelector(".privacy");
+  if (pv && AUTH.enforced && AUTH.authenticated) {
+    pv.textContent = "Not stored. This conversation lives only in this browser"
+      + " tab, goes to your own API key through a proxy that keeps nothing,"
+      + " and is gone when you reload. Your sign-in is known to the proxy in"
+      + " front of this app, so it is private rather than anonymous."
+      + " Copy or export it to keep it.";
+  }
+  box.querySelector("input").focus();
 }
 document.getElementById("list").addEventListener("click", onCardClick);
 document.getElementById("shelf-body").addEventListener("click", onCardClick);
+
+function showKeycard(root, id) {
+  const card = root.querySelector(`[data-keycard="${CSS.escape(id)}"]`);
+  if (!card) return;
+  card.hidden = false;
+  const btn = root.querySelector(`[data-chat="${CSS.escape(id)}"]`);
+  if (btn) btn.setAttribute("aria-expanded", "true");
+  card.querySelector("input").focus();
+}
+
+// "Save and ask" / "Save and match": save the key, then carry on with what
+// the person was doing when we asked for it.
+document.addEventListener("submit", e => {
+  const form = e.target.closest("[data-keyform]");
+  if (!form) return;
+  e.preventDefault();
+  if (!saveKey(form.querySelector("input").value)) {
+    form.querySelector("input").focus();
+    return;
+  }
+  document.querySelectorAll("[data-keycard]").forEach(c => { c.hidden = true; });
+  const id = form.dataset.keyform;
+  if (id === SHELF_KEYCARD) { runShelfSearch(); return; }
+  openChat(cardRoot(form), id);
+});
+
+function paintAccount() {
+  const name = AUTH.authenticated ? (AUTH.username || AUTH.display || "") : "";
+  const btn = document.getElementById("acctbtn");
+  btn.setAttribute("aria-label", name ? `Account: ${name}` : "Account");
+  document.getElementById("acct-who").hidden = !name;
+  document.getElementById("acct-name").textContent = AUTH.email || name;
+  if (name) {
+    const local = (AUTH.username || AUTH.email || name).split("@")[0];
+    const initials = (local.match(/[a-z]/gi) || []).slice(0, 2).join("").toUpperCase();
+    if (initials) document.getElementById("acct-av").textContent = initials;
+  }
+}
 
 async function sendFeedback(id, root) {
   root = root || document;
@@ -1860,9 +2388,7 @@ async function onChatSubmit(e) {
   const { key, model, base } = keyBar();
   const hint = root.querySelector(`[data-chathint="${CSS.escape(id)}"]`);
   if (!key) {
-    hint.textContent = "Add your API key in Personalize first.";
-    e.stopPropagation();
-    openConfig({ focusKey: true, prompt: true });
+    showKeycard(root, id);
     return;
   }
 
@@ -1904,7 +2430,7 @@ function boot(cat) {
   document.getElementById("n-soon").textContent  = cat.soon;
   document.getElementById("n-match").textContent = cat.matched;
   document.getElementById("asof").textContent =
-    "updated " + (cat.updated_at || "").slice(0, 10);
+    cat.updated_at ? "Updated " + longDate(cat.updated_at) : "Not yet updated";
 
   // Built from the data, not from a hardcoded list, so it always reflects the
   // roster as it actually matched. Commonest first, counted by the server.
@@ -1937,13 +2463,25 @@ function boot(cat) {
 
   const stale = cat.stale_sources || [];
   if (stale.length) {
+    const names = stale.map(s => esc(s.name));
+    const list = names.length > 1
+      ? names.slice(0, -1).join(", ") + " and " + names[names.length - 1] : names[0];
     document.getElementById("alarm").innerHTML =
-      `<div class="alarm">Coverage: <b>${stale.map(s => esc(s.name)).join(", ")}</b>
-       ${stale.length > 1 ? "have" : "has"} not updated in over 30 days &mdash;
-       this list may be incomplete.</div>`;
+      `<div class="alarm" role="note">
+         <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+         <span><b>Coverage may be incomplete.</b> ${list}
+         ${stale.length > 1 ? "have" : "has"} not updated in over 30 days.
+         <button type="button" class="linkbtn" data-open-sources>Manage sources</button></span></div>`;
   }
-  document.getElementById("foot").textContent =
-    `Scored ${cat.updated_at || "unknown"}. Scores and collaborator matches are model-generated; treat them as a first pass, not a decision.`;
+  let scored = "unknown";
+  if (cat.updated_at) {
+    const t = new Date(cat.updated_at);
+    scored = isNaN(t) ? cat.updated_at
+      : `${longDate(cat.updated_at)}, ${t.toISOString().slice(11, 16)} UTC`;
+  }
+  document.getElementById("foot").innerHTML =
+    `Scored ${esc(scored)}. Scores and collaborator matches are model-generated; treat them as a first pass, not a decision.` +
+    ` <a href="https://github.com/ncsa/grant-sift/wiki/Grant-Sift-in-Claude:-setup" target="_blank" rel="noopener">Connect your AI assistant (MCP)</a>`;
   loadShelf();
   paintShelfBtn();
   render();
@@ -2024,7 +2562,7 @@ fetch("api/catalogue")
     document.getElementById("asof").textContent = "no data";
   });
 
-// Optional Grafana link in the header strip (same row as open/soon/match).
+// Optional Grafana link: the Ops & signal item in the Data menu.
 fetch("/api/config")
   .then(r => r.ok ? r.json() : null)
   .then(cfg => {
@@ -2033,7 +2571,7 @@ fetch("/api/config")
     const link = document.getElementById("grafana-link");
     // Prefer a normal dashboard URL (drop kiosk if present).
     link.href = url.replace(/([?&])kiosk(=[^&]*)?/, "$1").replace(/\?&/, "?").replace(/[?&]$/, "") || url;
-    link.hidden = false;
+    document.getElementById("grafana-grp").hidden = false;
   })
   .catch(() => {});
 </script>
