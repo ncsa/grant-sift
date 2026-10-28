@@ -154,6 +154,8 @@ main.wrap { padding-top: 40px; padding-bottom: 64px; }
 .field.search-f { flex: 1 1 320px; }
 .field.funder-f { flex: 0 1 190px; min-width: 0; }
 .field.area-f { flex: 0 1 210px; min-width: 0; }
+.field.pick-f { flex: 0 1 170px; min-width: 0; }
+.sortsel.narrow { width: auto; min-width: 92px; }
 .searchbox {
   display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px;
   border: 1px solid var(--border-strong); border-radius: 10px; background: #fff;
@@ -183,6 +185,20 @@ main.wrap { padding-top: 40px; padding-bottom: 64px; }
   background: #fff; color: var(--il-blue); border: 1px solid var(--border);
 }
 .chip:hover { border-color: var(--il-blue); }
+
+/* Filters used less often, folded away; the count says some are on. */
+.advanced { margin-top: -8px; }
+.advanced > summary {
+  cursor: pointer; width: max-content; font-size: 13.5px; font-weight: 600;
+  color: var(--il-industrial);
+}
+.advcount {
+  display: inline-block; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 4px;
+  border-radius: 999px; background: var(--il-blue); color: #fff;
+  font-size: 12px; line-height: 20px; text-align: center;
+}
+.advcount[hidden] { display: none; }
+.advbody { display: flex; flex-direction: column; gap: 16px; margin-top: 14px; }
 .chip[aria-pressed="true"] { background: var(--il-blue); color: #fff; border-color: var(--il-blue); }
 
 /* ---- result bar ---- */
@@ -518,7 +534,7 @@ footer a { margin-left: 6px; }
   .stats { gap: 24px; }
   .stat dd { font-size: 28px; }
   .find .field { flex: 1 1 100%; }
-  .daterange .datesel { flex: 1 1 0; min-width: 0; }
+  .daterange .datesel, .daterange .sortsel { flex: 1 1 0; min-width: 0; }
   .row { flex-direction: column; gap: 12px; padding: 22px 0; }
   .when { flex: none; display: flex; align-items: baseline; gap: 10px; }
   .when .m { margin-top: 0; }
