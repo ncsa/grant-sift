@@ -1481,6 +1481,14 @@ def list_opportunities(
     category: str = "",
     source: str = "",
     min_score: int = 0,
+    min_award: float = 0,
+    max_award: float = 0,
+    posted_since: str = "",
+    posted_before: str = "",
+    match_kind: str = "",
+    match_status: str = "",
+    solicitation_type: str = "",
+    min_axes: str = "",
     sort: str = "",
     page: int = 1,
     page_size: int = 25,
@@ -1488,7 +1496,10 @@ def list_opportunities(
     """Search the open catalogue. Every argument narrows; q is fuzzy on names
     and titles and exact on prose (catalogue._relevance). filters is a comma
     list of catalogue.FILTERS, including the identity ones: via-me,
-    my-sources, my-digests. ids fetches particular calls, e.g. a shelf."""
+    my-sources, my-digests; a leading - excludes. funder, category, source,
+    match_kind, match_status and solicitation_type are comma lists matching
+    any. Awards are USD, 0 for no bound; posted_* bound first_seen; min_axes
+    is axis:floor pairs. ids fetches particular calls, e.g. a shelf."""
     principal = auth.principal(request)
     page_size = max(1, min(int(page_size), _PAGE_MAX))
     conn = _conn()
@@ -1499,7 +1510,11 @@ def list_opportunities(
                 conn, rows, principal, q=q, ids=_csv(ids), area=area,
                 funder=funder, deadline_from=deadline_from,
                 deadline_to=deadline_to, filters=_csv(filters),
-                category=category, source=source, min_score=min_score, sort=sort)
+                category=category, source=source, min_score=min_score, sort=sort,
+                min_award=min_award, max_award=max_award,
+                posted_since=posted_since, posted_before=posted_before,
+                match_kind=match_kind, match_status=match_status,
+                solicitation_type=solicitation_type, min_axes=min_axes)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
     finally:
