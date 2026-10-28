@@ -15,7 +15,7 @@ from datetime import date
 
 from rapidfuzz import fuzz, process
 
-from . import db, pipeline
+from . import db, llm, pipeline
 
 # ---------------------------------------------------------------------------
 # Derived fields
@@ -42,6 +42,16 @@ def award_usd(text):
         if best is None or n > best:
             best = n
     return best
+
+
+def _award(o):
+    """The regex reading of the prose, else the figure the scorer extracted.
+    Prose with no dollar sign ("up to 500K", "varies") is most of the
+    unknowns, and the model reads those where a regex cannot."""
+    a = award_usd(o["award_ceiling"])
+    if a is None:
+        a = (o.get("facts") or {}).get("award_ceiling_usd")
+    return float(a) if isinstance(a, (int, float)) and not isinstance(a, bool) else None
 
 
 # grants.gov reports an agency CODE, not a name: "HHS-NIH11", "DOD-AMRAA",
@@ -149,6 +159,13 @@ FILTERS = {
     "embedded": lambda o, ctx: o["category"] in ("embedded_software", "domain_subaward"),
     "ci": lambda o, ctx: o["category"] == "ci_program",
     "foundation": lambda o, ctx: o["source"] not in ("grants.gov", "nsf"),
+    # No deadline: rolling, or none stated. A deadline range drops these, so
+    # this is the only way to ask for them.
+    "rolling": lambda o, ctx: not o["deadline"],
+    "voted-up": lambda o, ctx: bool(o["human"] and o["human"]["verdict"] == "up"),
+    "voted-down": lambda o, ctx: bool(o["human"] and o["human"]["verdict"] == "down"),
+    # Stated as allowed. Unstated is not a no, so "-subaward-ok" keeps those.
+    "subaward-ok": lambda o, ctx: (o.get("facts") or {}).get("subaward_ok") is True,
     # Calls matched to a collaborator the signed-in person is the NCSA contact for.
     "via-me": lambda o, ctx: _via_me(o, ctx["principal"]),
     # Calls from funder pages or feeds the signed-in person added.
@@ -159,6 +176,57 @@ FILTERS = {
         not (o["human"] and o["human"]["verdict"] == "down")
         and any(t(o) for t in ctx["my_feeds"])),
 }
+
+
+def _filter(name):
+    """A chip, or its negation written with a leading minus ("-foundation")."""
+    if name.startswith("-"):
+        f = FILTERS[name[1:]]
+        return lambda o, ctx: not f(o, ctx)
+    return FILTERS[name]
+
+
+# Values the scorer is told to use (llm.py). Checked so a typo is a 400, not
+# a filter that silently matches nothing.
+MATCH_KINDS = ("collaboration", "program", "contact")
+MATCH_STATUSES = ("warm", "cold", "prospect", "departed", "do-not-contact")
+SOLICITATION_TYPES = ("single-pi", "center", "consortium", "fellowship",
+                      "training", "conference", "other")
+
+
+def _any_of(raw, allowed=None, what=""):
+    """A comma list as a lowercase set; empty means no constraint."""
+    vals = {v.strip().lower() for v in (raw or "").split(",") if v.strip()}
+    bad = sorted(vals - set(allowed)) if allowed else []
+    if bad:
+        raise ValueError(f"unknown {what} {bad}; use {', '.join(allowed)}")
+    return vals
+
+
+def _axis_floors(raw):
+    """"software_depth:70,partner_need:50" -> {axis: floor}."""
+    out = {}
+    for part in (raw or "").split(","):
+        if not part.strip():
+            continue
+        axis, _, n = part.partition(":")
+        axis = axis.strip()
+        if axis not in llm.AXES:
+            raise ValueError(f"unknown axis {axis!r}; use {', '.join(llm.AXES)}")
+        try:
+            out[axis] = int(n)
+        except ValueError:
+            raise ValueError(f"axis floor must be axis:number, got {part.strip()!r}") from None
+    return out
+
+
+def _iso_date(s, what):
+    if s:
+        try:
+            date.fromisoformat(s)
+        except ValueError:
+            raise ValueError(f"{what} must be an ISO date (YYYY-MM-DD), got {s!r}") from None
+    return s
 
 
 # ---------------------------------------------------------------------------
@@ -263,7 +331,7 @@ def load(conn, contacts):
     rows = pipeline.catalogue_rows(conn, contacts)
     for o in rows:
         o["_days"] = days_away(o["deadline"])
-        o["_award"] = award_usd(o["award_ceiling"])
+        o["_award"] = _award(o)
         o["_funder"] = funder_family(o)
         o["_short"] = _short_text(o)
         o["_words"] = sorted(set(_WORD.findall(o["_short"] + " " + (o["summary"] or "").lower())))
@@ -273,6 +341,9 @@ def load(conn, contacts):
 def public(o):
     out = {k: v for k, v in o.items() if k not in _PRIVATE}
     out["funder"] = o["_funder"]
+    # The figure min_award/max_award and the award sorts compare, so a caller
+    # can see why a call with "up to 500K" prose made the cut.
+    out["award_usd"] = o["_award"]
     if o.get("_rel") is not None:
         out["relevance"] = round(o["_rel"], 1)
     return out
@@ -280,17 +351,37 @@ def public(o):
 
 def search(conn, rows, principal, *, q="", ids=(), area="", funder="",
            deadline_from="", deadline_to="", filters=(), category="",
-           source="", min_score=0, sort=""):
-    """Filter, search and sort. Returns the matching rows, best first."""
-    unknown = [f for f in filters if f not in FILTERS]
+           source="", min_score=0, sort="", min_award=None, max_award=None,
+           posted_since="", posted_before="", match_kind="", match_status="",
+           solicitation_type="", min_axes=""):
+    """Filter, search and sort. Returns the matching rows, best first.
+
+    funder, category, source, match_kind, match_status and solicitation_type
+    take a comma list and match any of it. A filter with a leading minus is
+    negated. A bound on a field a row does not have (award, deadline, an
+    axis) drops that row: an unknown is not inside any range.
+    """
+    unknown = [f for f in filters if f.removeprefix("-") not in FILTERS]
     if unknown:
-        raise ValueError(f"unknown filter(s) {unknown}; use {', '.join(FILTERS)}")
+        raise ValueError(f"unknown filter(s) {unknown}; use {', '.join(FILTERS)}, "
+                         "or any of them with a leading - to exclude")
     sort = sort or ("relevance" if q.strip() else "score")
     if sort not in SORTS:
         raise ValueError(f"unknown sort {sort!r}; use {', '.join(SORTS)}")
+    _iso_date(posted_since, "posted_since")
+    _iso_date(posted_before, "posted_before")
+    funders = _any_of(funder)
+    categories = _any_of(category)
+    sources = _any_of(source)
+    kinds = _any_of(match_kind, MATCH_KINDS, "match_kind")
+    statuses = _any_of(match_status, MATCH_STATUSES, "match_status")
+    types = _any_of(solicitation_type, SOLICITATION_TYPES, "solicitation_type")
+    floors = _axis_floors(min_axes)
+    preds = [_filter(f) for f in filters]
 
     my_sources, my_feeds = (mine(conn, principal)
-                            if {"my-sources", "my-digests"} & set(filters) else (set(), []))
+                            if {"my-sources", "my-digests"} & {f.removeprefix("-") for f in filters}
+                            else (set(), []))
     ctx = {"principal": principal, "my_sources": my_sources, "my_feeds": my_feeds}
     wanted = set(ids)
     tokens = [t for t in q.lower().split() if t]
@@ -304,12 +395,38 @@ def search(conn, rows, principal, *, q="", ids=(), area="", funder="",
             continue
         if area and o["match_domain"] != area:
             continue
-        if funder and o["_funder"] != funder:
+        if funders and o["_funder"].lower() not in funders:
             continue
-        if category and o["category"] != category:
+        if categories and (o["category"] or "").lower() not in categories:
             continue
-        if source and (o["source"] or "").lower() != source.lower():
+        if sources and (o["source"] or "").lower() not in sources:
             continue
+        if kinds and (o["match_kind"] or "").lower() not in kinds:
+            continue
+        if statuses and (o["match_status"] or "").lower() not in statuses:
+            continue
+        if types and ((o.get("facts") or {}).get("solicitation_type") or "").lower() not in types:
+            continue
+        if (min_award or max_award) and o["_award"] is None:
+            continue
+        if min_award and o["_award"] < min_award:
+            continue
+        if max_award and o["_award"] > max_award:
+            continue
+        # first_seen is a timestamp; the bounds are dates. posted_before is
+        # exclusive, so since/before tile without overlap.
+        posted = (o["first_seen"] or "")[:10]
+        if (posted_since or posted_before) and not posted:
+            continue
+        if posted_since and posted < posted_since:
+            continue
+        if posted_before and posted >= posted_before:
+            continue
+        if floors:
+            axes = o.get("axes") or {}
+            if any(not isinstance(axes.get(a), (int, float)) or axes[a] < n
+                   for a, n in floors.items()):
+                continue
         # Rolling / unstated deadlines have no date to fall in a range, so they
         # drop out of a bounded view rather than sitting in every window.
         if (deadline_from or deadline_to) and not o["deadline"]:
@@ -318,7 +435,7 @@ def search(conn, rows, principal, *, q="", ids=(), area="", funder="",
             continue
         if deadline_to and o["deadline"] > deadline_to:
             continue
-        if not all(FILTERS[f](o, ctx) for f in filters):
+        if not all(p(o, ctx) for p in preds):
             continue
         o["_rel"] = None
         if tokens:

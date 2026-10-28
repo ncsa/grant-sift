@@ -126,14 +126,6 @@
         <span class="flbl">Roster area</span>
         <select id="area" class="sortsel"><option value="">All roster areas</option></select>
       </label>
-      <div class="field" role="group" aria-labelledby="dl-lbl">
-        <span class="flbl" id="dl-lbl">Due between</span>
-        <span class="daterange">
-          <input id="dl-from" class="datesel" type="date" aria-label="Due after">
-          <span aria-hidden="true">–</span>
-          <input id="dl-to" class="datesel" type="date" aria-label="Due before">
-        </span>
-      </div>
     </div>
     <div class="filters">
       <div class="chipgroup" role="group" aria-labelledby="g-priority">
@@ -158,6 +150,88 @@
         <button class="chip" data-filter="foundation" aria-pressed="false">Foundations</button>
       </div>
     </div>
+    <details class="advanced" id="advanced">
+      <summary>Advanced search <span class="advcount" id="adv-count" hidden></span></summary>
+      <div class="advbody">
+        <div class="find">
+          <label class="field pick-f">
+            <span class="flbl">Fit</span>
+            <select id="fit" class="sortsel">
+              <option value="">Any fit</option>
+              <option value="80">Strong fit (80+)</option>
+              <option value="60">Good fit (60+)</option>
+              <option value="40">Partial fit (40+)</option>
+            </select>
+          </label>
+          <div class="field" role="group" aria-labelledby="dl-lbl">
+            <span class="flbl" id="dl-lbl">Due between</span>
+            <span class="daterange">
+              <input id="dl-from" class="datesel" type="date" aria-label="Due after">
+              <span aria-hidden="true">–</span>
+              <input id="dl-to" class="datesel" type="date" aria-label="Due before">
+            </span>
+          </div>
+          <div class="field" role="group" aria-labelledby="aw-lbl">
+            <span class="flbl" id="aw-lbl">Award size</span>
+            <span class="daterange">
+              <select id="award-min" class="sortsel narrow" aria-label="Award at least">
+                <option value="">Any</option>
+                <option value="50000">$50K</option>
+                <option value="100000">$100K</option>
+                <option value="200000">$200K</option>
+                <option value="500000">$500K</option>
+                <option value="1000000">$1M</option>
+                <option value="5000000">$5M</option>
+              </select>
+              <span aria-hidden="true">–</span>
+              <select id="award-max" class="sortsel narrow" aria-label="Award at most">
+                <option value="">Any</option>
+                <option value="100000">$100K</option>
+                <option value="200000">$200K</option>
+                <option value="500000">$500K</option>
+                <option value="1000000">$1M</option>
+                <option value="5000000">$5M</option>
+                <option value="10000000">$10M</option>
+              </select>
+            </span>
+          </div>
+          <label class="field pick-f">
+            <span class="flbl">Added</span>
+            <select id="posted" class="sortsel">
+              <option value="">Any time</option>
+              <option value="7">Past 7 days</option>
+              <option value="30">Past 30 days</option>
+              <option value="90">Past 90 days</option>
+            </select>
+          </label>
+          <label class="field pick-f">
+            <span class="flbl">Match kind</span>
+            <select id="match-kind" class="sortsel">
+              <option value="">Any</option>
+              <option value="collaboration">Past collaborator</option>
+              <option value="program">Program</option>
+              <option value="contact" title="An outreach lead, not a past collaboration">Outreach contact</option>
+            </select>
+          </label>
+          <label class="field pick-f">
+            <span class="flbl">Match status</span>
+            <select id="match-status" class="sortsel">
+              <option value="">Any</option>
+              <option value="warm">Warm</option>
+              <option value="cold">Cold</option>
+              <option value="prospect">Prospect</option>
+            </select>
+          </label>
+        </div>
+        <div class="chipgroup" role="group" aria-labelledby="g-show">
+          <span class="glbl" id="g-show">Show</span>
+          <button class="chip" data-filter="rolling" aria-pressed="false"
+                  title="Calls with no deadline: rolling, or none stated">Rolling deadline</button>
+          <button class="chip" data-filter="-voted-down" aria-pressed="false"
+                  title="Leave out calls someone has marked not for us">Hide voted down</button>
+        </div>
+      </div>
+    </details>
   </section>
 
   <div class="resultbar">

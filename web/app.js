@@ -7,6 +7,10 @@ let SEEN = new Map(), GONE = new Set(), ACTIVE = new Set(), QUERY = "", SORT = "
 let SORT_CHOSEN = false;
 const PERSONAL = ["via-me", "my-sources", "my-digests"];
 let DL_FROM = "", DL_TO = "", DL_MIN = "", DL_MAX = "";
+// Award bounds in USD, "Added" as a number of days back, and the match pickers.
+let AW_MIN = "", AW_MAX = "", POSTED_DAYS = "", M_KIND = "", M_STATUS = "";
+// Minimum fit score, on the same bands as the Fit badge on each row.
+let MIN_FIT = "";
 let PAGE = 1, PAGE_SIZE = 25;
 
 const daysAway = d => d ? Math.ceil((new Date(d + "T00:00:00") - new Date().setHours(0,0,0,0)) / 864e5) : null;
@@ -83,6 +87,24 @@ function deadlineRangeLabel() {
   if (DL_FROM && DL_TO) return ` due ${shortDate(DL_FROM)}–${shortDate(DL_TO)}`;
   if (DL_FROM) return ` due from ${shortDate(DL_FROM)}`;
   return ` due by ${shortDate(DL_TO)}`;
+}
+
+const usd = n => n >= 1e6 ? `$${+(n / 1e6).toFixed(1)}M` : `$${Math.round(n / 1e3)}K`;
+
+function awardRangeLabel() {
+  if (AW_MIN && AW_MAX) return `award ${usd(AW_MIN)}–${usd(AW_MAX)}`;
+  if (AW_MIN) return `award ${usd(AW_MIN)}+`;
+  if (AW_MAX) return `award up to ${usd(AW_MAX)}`;
+  return "";
+}
+
+// "Past N days" as the ISO date the server compares first_seen against.
+// Local date, as the deadline pickers are.
+function postedSince() {
+  if (!POSTED_DAYS) return "";
+  const d = new Date();
+  d.setDate(d.getDate() - Number(POSTED_DAYS));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 // Both ends of the introduction: the researcher to approach, and whoever here
@@ -305,13 +327,32 @@ function rowHTML(o, opts = {}) {
   </li>`;
 }
 
+// How many filters inside the folded Advanced search section are on, so a
+// closed section still says it is narrowing the list.
+const ADV_CHIPS = ["rolling", "-voted-down"];
+function paintAdvancedCount() {
+  const n = [MIN_FIT, DL_FROM || DL_TO, AW_MIN || AW_MAX, POSTED_DAYS, M_KIND, M_STATUS]
+    .filter(Boolean).length + ADV_CHIPS.filter(f => ACTIVE.has(f)).length;
+  const el = document.getElementById("adv-count");
+  el.textContent = n;
+  el.hidden = !n;
+  el.setAttribute("aria-label", `${n} on`);
+}
+
 function queryParams() {
+  paintAdvancedCount();
   const p = new URLSearchParams({ sort: SORT, page: PAGE, page_size: PAGE_SIZE });
   if (QUERY) p.set("q", QUERY);
   if (AREA) p.set("area", AREA);
   if (FUNDER) p.set("funder", FUNDER);
   if (DL_FROM) p.set("deadline_from", DL_FROM);
   if (DL_TO) p.set("deadline_to", DL_TO);
+  if (MIN_FIT) p.set("min_score", MIN_FIT);
+  if (AW_MIN) p.set("min_award", AW_MIN);
+  if (AW_MAX) p.set("max_award", AW_MAX);
+  if (POSTED_DAYS) p.set("posted_since", postedSince());
+  if (M_KIND) p.set("match_kind", M_KIND);
+  if (M_STATUS) p.set("match_status", M_STATUS);
   if (ACTIVE.size) p.set("filters", [...ACTIVE].join(","));
   return p;
 }
@@ -341,6 +382,9 @@ async function render() {
     data.total !== data.of ? `of ${data.of} open` : "",
     AREA ? `in "${shortArea(AREA)}"` : "",
     deadlineRangeLabel().trim(),
+    MIN_FIT ? `fit ${MIN_FIT}+` : "",
+    awardRangeLabel(),
+    POSTED_DAYS ? `added in the past ${POSTED_DAYS} days` : "",
     data.total ? `Page ${data.page} of ${data.pages}` : "",
   ].filter(Boolean).join(" · ");
   document.getElementById("tally").innerHTML =
@@ -1629,6 +1673,32 @@ document.getElementById("area").addEventListener("change", e => {
 });
 document.getElementById("funder").addEventListener("change", e => {
   FUNDER = e.target.value; PAGE = 1; render();
+});
+// A bound on award size leaves out calls whose award is unknown, as the
+// deadline range does with rolling calls.
+function onAwardRange() {
+  const lo = document.getElementById("award-min");
+  const hi = document.getElementById("award-max");
+  AW_MIN = lo.value; AW_MAX = hi.value;
+  // Grey out the options that would make an empty range.
+  for (const o of hi.options) o.disabled = !!(o.value && AW_MIN && +o.value < +AW_MIN);
+  for (const o of lo.options) o.disabled = !!(o.value && AW_MAX && +o.value > +AW_MAX);
+  PAGE = 1;
+  render();
+}
+document.getElementById("award-min").addEventListener("change", onAwardRange);
+document.getElementById("award-max").addEventListener("change", onAwardRange);
+document.getElementById("fit").addEventListener("change", e => {
+  MIN_FIT = e.target.value; PAGE = 1; render();
+});
+document.getElementById("posted").addEventListener("change", e => {
+  POSTED_DAYS = e.target.value; PAGE = 1; render();
+});
+document.getElementById("match-kind").addEventListener("change", e => {
+  M_KIND = e.target.value; PAGE = 1; render();
+});
+document.getElementById("match-status").addEventListener("change", e => {
+  M_STATUS = e.target.value; PAGE = 1; render();
 });
 function syncDateBounds() {
   const from = document.getElementById("dl-from");

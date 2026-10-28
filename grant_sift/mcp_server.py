@@ -119,7 +119,7 @@ def _rest(ctx: Context, handler: str, *args, **kwargs):
 # A list row carries its subscores, extracted facts and contact block, which
 # is a lot of tokens times 25. A model choosing between calls needs these;
 # get_opportunity has the rest.
-_BRIEF = ("id", "title", "funder", "deadline", "award_ceiling", "score",
+_BRIEF = ("id", "title", "funder", "deadline", "award_ceiling", "award_usd", "first_seen", "score",
           "category", "summary", "match_name", "match_kind", "human",
           "relevance", "url")
 
@@ -149,31 +149,63 @@ def search_opportunities(
     funder: str = "",
     area: str = "",
     min_score: int = 0,
+    min_award: float = 0,
+    max_award: float = 0,
+    posted_since: str = "",
+    posted_before: str = "",
     deadline_from: str = "",
     deadline_to: str = "",
+    match_kind: list[str] | None = None,
+    match_status: list[str] | None = None,
+    solicitation_type: list[str] | None = None,
+    min_axes: dict[str, int] | None = None,
     sort: str = "",
     page: int = 1,
     page_size: int = 25,
 ) -> dict:
-    """Search open funding calls - the same search as the dashboard.
+    """Search open funding calls - the same search as the dashboard. Put
+    every constraint in ONE call rather than paging and filtering yourself.
 
     query: every word must match. Names, titles, funders and people match
     fuzzily (a typo still finds them); rationale, summary and the captured
     synopsis match exactly. filters (all must hold): soon (closes within 30
-    days), match (has a roster match), embedded, ci, foundation, and the
-    personal ones via-me, my-sources, my-digests. category e.g. ci_program,
-    embedded_software, domain_subaward. funder is the family name shown on
-    results (NIH, NSF, Defense, ...); area is a roster research area.
-    deadline_from/to are ISO dates. sort: relevance (default with a query),
-    score (default otherwise), deadline, award-desc, award-asc, new.
+    days), match (has a roster match), embedded, ci, foundation, rolling (no
+    deadline), voted-up, voted-down, subaward-ok (stated as allowed), and the
+    personal ones via-me, my-sources, my-digests; prefix any with - to
+    exclude it ("-voted-down"). category e.g. ci_program, embedded_software,
+    domain_subaward. funder is the family name shown on results (NIH, NSF,
+    Defense, ...); funder, category and source take a comma list matching any
+    ("NSF,NIH"). area is a roster research area.
+
+    min_award/max_award: USD, 0 for no bound; compared against award_usd,
+    and calls with no known award are left out. posted_since/posted_before:
+    ISO dates bounding first_seen, when Grant Sift first saw the call
+    (before is exclusive). deadline_from/to: ISO dates; rolling calls drop
+    out. match_kind: collaboration, program, contact (a contact is an
+    outreach lead, not a past collaborator). match_status: warm, cold,
+    prospect, departed, do-not-contact. solicitation_type: single-pi, center,
+    consortium, fellowship, training, conference, other. min_axes: subscore
+    floors, e.g. {"software_depth": 70}; axes are software_depth,
+    data_management, compute_intensity, sustainability, partner_need.
+    solicitation_type and min_axes need the scorer's extracted fields, so
+    calls assessed before those existed drop out.
+
+    sort: relevance (default with a query; only meaningful with one), score
+    (default otherwise, the 0-100 relevance to research software - what
+    "rank by relevance score" means), deadline, award-desc, award-asc, new.
     get_catalogue lists the funders, areas and their counts.
     """
     return _brief(_rest(
         ctx, "list_opportunities", q=query, filters=",".join(filters or []),
         category=category, source=source, funder=funder, area=area,
-        min_score=min_score, deadline_from=deadline_from,
-        deadline_to=deadline_to, sort=sort, page=page,
-        page_size=min(max(1, page_size), 50)))
+        min_score=min_score, min_award=min_award, max_award=max_award,
+        posted_since=posted_since, posted_before=posted_before,
+        deadline_from=deadline_from, deadline_to=deadline_to,
+        match_kind=",".join(match_kind or []),
+        match_status=",".join(match_status or []),
+        solicitation_type=",".join(solicitation_type or []),
+        min_axes=",".join(f"{k}:{v}" for k, v in (min_axes or {}).items()),
+        sort=sort, page=page, page_size=min(max(1, page_size), 50)))
 
 
 @mcp.tool(annotations=_READ)
