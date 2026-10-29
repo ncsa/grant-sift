@@ -146,7 +146,9 @@ Each element:
   "deadline":      "YYYY-MM-DD, or null if rolling, unstated, or already passed",
   "award_ceiling": "as written, e.g. '$250,000 over 2 years', or null",
   "indirect_cap":  "as written, e.g. '10% of direct costs', or null",
-  "url":           "application or details URL if one appears on the page, else null"
+  "url":           "application or details URL if one appears on the page, else null",
+  "funder":        "the organisation funding this call if it is not the page owner
+                    (e.g. an aggregator listing NIH or Pfizer calls), else null"
 }
 
 Rules:

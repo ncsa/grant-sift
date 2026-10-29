@@ -87,6 +87,42 @@ nothing also raises: the pattern is stale, not the source.
 Pin plain entries instead when a programme is genuinely standing at a stable URL
 (Google Cloud credits, DFG research data, CSCS allocations).
 
+## 2b. When the listing links one page per call, use a `listings:` rule
+
+The sitemap rule with the funder's own listing as the index. Use it when the
+listing paginates and each row links to its own call page that no sitemap lists.
+
+```yaml
+listings:
+  - name: Illinois Research Board
+    listing: https://research.illinois.edu/find-funding/featured-funding-opportunities
+    paginate: {param: page, max: 15}   # start: 1 for 1-based pagers
+    include: '^/rfp/'                  # matched on the link's PATH, same domain only
+    max: 300
+    aggregator: true
+```
+
+The listing pages are read for links only; each linked page is read on its own,
+one call per model request, and hashed so only new or changed calls reach the
+model after the first run. The pager is followed from the HTML's own next-page
+link, and both `max`es refuse rather than trim.
+
+Do not read a paginated listing's TEXT instead. UIUC's did not fit: one model
+call per page returning 30-46 calls timed out at 120s, and a cut-off answer
+parses as "no calls". Do not pin `?page=N` URLs either: rows slide between pages
+as calls expire, and each slide becomes a new record.
+
+Check what the "tabs" are first: UIUC's View All / External / Internal / Limited
+Submissions are all one page, and Limited Submissions is NOT a subset of View
+All. Duplicate links across tabs collapse before anything is fetched.
+
+`aggregator: true` marks a listing that relists other funders' calls. Its copy
+is dropped when the funder's own record exists, matched on title in code
+(`db.same_call`) with the "Grants for Research on ..." wrapper, the funder's
+name and filler words stripped. Deadlines do not help: they disagreed on 29 of
+43 true matches. Duplicates still count toward yield, so the source does not
+trip `zero_streak`.
+
 ## 3. Triaging a GrantForward CSV
 
 GrantForward cannot be crawled — SSO, and `robots.txt` disallows `/grant*`,
