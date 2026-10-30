@@ -299,6 +299,7 @@ def foundation_page(conn, name, url, force=False, min_text=None):
             # the fallback.
             "agency": (c.get("funder") or "").strip() or name,
             "url": c.get("url") or url,
+            "page_url": url,
             "deadline": _iso(c.get("deadline")),
             "award_ceiling": c.get("award_ceiling"),
             "indirect_cap": c.get("indirect_cap"),

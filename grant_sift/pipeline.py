@@ -408,6 +408,7 @@ def ingest(conn, sources, prefilter, verbose=True):
     # Rows stored before call_keys existed, or by a source not read today,
     # get their keys here; it is a regex per row, not a fetch.
     db.fill_missing_keys(conn)
+    db.fill_page_urls(conn)
     groups = db.link_duplicates(conn, aggregator_names(sources))
     stats["duplicate"] = sum(len(g["members"]) - 1 for g in groups)
     if verbose and groups:
@@ -763,10 +764,15 @@ def catalogue_rows(conn, contacts, min_score=0):
     # something the shown copy does not -- the Research Board listing a call is
     # how a campus limited submission surfaces -- and a verdict given on a copy
     # since folded in still stands.
+    # Linked to the listing itself -- the Research Board's /rfp/ page, the
+    # CURIOSS list -- not to the call's own link, which the card already has.
+    # A record with no page of its own falls back to its source's URL.
     also = {}
     for d in conn.execute(
-            "SELECT id, source, url, deadline, duplicate_of FROM opportunities "
-            "WHERE duplicate_of IS NOT NULL ORDER BY source"):
+            """SELECT d.id, d.source, d.deadline, d.duplicate_of,
+                      COALESCE(d.page_url, s.url) AS url
+               FROM opportunities d LEFT JOIN sources s ON s.name = d.source
+               WHERE d.duplicate_of IS NOT NULL ORDER BY d.source, d.deadline"""):
         also.setdefault(d["duplicate_of"], []).append(d)
     out = [
         # The synopsis is not carried. It was 0.96 MB of a 2.56 MB payload,
@@ -780,8 +786,10 @@ def catalogue_rows(conn, contacts, min_score=0):
         | {"axes": _loads(r["axes_json"]), "facts": _loads(r["facts_json"])}
         | {"human": verdicts.get(r["id"]) or next(
             (verdicts[d["id"]] for d in also.get(r["id"], []) if d["id"] in verdicts), None)}
+        # Every other listing, a second one from the same source included: the
+        # Research Board lists a call once per round, each with its own date.
         | {"also_listed": [{"source": d["source"], "url": d["url"], "deadline": d["deadline"]}
-                           for d in also.get(r["id"], []) if d["source"] != r["source"]]}
+                           for d in also.get(r["id"], [])]}
         | {"contact": contacts.get((r["match_name"] or "").strip().lower())}
         for r in rows
     ]

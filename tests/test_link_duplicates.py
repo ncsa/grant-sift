@@ -27,7 +27,8 @@ CURIOSS = {"id": "fnd:curioss", "source": "CURIOSS", "agency": "CURIOSS",
            "title": "NIH Research Software Engineer (RSE) Award",
            "url": NIH_URL, "deadline": SOON, "synopsis": "Salary support.",
            "raw": {"url": NIH_URL}}
-IRB = {"id": "fnd:irb", "source": "Illinois Research Board",
+IRB_PAGE = "https://research.illinois.edu/rfp/grants-support-research-software-engineers"
+IRB = {"id": "fnd:irb", "source": "Illinois Research Board", "page_url": IRB_PAGE,
        "agency": "National Institutes of Health",
        "title": "Grants to Support Research Software Engineers Developing Software "
                 "and Tools for Biomedical and/or Behavioral Health",
@@ -202,9 +203,38 @@ class Catalogue(Base):
         rows = pipeline.catalogue_rows(self.conn, {})
         self.assertEqual([r["id"] for r in rows], [GG["id"]])
         self.assertEqual(rows[0]["also_listed"],
-                         [{"source": "Illinois Research Board", "url": NIH_URL,
+                         [{"source": "Illinois Research Board", "url": IRB_PAGE,
                            "deadline": SOON}])
         self.assertEqual(rows[0]["human"]["verdict"], "down")
+
+
+class ListingPages(Base):
+    def test_also_listed_falls_back_to_the_source_url(self):
+        listing = "https://curioss.org/resources/funding-opportunities/"
+        db.record_source_run(self.conn, "CURIOSS", "page", listing, True, 1)
+        self.add(GG, CURIOSS)
+        self.conn.execute("UPDATE opportunities SET page_url = NULL WHERE id = ?", (CURIOSS["id"],))
+        self.link()
+        db.save_assessment(self.conn, GG["id"], {"score": 80, "category": "ci_program"}, "m", "h")
+        row = pipeline.catalogue_rows(self.conn, {})[0]
+        self.assertEqual(row["also_listed"][0]["url"], listing)
+
+    def test_source_kind_and_url_stay_current(self):
+        db.record_source_run(self.conn, "CURIOSS", "feed", "https://curioss.org/feed.xml", True, 1)
+        db.record_source_run(self.conn, "CURIOSS", "page", "https://curioss.org/list/", True, 1)
+        r = self.conn.execute("SELECT kind, url FROM sources WHERE name = 'CURIOSS'").fetchone()
+        self.assertEqual(tuple(r), ("page", "https://curioss.org/list/"))
+
+    def test_page_recovered_from_the_synthetic_id(self):
+        page = "https://research.illinois.edu/rfp/some-call"
+        title = "Grants for Some Call"
+        self.add({"id": f"fnd:{db.synthetic_id(page, title)}", "source": "Illinois Research Board",
+                  "title": title, "url": NIH_URL})
+        self.conn.execute("UPDATE opportunities SET page_url = NULL")
+        db.page_changed(self.conn, "https://research.illinois.edu/rfp/other", "x")
+        db.page_changed(self.conn, page, "y")
+        self.assertEqual(db.fill_page_urls(self.conn), 1)
+        self.assertEqual(self.conn.execute("SELECT page_url FROM opportunities").fetchone()[0], page)
 
 
 class SoonestDeadline(Base):

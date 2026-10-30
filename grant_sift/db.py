@@ -215,6 +215,12 @@ def init(path: str = "grant-sift.db") -> None:
         if "screen" not in ocols:
             conn.execute("ALTER TABLE opportunities ADD COLUMN screen TEXT")
             conn.commit()
+        if "page_url" not in ocols:
+            # The page a record was read from: a Research Board /rfp/ page, a
+            # CURIOSS list. `url` is the call's own link, which for a relisted
+            # call is the funder's, so it cannot say where the listing is.
+            conn.execute("ALTER TABLE opportunities ADD COLUMN page_url TEXT")
+            conn.commit()
         if "duplicate_of" not in ocols:
             # Another copy of the same call is the one shown; see link_duplicates.
             conn.execute("ALTER TABLE opportunities ADD COLUMN duplicate_of TEXT")
@@ -458,6 +464,30 @@ def fill_missing_keys(conn, rebuild=False) -> int:
     return len(rows)
 
 
+def fill_page_urls(conn) -> int:
+    """page_url for page-read records stored before the column existed.
+
+    Their id is synthetic_id(page, title), so the page is whichever cached
+    page reproduces it. A record no cached page reproduces stays NULL, and is
+    shown with its source's own URL instead.
+    """
+    rows = conn.execute(
+        "SELECT id, title FROM opportunities WHERE page_url IS NULL AND id LIKE 'fnd:%'"
+    ).fetchall()
+    if not rows:
+        return 0
+    want = {r["id"][4:]: r["title"] for r in rows}
+    found = 0
+    for (page,) in conn.execute("SELECT url FROM page_cache").fetchall():
+        for sid, title in list(want.items()):
+            if synthetic_id(page, title) == sid:
+                conn.execute("UPDATE opportunities SET page_url = ? WHERE id = ?",
+                             (page, f"fnd:{sid}"))
+                del want[sid]
+                found += 1
+    return found
+
+
 def canonical_id(conn, opp_id: str) -> str:
     """The id shown for this call: itself, or the copy it was folded into.
 
@@ -603,13 +633,14 @@ def upsert_opportunity(conn: sqlite3.Connection, rec: dict) -> bool:
         conn.execute(
             """INSERT INTO opportunities
                (id, source, external_id, kind, title, synopsis, agency, url,
-                deadline, award_ceiling, indirect_cap, screen, content_hash,
-                first_seen, last_seen, raw)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                page_url, deadline, award_ceiling, indirect_cap, screen,
+                content_hash, first_seen, last_seen, raw)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 rec["id"], rec["source"], rec.get("external_id"),
                 rec.get("kind", "solicitation"), rec["title"], rec.get("synopsis"),
-                rec.get("agency"), rec.get("url"), rec.get("deadline"),
+                rec.get("agency"), rec.get("url"), rec.get("page_url") or rec.get("url"),
+                rec.get("deadline"),
                 rec.get("award_ceiling"), rec.get("indirect_cap"),
                 rec.get("screen"), content_hash,
                 ts, ts, json.dumps(rec.get("raw", {}))[:20000],
@@ -634,11 +665,12 @@ def upsert_opportunity(conn: sqlite3.Connection, rec: dict) -> bool:
     conn.execute(
         """UPDATE opportunities
            SET last_seen=?, title=?, synopsis=?, deadline=?, agency=?, url=?,
-               award_ceiling=?, indirect_cap=?, screen=?, content_hash=?
+               page_url=?, award_ceiling=?, indirect_cap=?, screen=?, content_hash=?
            WHERE id=?""",
         (
             ts, rec["title"], merged["synopsis"], merged["deadline"],
-            rec.get("agency"), rec.get("url"), merged["award_ceiling"],
+            rec.get("agency"), rec.get("url"), rec.get("page_url") or rec.get("url"),
+            merged["award_ceiling"],
             merged["indirect_cap"], rec.get("screen"), content_hash, rec["id"],
         ),
     )
@@ -772,6 +804,8 @@ def record_source_run(conn, name, kind, url, ok, yielded=0, error=None, unchange
              (name, kind, url, last_run, last_success, last_yield, zero_streak, last_error)
            VALUES (?,?,?,?,?,?,?,?)
            ON CONFLICT(name) DO UPDATE SET
+             kind=excluded.kind,
+             url=excluded.url,
              last_run=excluded.last_run,
              last_success=CASE WHEN ? THEN excluded.last_success ELSE sources.last_success END,
              last_yield=excluded.last_yield,

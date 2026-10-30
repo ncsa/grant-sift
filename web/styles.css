@@ -226,6 +226,9 @@ main.wrap { padding-top: 40px; padding-bottom: 64px; }
 .when .d.word { font-size: 22px; line-height: 1.1; }
 .when .m { font-size: 13px; color: var(--text-3); margin-top: 6px; }
 .when .m.per { margin-top: 2px; font-size: 12px; font-style: italic; }
+.when .others { list-style: none; margin: 8px 0 0; padding: 0; font-size: 12px;
+                color: var(--text-3); line-height: 1.45; }
+.when .others .src { display: block; font-weight: 600; }
 .row.soon .when .d, .row.soon .when .d .u { color: var(--il-altgeld); }
 
 .body { flex: 999 1 480px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
@@ -538,8 +541,9 @@ footer a { margin-left: 6px; }
   .find .field { flex: 1 1 100%; }
   .daterange .datesel, .daterange .sortsel { flex: 1 1 0; min-width: 0; }
   .row { flex-direction: column; gap: 12px; padding: 22px 0; }
-  .when { flex: none; display: flex; align-items: baseline; gap: 10px; }
+  .when { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
   .when .m { margin-top: 0; }
+  .when .others { flex-basis: 100%; margin-top: 0; }
   .body { flex: none; }
   .side { margin-left: 0; gap: 32px; }
   h2.title { font-size: 20px; }
