@@ -30,10 +30,13 @@ Identity decides attribution on writes, and "mine" on reads: the calls from
 sources I added, the calls matched to collaborators I am the contact for.
 """
 
+import json
 import os
+from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import HTTPException
+from mcp.server.apps import Apps
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
@@ -65,8 +68,32 @@ _ADD = ToolAnnotations(read_only_hint=False, destructive_hint=False,
 _RETIRE = ToolAnnotations(read_only_hint=False, destructive_hint=True,
                           idempotent_hint=True, open_world_hint=False)
 
+# MCP Apps: get_opportunity and the two list tools name an HTML card that a
+# host with UI support (Claude, ChatGPT) draws in the chat; any other client
+# ignores the reference and reads the same JSON as before, so the tools'
+# output is unchanged. The card inlines the dashboard's stylesheet and reuses
+# its class names, so the two cannot drift apart. Built once at import: the
+# host's sandbox allows the card no requests of its own, so nothing can be
+# fetched later. Its actions are tools/call on the tools below, through the host.
+CARD_URI = "ui://grant-sift/opportunity-card.html"
+_CARD = {"ui": {"resourceUri": CARD_URI}}
+
+
+def _card_html() -> str:
+    here = Path(__file__).resolve().parent
+    css = (here.parent / "web" / "styles.css").read_text(encoding="utf-8")
+    return ((here / "mcp_card.html").read_text(encoding="utf-8")
+            .replace("/*DASHBOARD_CSS*/", css)
+            .replace('/*DASHBOARD_URL*/""', json.dumps(PUBLIC_URL + "/" if PUBLIC_URL else "")))
+
+
+_apps = Apps()
+_apps.add_html_resource(CARD_URI, _card_html(), name="opportunity-card",
+                        title="Grant Sift opportunity card", prefers_border=True)
+
 mcp = MCPServer(
     name="grant-sift",
+    extensions=[_apps],
     instructions=(
         "Grant Sift tracks open funding calls and scores each for research "
         "software engineering relevance (0-100) against a roster of past "
@@ -139,7 +166,7 @@ def whoami(ctx: Context) -> dict:
     return _rest(ctx, "whoami")
 
 
-@mcp.tool(annotations=_READ)
+@mcp.tool(annotations=_READ, meta=_CARD)
 def search_opportunities(
     ctx: Context,
     query: str = "",
@@ -216,7 +243,7 @@ def get_catalogue(ctx: Context) -> dict:
     return _rest(ctx, "catalogue_facets")
 
 
-@mcp.tool(annotations=_READ)
+@mcp.tool(annotations=_READ, meta=_CARD)
 def get_opportunity(ctx: Context, opportunity_id: str) -> dict:
     """One open call in full: the assessment, its subscores and extracted
     facts, the closest roster match with how to reach them, recorded
@@ -227,7 +254,7 @@ def get_opportunity(ctx: Context, opportunity_id: str) -> dict:
 _SCOPES = {"contacts": "via-me", "sources": "my-sources", "subscriptions": "my-digests"}
 
 
-@mcp.tool(annotations=_READ)
+@mcp.tool(annotations=_READ, meta=_CARD)
 def my_opportunities(ctx: Context, scope: str = "all", page_size: int = 25) -> dict:
     """Open calls tied to you, the signed-in person.
 

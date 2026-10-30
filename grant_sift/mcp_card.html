@@ -1,0 +1,388 @@
+<!doctype html>
+<!-- The opportunity card an MCP Apps host (Claude, ChatGPT) draws inside the
+     chat for get_opportunity, search_opportunities and my_opportunities.
+     mcp_server.py inlines web/styles.css where the marker below sits, and the
+     markup uses the dashboard's own class names, so a restyle of the dashboard
+     restyles this too. The host's sandbox allows no outside requests: data
+     arrives as the tool result, and actions go back through the host as
+     tools/call on existing tools. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grant Sift</title>
+<style>
+/*DASHBOARD_CSS*/
+</style>
+<style>
+/* Only what the iframe needs beyond the dashboard: no page chrome around the
+   card, the phone layout at any width, and the pieces the dashboard has no
+   class for (axes, the compact list). */
+html, body { background: var(--surface); }
+body { padding: 4px 2px; }
+.row { flex-direction: column; gap: 12px; padding: 16px 0; }
+.row:last-child { border-bottom: 0; }
+.when { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.when .m { margin-top: 0; }
+.body { flex: none; }
+.side { flex: none; max-width: none; flex-direction: row; gap: 32px; }
+h2.title { font-size: 20px; }
+.axes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 6px 20px; margin: 0; }
+.axes div { display: flex; justify-content: space-between; gap: 8px;
+            border-bottom: 1px solid var(--rule); padding: 3px 0; font-size: 13px; }
+.axes dt { color: var(--text-2); }
+.axes dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.brief { list-style: none; margin: 0; padding: 0; }
+.brief > li { border-bottom: 1px solid var(--rule); }
+.brief > li:last-child { border-bottom: 0; }
+.brief .open { all: unset; box-sizing: border-box; cursor: pointer; width: 100%;
+               display: grid; grid-template-columns: 56px 1fr auto; gap: 4px 12px;
+               align-items: baseline; padding: 10px 2px; }
+.brief .open:hover .t { text-decoration: underline; }
+.brief .open:focus-visible { outline: 2px solid var(--il-industrial); }
+.brief .n { font-family: var(--serif); font-size: 18px; font-weight: 500;
+            font-variant-numeric: tabular-nums; }
+.brief .t { font-weight: 600; line-height: 1.35; }
+.brief .sub { grid-column: 2 / 4; font-size: 12.5px; color: var(--text-3); }
+.brief .dl { font-size: 12.5px; color: var(--text-3); white-space: nowrap; }
+.brief .soon .dl { color: var(--il-altgeld); font-weight: 600; }
+.brief .row { padding-top: 4px; }
+.section { margin: 14px 0 4px; }
+.status { font-size: 13px; color: var(--text-3); padding: 8px 2px; }
+.status.err { color: var(--notice-fg); }
+.foot { display: flex; justify-content: space-between; gap: 8px; padding: 10px 2px 2px;
+        font-size: 12.5px; color: var(--text-3); }
+</style>
+</head>
+<body>
+<div id="root"><div class="status">Loading…</div></div>
+<script>
+"use strict";
+const DASHBOARD = /*DASHBOARD_URL*/"";
+const AXES = [["software_depth", "Software depth"], ["data_management", "Data management"],
+              ["compute_intensity", "Compute"], ["sustainability", "Sustainability"],
+              ["partner_need", "Partner need"]];
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const SENTINEL_DAYS = 3650;
+const root = document.getElementById("root");
+
+// ---- the host bridge: JSON-RPC 2.0 over postMessage (MCP Apps, 2026-01-26) ----
+let nextId = 1;
+const pending = new Map();
+function send(msg) { window.parent.postMessage({ jsonrpc: "2.0", ...msg }, "*"); }
+function request(method, params) {
+  const id = nextId++;
+  send({ id, method, params });
+  return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+}
+function notify(method, params) { send({ method, params }); }
+
+window.addEventListener("message", e => {
+  if (e.source !== window.parent) return;
+  const m = e.data;
+  if (!m || m.jsonrpc !== "2.0") return;
+  if (m.id != null && !m.method) {          // a reply to one of ours
+    const p = pending.get(m.id);
+    if (!p) return;
+    pending.delete(m.id);
+    m.error ? p.reject(new Error(m.error.message || "host error")) : p.resolve(m.result);
+    return;
+  }
+  if (m.id != null) {                        // the host asking us something
+    const known = m.method === "ping" || m.method === "ui/resource-teardown";
+    send(known ? { id: m.id, result: {} }
+               : { id: m.id, error: { code: -32601, message: `no method ${m.method}` } });
+    return;
+  }
+  if (m.method === "ui/notifications/tool-result") render(m.params);
+  if (m.method === "ui/notifications/tool-cancelled") status("Cancelled.");
+});
+
+// Tools return plain JSON text (what a client without UI support reads), so
+// the card reads the same text rather than a second structured copy.
+function payload(result) {
+  if (result.structuredContent) return result.structuredContent;
+  const t = (result.content || []).find(c => c.type === "text");
+  if (!t) throw new Error("empty result");
+  if (result.isError) throw new Error(t.text);
+  return JSON.parse(t.text);
+}
+async function callTool(name, args) {
+  const r = await request("tools/call", { name, arguments: args });
+  if (r.isError) throw new Error(((r.content || [])[0] || {}).text || "tool error");
+  return payload(r);
+}
+function openLink(url) { request("ui/open-link", { url }).catch(() => {}); }
+
+new ResizeObserver(() => notify("ui/notifications/size-changed",
+  { height: Math.ceil(document.documentElement.getBoundingClientRect().height) }))
+  .observe(document.documentElement);
+
+// ---- formatting, as web/app.js does it ----
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const _ent = document.createElement("textarea");
+function decode(s) {
+  if (!s || !/&(#\d+|#x[0-9a-f]+|[a-z]+);/i.test(s)) return s;
+  _ent.innerHTML = s;
+  return _ent.value;
+}
+const daysAway = d => d ? Math.ceil((new Date(d + "T00:00:00") - new Date().setHours(0,0,0,0)) / 864e5) : null;
+function longDate(iso) {
+  if (!iso) return "";
+  const dt = new Date(iso.length === 10 ? iso + "T00:00:00" : iso);
+  return isNaN(dt) ? iso : `${MONTHS[dt.getMonth()]} ${dt.getDate()}, ${dt.getFullYear()}`;
+}
+function money(cur, n) {
+  const fix = (v, u) => `${cur}${+v.toFixed(v < 10 ? 1 : 0)}${u}`;
+  if (n >= 1e9) return fix(n / 1e9, "B");
+  if (n >= 1e6) return fix(n / 1e6, "M");
+  if (n >= 1e3) return fix(n / 1e3, "K");
+  return `${cur}${n}`;
+}
+function awardParts(s) {
+  if (!s) return null;
+  const hits = [...s.matchAll(/([$€£])\s?(\d[\d,]*(?:\.\d+)?)/g)];
+  if (!hits.length) return { head: s, note: "" };
+  const fig = h => money(h[1], Number(h[2].replace(/,/g, "")));
+  const first = hits[0];
+  let head = fig(first), end = first.index + first[0].length;
+  const second = hits[1];
+  if (second && /^\s*(to|–|—|-)\s*$/i.test(s.slice(end, second.index))) {
+    head += " – " + fig(second);
+    end = second.index + second[0].length;
+  }
+  const pre = s.slice(0, first.index).trim();
+  if (/^up to$/i.test(pre)) head = "Up to " + head;
+  else if (pre) return { head, note: s };
+  return { head, note: s.slice(end).replace(/^[\s,;.]+/, "").trim() };
+}
+const SCORE_BANDS =[[80, "hi", "Strong fit"], [60, "mid", "Good fit"], [40, "lo", "Partial fit"], [0, "min", "Weak fit"]];
+const band = s => SCORE_BANDS.find(([min]) => s >= min) || SCORE_BANDS[3];
+const CATEGORIES = { ci_program: "CI program", embedded_software: "Embedded software",
+                     domain_subaward: "Domain subaward", sustainability: "Sustainability",
+                     not_relevant: "Not relevant" };
+const category = c => c ? (CATEGORIES[c] || c.replace(/_/g, " ")) : "";
+
+function whenHTML(o) {
+  const away = daysAway(o.deadline);
+  if (!o.deadline || away > SENTINEL_DAYS) return `<div class="d word">Rolling</div><div class="m">No fixed date</div>`;
+  const per = o.deadline_from ? `<div class="m per">per ${esc(o.deadline_from)}</div>` : "";
+  const due = `<div class="m">Due ${esc(longDate(o.deadline))}</div>${per}`;
+  if (away < 0) return `<div class="d word">Passed</div>${due}`;
+  if (away === 0) return `<div class="d word">Today</div>${due}`;
+  return `<div class="d">${away}<span class="u">${away === 1 ? "day" : "days"}</span></div>${due}`;
+}
+
+function person(name, email, extra) {
+  const who = email
+    ? `<b>${esc(name)}</b> · <a href="mailto:${esc(email)}" data-link="mailto:${esc(email)}">${esc(email)}</a>`
+    : `<b>${esc(name)}</b> <span class="noaddr">· no address on file</span>`;
+  return who + (extra ? ` <span class="dept">· ${esc(extra)}</span>` : "");
+}
+
+// The route to the closest roster match: them, and whoever here knows them.
+function fitHTML(o) {
+  if (!o.match_name) return "";
+  const c = o.contact || {};
+  const flags = [
+    o.match_status && o.match_status !== "warm" ? esc(o.match_status) : "",
+    o.match_kind === "contact" ? "lead, not a past project" : "",
+    o.match_kind === "program" ? "our own program" : "",
+  ].filter(Boolean).map(f => `<span class="cold"> · ${f}</span>`).join("");
+  const lines = [];
+  const where = [c.unit, c.org && c.org !== "UIUC" ? c.org : null].filter(Boolean).join(", ");
+  if (c.kind !== "program" && (c.email || where)) {
+    lines.push(`<div><span class="who">Them</span><span>${person(o.match_name, c.email, where)}</span></div>`);
+  }
+  if ((c.ncsa_contact || []).some(p => p.name)) {
+    lines.push(`<div><span class="who">Via us</span><span>${
+      c.ncsa_contact.filter(p => p.name).map(p => person(p.name, p.email)).join(", ")}</span></div>`);
+  }
+  if (c.review) lines.push(`<div><span class="who">Check</span><span class="flag">${esc(c.review)}</span></div>`);
+  return `<div class="fit">
+      <div class="fithead"><div class="fitwho"><span class="eyebrow">Closest fit</span><b>${esc(o.match_name)}</b>${
+        o.match_project ? `<span class="proj"> — ${esc(o.match_project)}</span>` : ""}${flags}</div></div>
+      ${o.match_rationale ? `<p class="reason">${esc(o.match_rationale)}</p>` : ""}
+      ${lines.length ? `<div class="reach">${lines.join("")}</div>` : ""}
+    </div>`;
+}
+
+function axesHTML(o) {
+  const a = o.axes;
+  if (!a) return "";
+  return `<dl class="axes" aria-label="Subscores, 0 to 100">${AXES.map(([k, label]) =>
+    `<div><dt>${label}</dt><dd>${a[k] ?? "–"}</dd></div>`).join("")}</dl>`;
+}
+
+function verdictHTML(o) {
+  const hv = o.human;
+  if (!hv) return "";
+  return `<span class="verdict ${hv.verdict === "down" ? "down" : ""}">Your group: ${
+    hv.verdict === "down" ? "not for us" : "useful"}</span>`;
+}
+
+function cardHTML(o) {
+  const away = daysAway(o.deadline);
+  const soon = away !== null && away >= 0 && away <= 30;
+  const meta = [`<span class="funder">${esc(o.funder || o.agency || o.source)}</span>`];
+  if (o.category) meta.push(`<span>${esc(category(o.category))}</span>`);
+  if (o.indirect_cap) meta.push(`<span class="cap">Indirect capped at ${esc(o.indirect_cap)}</span>`);
+  const v = verdictHTML(o);
+  if (v) meta.push(v);
+  const award = awardParts(o.award_ceiling);
+  return `<div class="row${soon ? " soon" : ""}" data-card="${esc(o.id)}">
+    <div class="when">${whenHTML(o)}</div>
+    <div class="body">
+      <div class="meta">${meta.join("")}</div>
+      <h2 class="title">${o.url
+        ? `<a href="${esc(o.url)}" data-link="${esc(o.url)}">${esc(decode(o.title))}</a>`
+        : esc(decode(o.title))}</h2>
+      ${o.rationale ? `<p class="why"><span class="tag">Why it fits</span>${esc(o.rationale)}</p>` : ""}
+      ${o.summary ? `<p class="sumry">${esc(o.summary)}</p>` : ""}
+      ${axesHTML(o)}
+      ${fitHTML(o)}
+      <div class="acts">
+        ${DASHBOARD ? `<a class="act" href="${esc(DASHBOARD)}" data-link="${esc(DASHBOARD)}">Open Grant Sift</a>` : ""}
+        <span class="spacer"></span>
+        <span class="votes">
+          <button class="vote" data-vote="up" aria-pressed="false" title="Good find: score it higher next time">Useful</button>
+          <button class="vote" data-vote="down" aria-pressed="false" title="Not for us: score it lower next time">Not for us</button>
+        </span>
+        <span class="votenote"></span>
+      </div>
+      <div class="fbbox">
+        <select aria-label="what was wrong">
+          <option value="score">the score</option>
+          <option value="category">the category</option>
+          <option value="match">the named collaborator</option>
+        </select>
+        <input type="text" maxlength="500" placeholder="one comment, optional: why?">
+        <button class="vote" data-send>Send</button>
+      </div>
+    </div>
+    <aside class="side">
+      <div>
+        <div class="eyebrow">Award</div>
+        ${award
+          ? `<div class="amt">${esc(award.head)}</div>${award.note ? `<div class="amtnote">${esc(award.note)}</div>` : ""}`
+          : `<div class="noamt">Not stated</div>`}
+      </div>
+      <div class="score ${band(o.score)[1]}">
+        <div class="eyebrow">Fit</div>
+        <div class="num" aria-label="Fit score ${o.score} of 100"><b>${o.score}</b><span>/100</span></div>
+        <span class="fitpill ${band(o.score)[1]}">${band(o.score)[2]}</span>
+      </div>
+    </aside>
+  </div>`;
+}
+
+function briefHTML(o) {
+  const away = daysAway(o.deadline);
+  const soon = away !== null && away >= 0 && away <= 30;
+  const dl = !o.deadline || away > SENTINEL_DAYS ? "Rolling" : away < 0 ? "Passed"
+           : away === 0 ? "Today" : `${away} ${away === 1 ? "day" : "days"}`;
+  const sub = [o.funder, category(o.category), o.match_name ? `fit: ${o.match_name}` : ""]
+    .filter(Boolean).map(esc).join(" · ");
+  return `<li class="${soon ? "soon" : ""}" data-brief="${esc(o.id)}">
+    <button class="open" aria-expanded="false">
+      <span class="n" title="Fit score ${o.score} of 100">${o.score}</span>
+      <span class="t">${esc(decode(o.title))}</span>
+      <span class="dl">${dl}</span>
+      <span class="sub">${sub}</span>
+    </button>
+  </li>`;
+}
+
+const SCOPES = { contacts: "Matched via you", sources: "From sources you added",
+                 subscriptions: "In your digests" };
+
+function pageHTML(p) {
+  const count = `${p.total} call${p.total === 1 ? "" : "s"}${p.pages > 1 ? `, page ${p.page} of ${p.pages}` : ""}`;
+  return p.opportunities.length
+    ? `<div class="meta">${esc(count)}</div><ul class="brief">${p.opportunities.map(briefHTML).join("")}</ul>`
+    : `<div class="status">No calls.</div>`;
+}
+
+function render(result) {
+  let data;
+  try { data = payload(result); } catch (e) { return status(e.message, true); }
+  if (data.opportunities) {
+    root.innerHTML = pageHTML(data);
+  } else if (data.id && data.title) {
+    root.innerHTML = cardHTML(data);
+  } else {
+    root.innerHTML = Object.entries(data).map(([scope, p]) =>
+      `<div class="section"><div class="eyebrow">${esc(SCOPES[scope] || scope)}</div>${pageHTML(p)}</div>`).join("");
+  }
+  if (DASHBOARD) root.insertAdjacentHTML("beforeend",
+    `<div class="foot"><span>Grant Sift</span><a href="${esc(DASHBOARD)}" data-link="${esc(DASHBOARD)}">Open the dashboard →</a></div>`);
+}
+
+function status(msg, err) {
+  root.innerHTML = `<div class="status${err ? " err" : ""}">${esc(msg)}</div>`;
+}
+
+// ---- interaction ----
+root.addEventListener("click", async e => {
+  // A sandboxed iframe cannot navigate; the host opens links for it.
+  const link = e.target.closest("[data-link]");
+  if (link) { e.preventDefault(); openLink(link.dataset.link); return; }
+
+  // List rows open into the full card, fetched through get_opportunity.
+  const open = e.target.closest(".open");
+  if (open) {
+    const li = open.parentElement;
+    const shown = li.querySelector("[data-card]");
+    if (shown) { shown.remove(); open.setAttribute("aria-expanded", "false"); return; }
+    open.setAttribute("aria-expanded", "true");
+    li.insertAdjacentHTML("beforeend", `<div class="status" data-card>Loading…</div>`);
+    try {
+      const o = await callTool("get_opportunity", { opportunity_id: li.dataset.brief });
+      li.querySelector("[data-card]").outerHTML = cardHTML(o);
+    } catch (err) {
+      li.querySelector("[data-card]").outerHTML =
+        `<div class="status err" data-card>${esc(err.message)}</div>`;
+    }
+    return;
+  }
+
+  // Votes as on the dashboard: a thumb opens the comment box, Send records it.
+  const card = e.target.closest("[data-card]");
+  if (!card) return;
+  const vote = e.target.closest("[data-vote]");
+  if (vote) {
+    card.querySelectorAll("[data-vote]").forEach(b => b.setAttribute("aria-pressed", b === vote));
+    const box = card.querySelector(".fbbox");
+    box.dataset.verdict = vote.dataset.vote;
+    box.classList.add("on");
+    box.querySelector("input").focus();
+    return;
+  }
+  const sendBtn = e.target.closest("[data-send]");
+  if (sendBtn) {
+    const box = card.querySelector(".fbbox");
+    const note = card.querySelector(".votenote");
+    sendBtn.disabled = true;
+    try {
+      await callTool("add_feedback", {
+        opportunity_id: card.dataset.card, verdict: box.dataset.verdict,
+        aspect: box.querySelector("select").value, note: box.querySelector("input").value.trim() });
+      box.classList.remove("on");
+      note.textContent = "Recorded. Thank you.";
+    } catch (err) {
+      note.textContent = err.message;
+      sendBtn.disabled = false;
+    }
+  }
+});
+
+request("ui/initialize", {
+  appInfo: { name: "grant-sift-card", version: "1.0.0" },
+  appCapabilities: {},
+  protocolVersion: "2026-01-26",
+}).then(() => notify("ui/notifications/initialized", {}))
+  .catch(err => status(err.message, true));
+</script>
+</body>
+</html>
