@@ -103,7 +103,7 @@ kubectl -n grant-sift port-forward svc/grant-sift-grafana 3000:80
 
 ### 4. Seed today’s rollup (once)
 
-The nightly job writes telemetry at the **end** of `daily`. To fill Grafana before the next 06:00 run:
+The nightly job writes telemetry at the **end** of `daily`. To fill Grafana before the next 04:00 run:
 
 ```bash
 kubectl -n grant-sift exec deploy/grant-sift -- python run.py telemetry

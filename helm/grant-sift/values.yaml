@@ -113,7 +113,7 @@ config:
   GRANT_SIFT_DAILY_LIMIT: "400"
   # Nightly pipeline, in the serving process. Empty disables it, in which case
   # schedule `run.py daily` yourself from somewhere that is the only writer.
-  GRANT_SIFT_DAILY_AT: "06:00"          # HH:MM, blank to turn the scheduler off
+  GRANT_SIFT_DAILY_AT: "04:00"          # HH:MM, blank to turn the scheduler off
   GRANT_SIFT_DAILY_TZ: America/Chicago
   # Run on startup when the last run is over 20h old, so a pod restart across
   # the scheduled minute does not silently skip a day.

@@ -12,8 +12,10 @@ answer from one implementation. Two writes are worth a note:
                        live gateway, so a browser cannot call it directly. This
                        forwards the request and nothing more.
 
-The viewer's API key is never stored, never logged, and never written to disk.
-It arrives per request, is forwarded, and is dropped.
+Chat and Idea match run on the server's own Lumen key and model (llm.API_KEY,
+llm.MODEL) unless the viewer brings a key, so they work with no setup. A
+viewer's own key is never stored, never logged, and never written to disk. It
+arrives per request, is forwarded, and is dropped.
 
 Chat is not recorded. There is no chat table, no INSERT on the chat path, and
 the transcript exists only in the browser tab that made it. What the process
@@ -45,7 +47,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import adapters, auth, catalogue, db, mcp_server, pipeline, telemetry
+from . import adapters, auth, catalogue, db, llm, mcp_server, pipeline, telemetry
 
 DB_PATH = os.environ.get("GRANT_SIFT_DB", "grant-sift.db")
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -76,8 +78,8 @@ ALLOWED_HOSTS = {
 
 
 # Heavy on feedback because each row feeds the next classification prompt, so
-# volume there is not just noise, it moves the model. Chat is looser: the
-# viewer pays for it with their own key, and the limit only protects the proxy.
+# volume there is not just noise, it moves the model. Chat is looser: a
+# conversation on the shared key costs about 0.005 Lumen coins.
 FEEDBACK_PER_HOUR = int(os.environ.get("GRANT_SIFT_FEEDBACK_PER_HOUR", "20"))
 CHAT_PER_HOUR = int(os.environ.get("GRANT_SIFT_CHAT_PER_HOUR", "60"))
 # Tighter than feedback: a roster row is trusted context in every later prompt.
@@ -88,9 +90,12 @@ MAX_NOTE = 500
 MAX_CHAT_CHARS = 4000
 MAX_TURNS = 12
 
-# Focus: idea text -> matching calls. Two model calls on the viewer's own key,
-# so the limit is per hour like chat rather than per day.
-FOCUS_PER_HOUR = int(os.environ.get("GRANT_SIFT_FOCUS_PER_HOUR", "20"))
+# Focus: idea text -> matching calls. A search reads the whole catalogue, about
+# 0.015 coins on the shared key against a refill of 24 a day, so it is the
+# tight one. Re-scoring a shortlist is a few thousand tokens and is meant to be
+# pressed after each edit, so it has its own, looser bucket.
+FOCUS_PER_HOUR = int(os.environ.get("GRANT_SIFT_FOCUS_PER_HOUR", "6"))
+RESCORE_PER_HOUR = int(os.environ.get("GRANT_SIFT_RESCORE_PER_HOUR", "30"))
 MAX_IDEA_CHARS = 4000
 # The whole live catalogue is searched, but it does not fit in one prompt.
 # Measured against Lumen's gemma-4-31b-it: 1,040 live calls render to ~340k
@@ -219,7 +224,10 @@ def public_config():
         (os.environ.get("GRANT_SIFT_GRAFANA_URL") or "").strip()
         or (os.environ.get("GRANT_SIFT_GRAFANA_EMBED_URL") or "").strip()
     )
-    return {"grafana_url": url or None}
+    return {"grafana_url": url or None,
+            # What Ask and Idea match run on when the viewer brings no key.
+            "ai": {"shared": bool(llm.API_KEY), "model": llm.MODEL,
+                   "gateway": urlparse(llm.BASE_URL).hostname}}
 
 
 @app.get("/api/whoami")
@@ -818,6 +826,86 @@ def _check_base_url(base_url: str) -> str:
     return base_url.rstrip("/")
 
 
+def _gateway(payload: dict) -> dict:
+    """The gateway, key and model one request runs on.
+
+    No key from the viewer: the server's own (llm.BASE_URL, llm.API_KEY,
+    llm.MODEL), and the viewer's model and base_url are ignored, so the shared
+    key cannot be pointed at a pricier model or another host. A key: the
+    viewer's own gateway, checked against ALLOWED_HOSTS, and their model.
+    """
+    api_key = str(payload.get("api_key") or "").strip()
+    if not api_key:
+        if not llm.API_KEY:
+            raise HTTPException(503, "AI is not configured on this server. "
+                                     "Add your own key under AI model.")
+        return {"base_url": llm.BASE_URL.rstrip("/"), "api_key": llm.API_KEY,
+                "model": llm.MODEL, "own": False}
+    model = str(payload.get("model") or "").strip()
+    if not model:
+        raise HTTPException(400, "model is required with your own key")
+    base_url = _check_base_url(
+        str(payload.get("base_url") or llm.DEFAULT_BASE_URL).strip())
+    return {"base_url": base_url, "api_key": api_key, "model": model, "own": True}
+
+
+_REDACT = re.compile(r"(sk|gho|xoxb)[_-][A-Za-z0-9_\-]{8,}")
+# How a gateway says the key has run out of budget. Lumen meters in coins.
+_OUT_OF_BUDGET = re.compile(r"coin|credit|quota|budget|insufficient|balance", re.I)
+
+
+def _gateway_error(gw: dict, r) -> HTTPException:
+    """A failed completion, as the page should show it.
+
+    On the viewer's own key the gateway's answer is theirs to read, redacted
+    so a gateway that echoes the request cannot leak the key back. On the
+    shared key it is not: an empty coin bucket is a "try later", not a raw
+    402 and a body about our account.
+    """
+    if gw["own"]:
+        detail = _REDACT.sub("[redacted]", r.text[:300])
+        return HTTPException(502, f"gateway returned {r.status_code}: {detail}")
+    if r.status_code in (402, 429) or _OUT_OF_BUDGET.search(r.text[:1000]):
+        return HTTPException(503, "The shared AI model is busy. Try again later, "
+                                  "or use your own key under AI model.")
+    return HTTPException(502, f"The shared AI model is unavailable right now "
+                              f"({r.status_code}). Try again later.")
+
+
+def _complete(gw: dict, messages: list, max_tokens: int, temperature: float = 0):
+    """One chat completion on `gw`. Returns (content, usage).
+
+    The key is forwarded and dropped, and no error echoes it back. Nothing
+    about the exchange is written anywhere: no table, no file, no log line
+    carrying content.
+    """
+    body = {"model": gw["model"], "max_tokens": max_tokens,
+            "temperature": temperature, "messages": messages}
+    # Lumen / some vLLM stacks bill reasoning as output; OpenAI-compatible
+    # cloud APIs reject this unknown field, so only send it there.
+    host = (urlparse(gw["base_url"]).hostname or "").lower()
+    if host == "lumen.ncsa.illinois.edu" or host.endswith(".ncsa.illinois.edu"):
+        body["chat_template_kwargs"] = {"enable_thinking": False}
+    try:
+        r = requests.post(f"{gw['base_url']}/chat/completions",
+                          headers={"Authorization": f"Bearer {gw['api_key']}",
+                                   "Content-Type": "application/json"},
+                          json=body, timeout=CHAT_TIMEOUT)
+    except requests.RequestException as exc:
+        raise HTTPException(502, f"gateway unreachable: {type(exc).__name__}")
+    if r.status_code != 200:
+        raise _gateway_error(gw, r)
+    data = r.json()
+    choice = (data.get("choices") or [{}])[0]
+    content = ((choice.get("message") or {}).get("content") or "").strip()
+    if not content:
+        usage = data.get("usage") or {}
+        raise HTTPException(502, "the model returned no content (finish_reason="
+                                 f"{choice.get('finish_reason')}, reasoning_tokens="
+                                 f"{usage.get('reasoning_tokens')}). Try a larger max_tokens.")
+    return content, (data.get("usage") or {})
+
+
 CHAT_SYSTEM = """You are helping a research software engineering group at a
 supercomputing centre decide whether to pursue one specific funding call, and
 how to approach it.
@@ -916,20 +1004,20 @@ def _opportunity_context(conn, opp_id: str) -> str:
 
 @app.post("/api/models")
 def models(request: Request, payload: dict = Body(...)):
-    """List models the viewer's key can reach. Same CORS reason as /api/chat."""
+    """List models the viewer's own key can reach. Same CORS reason as /api/chat."""
     auth.require_user(request)
     _rate_limit(f"models:{_client(request)}", CHAT_PER_HOUR)
 
     api_key = str(payload.get("api_key") or "").strip()
-    base_url = _check_base_url(
-        str(payload.get("base_url") or "https://lumen.ncsa.illinois.edu/v1").strip()
-    )
     if not api_key:
         raise HTTPException(400, "api_key is required")
+    gw = {"base_url": _check_base_url(
+              str(payload.get("base_url") or llm.DEFAULT_BASE_URL).strip()),
+          "api_key": api_key, "own": True}
 
     try:
         r = requests.get(
-            f"{base_url}/models",
+            f"{gw['base_url']}/models",
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=min(CHAT_TIMEOUT, 30),
         )
@@ -937,8 +1025,7 @@ def models(request: Request, payload: dict = Body(...)):
         raise HTTPException(502, f"gateway unreachable: {type(exc).__name__}")
 
     if r.status_code != 200:
-        detail = re.sub(r"(sk|gho|xoxb)[_-][A-Za-z0-9_\-]{8,}", "[redacted]", r.text[:300])
-        raise HTTPException(502, f"gateway returned {r.status_code}: {detail}")
+        raise _gateway_error(gw, r)
 
     data = r.json()
     ids = []
@@ -951,26 +1038,18 @@ def models(request: Request, payload: dict = Body(...)):
 
 @app.post("/api/chat")
 def chat(request: Request, payload: dict = Body(...)):
-    """Forward one chat turn to the viewer's own gateway.
+    """One chat turn about one call, on the shared key or the viewer's own.
 
-    The key is read from the request, forwarded, and dropped. It is never
-    persisted or logged, and no error message echoes it back.
+    A viewer's key is read from the request, forwarded, and dropped. It is
+    never persisted or logged, and no error message echoes it back.
     """
     auth.require_user(request)
     _rate_limit(f"chat:{_client(request)}", CHAT_PER_HOUR)
 
     opp_id = str(payload.get("opportunity_id") or "").strip()
-    api_key = str(payload.get("api_key") or "").strip()
-    model = str(payload.get("model") or "").strip()
-    base_url = _check_base_url(
-        str(payload.get("base_url") or "https://lumen.ncsa.illinois.edu/v1").strip()
-    )
+    gw = _gateway(payload)
     turns = payload.get("messages") or []
 
-    if not api_key:
-        raise HTTPException(400, "api_key is required; this server holds no key of its own")
-    if not model:
-        raise HTTPException(400, "model is required")
     if not isinstance(turns, list) or not turns:
         raise HTTPException(400, "messages must be a non-empty list")
     if len(turns) > MAX_TURNS:
@@ -992,52 +1071,14 @@ def chat(request: Request, payload: dict = Body(...)):
     finally:
         conn.close()
 
-    body = {
-        "model": model,
-        "max_tokens": int(payload.get("max_tokens") or 1200),
-        "temperature": 0.2,
-        "messages": [
-            {"role": "system", "content": f"{CHAT_SYSTEM}\n\nTHE CALL:\n{context}"}
-        ] + clean,
-    }
-    # Lumen / some vLLM stacks bill reasoning as output; OpenAI-compatible
-    # cloud APIs reject this unknown field, so only send it there.
-    host = (urlparse(base_url).hostname or "").lower()
-    if host == "lumen.ncsa.illinois.edu" or host.endswith(".ncsa.illinois.edu"):
-        body["chat_template_kwargs"] = {"enable_thinking": False}
-
-    try:
-        r = requests.post(
-            f"{base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}",
-                     "Content-Type": "application/json"},
-            json=body,
-            timeout=CHAT_TIMEOUT,
-        )
-    except requests.RequestException as exc:
-        raise HTTPException(502, f"gateway unreachable: {type(exc).__name__}")
-
-    if r.status_code != 200:
-        # Pass the status through but not the body verbatim, so a gateway that
-        # echoes the request cannot leak the key back to the page.
-        detail = re.sub(r"(sk|gho|xoxb)[_-][A-Za-z0-9_\-]{8,}", "[redacted]", r.text[:300])
-        raise HTTPException(502, f"gateway returned {r.status_code}: {detail}")
-
-    # Nothing about this exchange is written anywhere: no table, no file, no
-    # log line carrying content. The transcript lives in the caller's tab and
-    # disappears when it closes, which is why the page offers copy and export.
-    data = r.json()
-    choice = (data.get("choices") or [{}])[0]
-    content = ((choice.get("message") or {}).get("content") or "").strip()
-    if not content:
-        usage = data.get("usage") or {}
-        raise HTTPException(
-            502,
-            "the model returned no content (finish_reason="
-            f"{choice.get('finish_reason')}, reasoning_tokens="
-            f"{usage.get('reasoning_tokens')}). Try a larger max_tokens.",
-        )
-    return {"content": content, "usage": data.get("usage") or {}}
+    # The transcript lives in the caller's tab and disappears when it closes,
+    # which is why the page offers copy and export.
+    content, usage = _complete(
+        gw,
+        [{"role": "system", "content": f"{CHAT_SYSTEM}\n\nTHE CALL:\n{context}"}] + clean,
+        max_tokens=min(int(payload.get("max_tokens") or 1200), 4000),
+        temperature=0.2)
+    return {"content": content, "usage": usage, "model": gw["model"]}
 
 
 # --------------------------------------------------------------------------
@@ -1181,38 +1222,10 @@ def _focus_corpus(conn):
     return chunks, n, trimmed
 
 
-def _focus_post(base_url, api_key, model, system, user, max_tokens):
-    """One completion against the viewer's gateway. Same handling as /api/chat:
-    the key is forwarded and dropped, and no error echoes it back."""
-    body = {
-        "model": model,
-        "max_tokens": max_tokens,
-        "temperature": 0,
-        "messages": [{"role": "system", "content": system},
-                     {"role": "user", "content": user}],
-    }
-    host = (urlparse(base_url).hostname or "").lower()
-    if host == "lumen.ncsa.illinois.edu" or host.endswith(".ncsa.illinois.edu"):
-        body["chat_template_kwargs"] = {"enable_thinking": False}
-    try:
-        r = requests.post(f"{base_url}/chat/completions",
-                          headers={"Authorization": f"Bearer {api_key}",
-                                   "Content-Type": "application/json"},
-                          json=body, timeout=CHAT_TIMEOUT)
-    except requests.RequestException as exc:
-        raise HTTPException(502, f"gateway unreachable: {type(exc).__name__}")
-    if r.status_code != 200:
-        detail = re.sub(r"(sk|gho|xoxb)[_-][A-Za-z0-9_\-]{8,}", "[redacted]", r.text[:300])
-        raise HTTPException(502, f"gateway returned {r.status_code}: {detail}")
-    data = r.json()
-    choice = (data.get("choices") or [{}])[0]
-    content = ((choice.get("message") or {}).get("content") or "").strip()
-    if not content:
-        usage = data.get("usage") or {}
-        raise HTTPException(502, "the model returned no content (finish_reason="
-                                 f"{choice.get('finish_reason')}, reasoning_tokens="
-                                 f"{usage.get('reasoning_tokens')}). Try a larger max_tokens.")
-    return content, (data.get("usage") or {})
+def _focus_post(gw, system, user, max_tokens):
+    """One completion for Idea match. Same handling as /api/chat."""
+    return _complete(gw, [{"role": "system", "content": system},
+                          {"role": "user", "content": user}], max_tokens)
 
 
 def _focus_json(text):
@@ -1234,7 +1247,8 @@ def _focus_json(text):
 
 @app.post("/api/focus")
 def focus(request: Request, payload: dict = Body(...)):
-    """Idea text in, matching calls out. Two model calls on the viewer's key.
+    """Idea text in, matching calls out. Two model calls, on the shared key or
+    the viewer's own.
 
     Nothing about the idea is stored. It is not written to a table, not logged,
     and not exported: it is unpublished research, the same class of material as
@@ -1245,17 +1259,9 @@ def focus(request: Request, payload: dict = Body(...)):
     _rate_limit(f"focus:{_client(request)}", FOCUS_PER_HOUR)
 
     idea = str(payload.get("idea") or "").strip()[:MAX_IDEA_CHARS]
-    api_key = str(payload.get("api_key") or "").strip()
-    model = str(payload.get("model") or "").strip()
-    base_url = _check_base_url(
-        str(payload.get("base_url") or "https://lumen.ncsa.illinois.edu/v1").strip())
-
     if not idea:
         raise HTTPException(400, "idea is required")
-    if not api_key:
-        raise HTTPException(400, "api_key is required; this server holds no key of its own")
-    if not model:
-        raise HTTPException(400, "model is required")
+    gw = _gateway(payload)
 
     conn = _conn()
     try:
@@ -1268,7 +1274,7 @@ def focus(request: Request, payload: dict = Body(...)):
         sys_prompt = FOCUS_SHORTLIST_SYSTEM.format(n=FOCUS_PER_CHUNK)
 
         def search(chunk):
-            return _focus_post(base_url, api_key, model, sys_prompt,
+            return _focus_post(gw, sys_prompt,
                                f"CATALOGUE OF OPEN CALLS:\n{chunk}\n\nTHE IDEA:\n{idea}",
                                max_tokens=2000)
 
@@ -1323,7 +1329,7 @@ def focus(request: Request, payload: dict = Body(...)):
                     "note": "the model returned ids that are not in the catalogue"}
 
         ranked_raw, used = _focus_post(
-            base_url, api_key, model, FOCUS_RANK_SYSTEM,
+            gw, FOCUS_RANK_SYSTEM,
             "SHORTLISTED CALLS:\n\n" + "\n\n".join(detail) + f"\n\nTHE IDEA:\n{idea}",
             max_tokens=4000)
 
@@ -1350,7 +1356,7 @@ def focus(request: Request, payload: dict = Body(...)):
         usage.append(used)
         out.sort(key=lambda x: -x["affinity"])
         return {"results": out, "searched": n, "trimmed": trimmed,
-                "chunks": len(chunks), "usage": usage}
+                "chunks": len(chunks), "usage": usage, "model": gw["model"]}
     finally:
         conn.close()
 
@@ -1369,24 +1375,17 @@ def rescore(request: Request, payload: dict = Body(...)):
     ~96k and over a minute for a search of the whole catalogue.
     """
     auth.require_user(request)
-    _rate_limit(f"focus:{_client(request)}", FOCUS_PER_HOUR)
+    _rate_limit(f"rescore:{_client(request)}", RESCORE_PER_HOUR)
 
     idea = str(payload.get("idea") or "").strip()[:MAX_IDEA_CHARS]
     ids = payload.get("ids")
-    api_key = str(payload.get("api_key") or "").strip()
-    model = str(payload.get("model") or "").strip()
-    base_url = _check_base_url(
-        str(payload.get("base_url") or "https://lumen.ncsa.illinois.edu/v1").strip())
 
     if not idea:
         raise HTTPException(400, "idea is required; there is nothing to score against")
     if not isinstance(ids, list) or not ids:
         raise HTTPException(400, "ids must be a non-empty list")
     ids = [str(i) for i in ids][:60]
-    if not api_key:
-        raise HTTPException(400, "api_key is required; this server holds no key of its own")
-    if not model:
-        raise HTTPException(400, "model is required")
+    gw = _gateway(payload)
 
     conn = _conn()
     try:
@@ -1416,7 +1415,7 @@ def rescore(request: Request, payload: dict = Body(...)):
         for r in ordered)
 
     raw, usage = _focus_post(
-        base_url, api_key, model, FOCUS_RESCORE_SYSTEM,
+        gw, FOCUS_RESCORE_SYSTEM,
         "SHORTLISTED CALLS:\n\n" + detail + f"\n\nTHE IDEA:\n{idea}",
         max_tokens=4000)
 
@@ -1451,7 +1450,8 @@ def rescore(request: Request, payload: dict = Body(...)):
         raise HTTPException(502, "the model returned no usable scores")
 
     return {"recommendation": str(data.get("recommendation") or "")[:2000],
-            "items": out, "scored": len(out), "of": len(ordered), "usage": usage}
+            "items": out, "scored": len(out), "of": len(ordered), "usage": usage,
+            "model": gw["model"]}
 
 
 _PAGE_MAX = 200
