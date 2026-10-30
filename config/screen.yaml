@@ -12,12 +12,9 @@
 # Closed calls are annotated too, not dropped, and pruning is off unless
 # GRANT_SIFT_PRUNE_DAYS is set. A record of what was once open is worth keeping.
 
-# 0 means every fetched record reaches the classifier. Measured 2026-09-04:
-# raising this to 1 dropped 1,041 records to 597, and the 444 difference cost
-# only about 0.4 coins to assess. Recall is worth more than that, so the
-# keyword list below now only annotates why a record matched; it no longer
-# gates. exclude_patterns still apply, and they are the only real filter left.
-min_keyword_hits: 0
+# Measured 2026-09-04: requiring one keyword hit cut 1,041 records to 597, and
+# assessing the other 444 cost about 0.4 coins. Recall is worth more than that,
+# so the keyword list below only annotates why a record looks relevant.
 
 # Substring matched, case-insensitively, against lowercased title + synopsis.
 # Loose on purpose: a false exclusion here is invisible and permanent, a false
@@ -244,21 +241,8 @@ agency_allowlist:
   - Packard
   - Illinois Research Board
 
-# Sources curated by humans elsewhere, assess everything they surface.
-# Matched with str.startswith against rec["source"]. MUST be quoted: a bare
-# `- fnd:` is YAML for the dict {fnd: None}, which made startswith() raise
-# TypeError and take the whole source down with it.
-#
-# NOTE "fnd:" is currently a no-op: it is the prefix of rec["id"], not of
-# rec["source"], which adapters set to the foundation's name. Foundations are
-# covered by agency_allowlist above instead. Left here, quoted and harmless,
-# only so the intent is visible.
-always_assess_sources:
-  - "fnd:"
-  - CURIOSS
-  - ReSA
-
-# Regex, matched against lowercased title + synopsis.
+# Regex, matched against lowercased title + synopsis. A match is noted as
+# "matched exclusion"; the record is still stored and assessed.
 exclude_patterns:
   - "\\bconstruction of (a )?(building|facility)\\b"
   - "\\bscholarship for undergraduate students\\b"

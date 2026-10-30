@@ -175,6 +175,15 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def local_date(ts: str) -> date:
+    """The calendar date of a stored timestamp, where this machine is.
+
+    Timestamps are stored in UTC, so slicing the first ten characters gives the
+    UTC date: a run at 9pm in Illinois reads as tomorrow.
+    """
+    return datetime.fromisoformat(ts).astimezone().date()
+
+
 def connect(path: str = "grant-sift.db") -> sqlite3.Connection:
     """Open a connection. Cheap by design: three PRAGMAs and nothing else.
 
@@ -683,10 +692,9 @@ def upsert_opportunity(conn: sqlite3.Connection, rec: dict) -> bool:
 def detail_cached(conn, opp_id: str, retry_failed_after_days: int = 7):
     """Return the cached detail for an opportunity, or None if it needs fetching.
 
-    Keyed by opportunity id rather than by the opportunities table, because the
-    whole point is to remember records the prefilter REJECTED. Those are never
-    stored as opportunities, so without this they would be re-fetched every
-    morning: about a thousand requests a day.
+    Keyed by opportunity id rather than by the opportunities table, so it
+    outlives a record that closes or is pruned. Without it every grants.gov
+    listing would be re-fetched every morning: about a thousand requests a day.
 
     A failed fetch is cached too, so one bad id does not get retried daily, but
     it expires after `retry_failed_after_days` in case the failure was

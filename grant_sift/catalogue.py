@@ -434,9 +434,9 @@ def search(conn, rows, principal, *, q="", ids=(), area="", funder="",
             continue
         if max_award and o["_award"] > max_award:
             continue
-        # first_seen is a timestamp; the bounds are dates. posted_before is
-        # exclusive, so since/before tile without overlap.
-        posted = (o["first_seen"] or "")[:10]
+        # first_seen is a UTC timestamp; the bounds are local dates. posted_before
+        # is exclusive, so since/before tile without overlap.
+        posted = db.local_date(o["first_seen"]).isoformat() if o["first_seen"] else ""
         if (posted_since or posted_before) and not posted:
             continue
         if posted_since and posted < posted_since:

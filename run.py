@@ -2,7 +2,7 @@
 """Grant Sift CLI.
 
     python run.py daily                 # nightly: ingest, assess, digest, telemetry
-    python run.py ingest                # fetch and prefilter only
+    python run.py ingest                # fetch, screen and store only
     python run.py assess                # classify and match anything unassessed
     python run.py digest --feed closing-soon [--send]
     python run.py telemetry             # write telemetry_daily for Grafana (/api/stats)
@@ -44,11 +44,10 @@ _SHUTDOWN = threading.Event()
 
 
 def cmd_ingest(conn, args):
-    sources, _, prefilter = pipeline.load_config(args.config)
+    sources, _, screen_rules = pipeline.load_config(args.config)
     print("Ingesting:")
-    stats = pipeline.ingest(conn, sources, prefilter)
-    line = (f"\n{stats['fetched']} fetched, {stats['kept']} passed prefilter, "
-            f"{stats['new']} new or changed")
+    stats = pipeline.ingest(conn, sources, screen_rules)
+    line = f"\n{stats['fetched']} open calls read, {stats['new']} new or changed"
     if stats.get("enriched"):
         line += f", {stats['enriched']} enriched with detail"
     if stats.get("detail_cached"):
@@ -287,9 +286,11 @@ def cmd_serve(conn, args):
 
 
 def cmd_status(conn, args):
-    print(f"{'source':40s} {'last success':22s} {'yield':>6s}")
+    print(f"{'source':40s} {'last success':22s} {'calls':>6s}")
     for r in conn.execute("SELECT * FROM sources ORDER BY name"):
-        print(f"{r['name']:40s} {str(r['last_success'] or 'never'):22s} {r['last_yield']:6d}"
+        when = (datetime.fromisoformat(r["last_success"]).astimezone().strftime("%Y-%m-%d %H:%M")
+                if r["last_success"] else "never")
+        print(f"{r['name']:40s} {when:22s} {r['last_yield']:6d}"
               + (f"  {r['last_error'][:50]}" if r["last_error"] else ""))
     stale = db.stale_sources(conn)
     if stale:
