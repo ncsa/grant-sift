@@ -382,7 +382,7 @@ def _config_stamp():
     cheap next to parsing the YAML, and lets an edit - a ConfigMap update in
     Kubernetes - reach the next request without a restart."""
     d = Path("config")
-    paths = (d / "sources.yaml", d / "screen.yaml", d / "ncsa_staff.yaml",
+    paths = (d / "sources.yaml", d / "ncsa_staff.yaml",
              Path(os.environ.get("GRANT_SIFT_ROSTER") or (d / "roster.yaml")))
     out = []
     for p in paths:
@@ -404,7 +404,7 @@ def _config():
     stamp = _config_stamp()
     if _CONFIG["stamp"] != stamp:
         try:
-            sources, roster, _ = pipeline.load_config()
+            sources, roster = pipeline.load_config()
         except Exception:  # noqa: BLE001
             sources, roster = {}, []
         _CONFIG.update(stamp=stamp, sources=sources or {}, roster=roster,
@@ -497,8 +497,6 @@ def sources_list(request: Request):
 
         if (cfg.get("grants_gov") or {}).get("enabled"):
             add("grants.gov", "api", adapters.GRANTS_GOV_URL, "file")
-        if (cfg.get("nsf") or {}).get("enabled"):
-            add("nsf", "api", adapters.NSF_URL, "file")
         for f in cfg.get("feeds") or []:
             add(f["name"], "feed", f["url"], "file")
         for f in cfg.get("foundations") or []:
@@ -507,9 +505,7 @@ def sources_list(request: Request):
             add(a["name"], a["kind"], a["url"], "dashboard",
                 a["cadence"], a["notes"], a["id"], a.get("created_by"))
 
-        return {"count": len(out),
-                "keywords": cfg.get("keywords") or [],
-                "sources": out}
+        return {"count": len(out), "sources": out}
     finally:
         conn.close()
 

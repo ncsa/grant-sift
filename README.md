@@ -69,18 +69,15 @@ flowchart TD
     SRC2["source_entries<br/>added in the dashboard"] --> SL
     SL{{"source list<br/>merged at ingest, deduplicated on URL"}}
     SL --> A1
-    SL --> A2
     SL --> A3
     SL --> A4
     SL --> A5
-    A1["Grants.gov search2<br/>31 query terms"] --> E
-    A2["NSF funding search"] --> E
-    A3["RSS feed"] --> SC
+    A1["Grants.gov search2<br/>every open call, paged"] --> E
+    A3["RSS feed"] --> S
     A4["foundation pages<br/>stripped to text"] --> X
     A5["sitemap rules<br/>one pinned sitemap,<br/>expanded to call pages"] --> X
-    X["EXTRACT<br/>model lists the open calls"] --> SC
-    E["ENRICH<br/>per-call detail fetch:<br/>description, award, deadline"] --> SC
-    SC["SCREEN<br/>annotates only.<br/>Discards nothing"] --> S[("SQLite")]
+    X["EXTRACT<br/>model lists the open calls"] --> S[("SQLite")]
+    E["ENRICH<br/>per-call detail fetch:<br/>description, award, deadline"] --> S
     S --> AS["ASSESS<br/>one call per record:<br/>score, category, roster match"]
     R1["config/roster.yaml<br/>parties, projects optional"] --> AS
     R2["roster_entries<br/>added in the dashboard"] --> AS
@@ -119,38 +116,32 @@ majority-dead within a year. `max` refuses rather than truncates; Gates
 publishes a sitemap of 41,507 committed grants, and a silently shortened list is
 the failure this tool exists to avoid.
 
-## Nothing fetched is thrown away
+## No keywords, anywhere
 
-Every record from every source is stored. Relevance is decided by the model
-against the roster, because that is the only judgement here with any context.
+Every open call from every source is stored and assessed. Relevance is decided
+by the model against the roster, because that is the only judgement here with
+any context.
 
-`config/screen.yaml` therefore annotates rather than filters: its keywords,
-allowlist and exclusion patterns write a note into `opportunities.screen` and
-nothing acts on it. That is queryable, so you can ask what a filter would have
-cost you:
-
-```sql
-SELECT title, screen FROM opportunities WHERE screen LIKE '%matched exclusion%';
-```
-
-The first run after this change showed the old SBIR pattern would have
-discarded "NIEHS Worker Training Program's SBIR E-Learning" and one titled
-simply "Sociology". The keyword gate had been cutting 1,041 records to 597.
+Grants.gov is read whole: every forecasted and posted opportunity, paged 250
+at a time (1,469 calls, six requests, on 2026-10-30). It used to be searched
+with 31 query terms capped at 200 rows each; 25 of them hit the cap, and the
+pull missed 399 open calls. A filter before the model had cut 1,041 records to
+597 and would have discarded "NIEHS Worker Training Program's SBIR E-Learning"
+on an SBIR pattern. A pull that stops short of grants.gov's reported total
+raises rather than passing as complete.
 
 Closed calls are kept and marked, and queue behind live ones in `assess`.
 Pruning is off unless `GRANT_SIFT_PRUNE_DAYS` is set.
 
-## Enrichment, and why it comes before the screen
+## Enrichment
 
-Grants.gov's search endpoint returns only title, agency and dates. Filtering on
-that means judging a thousand records a day by their titles.
+Grants.gov's search endpoint returns only title, agency and dates, so the
+model would judge each call by its title.
 
 So each opportunity gets one detail fetch first. That stays cheap because of a
 ledger: `detail_cache` remembers every id already fetched, **including ones no
-longer stored**, which would otherwise be re-fetched every morning. Measured:
-title-only screening stored 118 records; description screening stored 597, all
-with a synopsis and 373 with an award figure. The first pass is about 1,150
-fetches and five minutes; steady state is only new postings.
+longer stored**, which would otherwise be re-fetched every morning. The first
+pass is one fetch per open call; steady state is only new postings.
 
 Expiry is checked twice, on the search response and again after enrichment,
 because the detail endpoint often supplies a deadline the search omitted that
@@ -539,7 +530,7 @@ erDiagram
     ROSTER_ENTRIES }o--|| ASSESSMENTS : "merged with roster.yaml at assess time"
 
     OPPORTUNITIES {
-        TEXT id PK "gg nsf fnd rss prefixes"
+        TEXT id PK "gg fnd rss prefixes"
         TEXT source
         TEXT title
         TEXT synopsis "from the detail fetch"
@@ -548,7 +539,6 @@ erDiagram
         TEXT deadline
         TEXT award_ceiling
         TEXT indirect_cap
-        TEXT screen "annotation, never a filter"
         TEXT content_hash "a change triggers a re-assess"
         TEXT first_seen
         TEXT last_seen
@@ -734,22 +724,13 @@ That was three opportunities in one subject area, so treat it as a shortlist.
 `ornith` scoring 25 where glm scored 50 would drop a real call below a
 threshold, which is how a cheap model costs you a lead.
 
-Dropping the keyword gate entirely took the corpus from 597 to 1,041 records
-for about 0.4 coins. Steady state is a few new postings a day, so cents.
+Dropping the keyword gate took the corpus from 597 to 1,041 records for about
+0.4 coins, and reading grants.gov whole adds about 400 more once. Steady state
+is a few new postings a day, so cents.
 
 If the roster grows past a few hundred entries, the structural fix is to split
 assessment: score without the roster, then send the roster only for records
 that clear a threshold. At current volumes that is not worth the complexity.
-
-## Tuning
-
-The screen's keyword list is deliberately loose and matching is plain
-substring, so short tokens over-match: `api` also matches "rapid" and
-"therapies". Two-letter tokens are avoided for that reason.
-
-The query terms in `config/sources.yaml` are the opposite case. Each costs a
-separate API request and is capped at the endpoint's row limit, so a term broad
-enough to exceed that cap is silently truncated. Keep those specific.
 
 ## Deliberately not built
 

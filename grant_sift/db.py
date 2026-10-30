@@ -221,8 +221,9 @@ def init(path: str = "grant-sift.db") -> None:
             conn.execute("ALTER TABLE sources ADD COLUMN zero_streak INTEGER DEFAULT 0")
             conn.commit()
         ocols = {r["name"] for r in conn.execute("PRAGMA table_info(opportunities)")}
-        if "screen" not in ocols:
-            conn.execute("ALTER TABLE opportunities ADD COLUMN screen TEXT")
+        if "screen" in ocols:
+            # A keyword note nothing read. Ingest no longer writes it.
+            conn.execute("ALTER TABLE opportunities DROP COLUMN screen")
             conn.commit()
         if "page_url" not in ocols:
             # The page a record was read from: a Research Board /rfp/ page, a
@@ -683,16 +684,16 @@ def upsert_opportunity(conn: sqlite3.Connection, rec: dict) -> bool:
         conn.execute(
             """INSERT INTO opportunities
                (id, source, external_id, kind, title, synopsis, agency, url,
-                page_url, deadline, award_ceiling, indirect_cap, screen,
+                page_url, deadline, award_ceiling, indirect_cap,
                 content_hash, first_seen, last_seen, raw)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 rec["id"], rec["source"], rec.get("external_id"),
                 rec.get("kind", "solicitation"), rec["title"], rec.get("synopsis"),
                 rec.get("agency"), rec.get("url"), rec.get("page_url") or rec.get("url"),
                 rec.get("deadline"),
                 rec.get("award_ceiling"), rec.get("indirect_cap"),
-                rec.get("screen"), content_hash,
+                content_hash,
                 ts, ts, json.dumps(rec.get("raw", {}))[:20000],
             ),
         )
@@ -715,13 +716,13 @@ def upsert_opportunity(conn: sqlite3.Connection, rec: dict) -> bool:
     conn.execute(
         """UPDATE opportunities
            SET last_seen=?, title=?, synopsis=?, deadline=?, agency=?, url=?,
-               page_url=?, award_ceiling=?, indirect_cap=?, screen=?, content_hash=?
+               page_url=?, award_ceiling=?, indirect_cap=?, content_hash=?
            WHERE id=?""",
         (
             ts, rec["title"], merged["synopsis"], merged["deadline"],
             rec.get("agency"), rec.get("url"), rec.get("page_url") or rec.get("url"),
             merged["award_ceiling"],
-            merged["indirect_cap"], rec.get("screen"), content_hash, rec["id"],
+            merged["indirect_cap"], content_hash, rec["id"],
         ),
     )
     if changed:
