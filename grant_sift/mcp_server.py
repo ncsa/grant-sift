@@ -99,7 +99,8 @@ mcp = MCPServer(
         "software engineering relevance (0-100) against a roster of past "
         "collaborators. Use search_opportunities to find calls (fuzzy on names "
         "and titles), get_opportunity for one call's full record, and "
-        "my_opportunities for calls tied to the signed-in person. A roster match of kind 'contact' "
+        "my_opportunities for calls tied to the signed-in person, and "
+        "get_intro_brief before drafting an email to a call's match. A roster match of kind 'contact' "
         "is an outreach lead, NOT a past collaboration: never describe it as "
         "one. Writes (feedback, roster, sources, subscriptions) are stamped "
         "with the signed-in username and shape every later score or digest: "
@@ -249,6 +250,16 @@ def get_opportunity(ctx: Context, opportunity_id: str) -> dict:
     facts, the closest roster match with how to reach them, recorded
     feedback, and the synopsis as captured (not a fresh fetch)."""
     return _rest(ctx, "get_opportunity", opportunity_id.strip())
+
+
+@mcp.tool(annotations=_READ)
+def get_intro_brief(ctx: Context, opportunity_id: str) -> dict:
+    """Material for drafting an intro email to one call's roster match. Says
+    whether one may be written (not to our own programs, departed or
+    do-not-contact people), who it goes to, the rules a draft must follow,
+    and the call with its synopsis. Draft the email yourself from this; follow
+    `rules` exactly, and quote the synopsis only word for word."""
+    return _rest(ctx, "get_intro_brief", opportunity_id.strip())
 
 
 _SCOPES = {"contacts": "via-me", "sources": "my-sources", "subscriptions": "my-digests"}

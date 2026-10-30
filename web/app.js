@@ -127,7 +127,7 @@ function reach(o) {
   // rather than a person is just a line of grey text.
   const anyInternal = (c.ncsa_contact || []).some(p => p.name);
   if (!c.email && !anyInternal && !c.review) {
-    return `<div class="reach">${ROSTER_LINK}</div>`;
+    return `<div class="reach">${ROSTER_LINK}</div>${introRow(o)}`;
   }
   const where = [c.unit, c.org && c.org !== "UIUC" ? c.org : null]
     .filter(Boolean).join(", ");
@@ -149,7 +149,19 @@ function reach(o) {
     lines.push(`<div><span class="who">Check</span><span class="flag">${
       esc(c.review)}</span></div>`);
   }
-  return `<div class="reach">${lines.join("")}${ROSTER_LINK}</div>`;
+  return `<div class="reach">${lines.join("")}${ROSTER_LINK}</div>${introRow(o)}`;
+}
+
+// The next step after finding who to write to, so it sits under their address.
+function introRow(o) {
+  if (!canIntro(o)) return "";
+  return `<div class="intro">
+    <button class="introbtn" data-intro="${esc(o.id)}" data-name="${esc(o.match_name)}">${
+      ICON_MAIL}Draft intro to ${esc(o.match_name)}</button>
+    <span class="introhint">${o.match_kind === "contact"
+      ? "Written as a first contact: it never claims we have worked together."
+      : "Cites the project we did together and quotes why this call needs us."}</span>
+  </div>`;
 }
 const ROSTER_LINK = `<button type="button" class="linkbtn rosterlink" data-open-roster>Who we know →</button>`;
 
@@ -170,6 +182,7 @@ function scoreSignal(score) {
     </div>`;
 }
 
+const ICON_MAIL = `<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>`;
 const ICON_CHAT = `<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>`;
 const ICON_UP = `<svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>`;
 const ICON_DOWN = `<svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`;
@@ -209,6 +222,14 @@ function whenHTML(o) {
   if (away < 0) return `<div class="d word">Passed</div>${due}`;
   if (away === 0) return `<div class="d word">Today</div>${due}`;
   return `<div class="d">${away}<span class="u">${away === 1 ? "day" : "days"}</span></div>${due}`;
+}
+
+// The server decides what an intro may claim (server._intro); this only hides
+// the button where it would be refused: our own programs, and people who have
+// left or asked not to be contacted.
+function canIntro(o) {
+  return (o.match_kind === "collaboration" || o.match_kind === "contact")
+    && !["departed", "do-not-contact"].includes(o.match_status);
 }
 
 function rowHTML(o, opts = {}) {
@@ -418,7 +439,7 @@ async function render() {
   }
 
   if (API) { paintFeedback(); } else {
-    document.querySelectorAll("[data-vote],[data-chat],[data-fbsend]")
+    document.querySelectorAll("[data-vote],[data-chat],[data-intro],[data-fbsend]")
       .forEach(b => { b.disabled = true; });
   }
 }
@@ -1047,7 +1068,13 @@ function turnHTML(t) {
   const role = t.role === "user" ? "user" : "assistant";
   const label = role === "user" ? "You" : (t.model || keyBar().model || "Model");
   const body = role === "user" ? esc(t.content) : `<div class="md">${mdHTML(t.content || "")}</div>`;
-  return `<div class="turn ${role}"><span class="from">${esc(label)}</span>${body}</div>`;
+  // Checked on the server against the stored synopsis. Shown, not stripped:
+  // the quote may be from the full solicitation, which we do not hold.
+  const unver = (t.unverified || []).length
+    ? `<p class="unverified">Not found in the captured synopsis, so check against the solicitation before sending: ${
+        t.unverified.map(q => `“${esc(q)}”`).join(", ")}</p>`
+    : "";
+  return `<div class="turn ${role}"><span class="from">${esc(label)}</span>${body}${unver}</div>`;
 }
 
 function cardRoot(el) {
@@ -1216,7 +1243,7 @@ async function probeAPI() {
     loadSubscriptions();
   }
   document.getElementById("whoami").hidden = !API;
-  document.querySelectorAll("[data-vote],[data-chat],[data-fbsend]")
+  document.querySelectorAll("[data-vote],[data-chat],[data-intro],[data-fbsend]")
     .forEach(b => { b.disabled = !API; });
   if (!API) {
     document.querySelectorAll(".votenote").forEach(n => {
@@ -1544,6 +1571,21 @@ function onCardClick(e) {
   const send = e.target.closest("[data-fbsend]");
   if (send && API) { sendFeedback(send.dataset.fbsend, cardRoot(send)); return; }
 
+  // Draft intro is a canned question in the call's chat. The relationship it
+  // may claim and the quoting rules ride in the server's context, not here.
+  const intro = e.target.closest("[data-intro]");
+  if (intro) {
+    const id = intro.dataset.intro;
+    const root = cardRoot(intro);
+    if (!aiReady()) { openChatPanel(intro); return; }
+    openChat(root, id, false);
+    const form = root.querySelector(`[data-chatform="${CSS.escape(id)}"]`);
+    form.querySelector("input").value =
+      `Draft a short intro email to ${intro.dataset.name} about this call.`;
+    form.requestSubmit();
+    return;
+  }
+
   const chat = e.target.closest("[data-chat]");
   if (chat) {
     const id = chat.dataset.chat;
@@ -1708,8 +1750,10 @@ async function onChatSubmit(e) {
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { hint.textContent = d.detail || `failed (${r.status})`; return; }
     const used = d.model || model;
-    CHATS[id].push({ role: "assistant", content: d.content, model: used });
-    log.insertAdjacentHTML("beforeend", turnHTML({ role: "assistant", content: d.content, model: used }));
+    const turn = { role: "assistant", content: d.content, model: used,
+                   unverified: d.unverified_quotes || [] };
+    CHATS[id].push(turn);
+    log.insertAdjacentHTML("beforeend", turnHTML(turn));
     const u = d.usage || {};
     hint.textContent = u.prompt_tokens
       ? `${u.prompt_tokens} in / ${u.completion_tokens} out tokens · ${used}`

@@ -39,6 +39,7 @@ import time
 from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from datetime import date
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -932,7 +933,85 @@ def _roster():
     return _config()["contacts"]
 
 
-def _opportunity_context(conn, opp_id: str) -> str:
+# Under this many days to the deadline, an intro says joining may be tight.
+# A suggestion only: nothing is withheld because a call is close.
+INTRO_TIGHT_DAYS = 21
+
+# Who an intro can be written to, by match kind. Decided here rather than by
+# the model, so the relationship an email claims comes from the roster.
+INTRO_KINDS = {
+    "collaboration": (
+        "This is a PAST COLLABORATOR. You may say we worked together, and on "
+        "which project, exactly as the context names it. Do not add projects, "
+        "papers or awards the context does not mention."),
+    "contact": (
+        "This person is an OUTREACH LEAD, not a collaborator. Never say or "
+        "imply we have worked together, met, or share any project or award. "
+        "Open with how their work in their area lines up with this call."),
+}
+
+
+def _intro(r: dict, contact: dict, due: str | None) -> dict:
+    """Whether this call's match can be sent an intro, and the rules a draft
+    must follow. Shared by the dashboard chat and the MCP brief."""
+    name = (r.get("match_name") or "").strip()
+    kind = r.get("match_kind")
+    status = r.get("match_status")
+    if not name:
+        return {"eligible": False, "reason": "no roster match on this call"}
+    if status in ("departed", "do-not-contact"):
+        return {"eligible": False, "reason": f"{name} is marked {status}"}
+    if kind == "program":
+        return {"eligible": False,
+                "reason": f"{name} is a program we run, not an outside partner: "
+                          "brief its owner instead of writing an email"}
+    if kind not in INTRO_KINDS:
+        return {"eligible": False, "reason": f"unknown match kind {kind!r}"}
+
+    days = None
+    try:
+        days = (date.fromisoformat((due or "")[:10]) - date.today()).days
+    except ValueError:
+        pass
+    rules = [
+        f"INTRO EMAIL RULES, if asked to draft an email to {name}:",
+        INTRO_KINDS[kind],
+        "Quote, word for word in double quotes, the one sentence from the "
+        "synopsis that shows why this call needs a software or data partner. "
+        "Copy it exactly; never paraphrase inside quotes. If no sentence "
+        "shows it, say so instead of quoting.",
+        "Say in one sentence what our group would build for it.",
+        "Include the call's title and link. Give a subject line. Under 150 "
+        "words. Sign off as [Your name], since anyone in the group may send it.",
+    ]
+    if days is not None and 0 <= days < INTRO_TIGHT_DAYS:
+        rules.append(f"The deadline is {days} days away. After the email, note "
+                     "that joining this late may be tight, as a suggestion.")
+    return {"eligible": True, "kind": kind, "days_to_deadline": days,
+            "to": {"name": name, "email": contact.get("email"),
+                   "project": r.get("match_project") if kind == "collaboration" else None},
+            "rules": "\n".join(rules)}
+
+
+_QUOTE = re.compile(r'["“]([^"“”]{20,}?)["”]')
+
+
+def _norm(text: str) -> str:
+    return " ".join(re.sub(r"[^\w\s]", " ", text.lower()).split())
+
+
+def unverified_quotes(reply: str, synopsis: str) -> list[str]:
+    """Quoted passages in a reply that are not in the synopsis. A misquoted
+    solicitation is the one error that would embarrass someone in a real
+    email, and a model cannot check its own copying."""
+    source = _norm(synopsis or "")
+    return [q for q in _QUOTE.findall(reply or "")
+            if len(_norm(q).split()) >= 4 and _norm(q) not in source]
+
+
+def _opportunity_context(conn, opp_id: str) -> dict:
+    """The call as the chat and the intro brief see it: the context text, the
+    synopsis it quotes from, and whether its match can be written to."""
     row = conn.execute(
         """SELECT o.title, o.agency, o.source, o.url, o.deadline, o.award_ceiling,
                   o.indirect_cap, o.synopsis,
@@ -948,6 +1027,7 @@ def _opportunity_context(conn, opp_id: str) -> str:
     r = dict(row)
     deadline = r["deadline"] or "none stated"
     sooner = db.next_due(conn).get(opp_id)
+    due = sooner[0] if sooner else r["deadline"]
     if sooner:
         deadline = (f"{sooner[0]} (per {sooner[1]}; the funder's own listing "
                     f"says {r['deadline'] or 'rolling'})")
@@ -964,6 +1044,7 @@ def _opportunity_context(conn, opp_id: str) -> str:
             f"Pipeline score: {r['score']}/100 ({r['category']})",
             f"Why: {r['rationale']}",
         ]
+    c = _roster().get((r["match_name"] or "").strip().lower()) or {}
     if r.get("match_name"):
         # A contact is not a collaboration, and the chat must not blur them:
         # "we worked with them" is the single most damaging thing it could
@@ -984,7 +1065,6 @@ def _opportunity_context(conn, opp_id: str) -> str:
                 f"That project: {r['match_project']}",
             ]
         lines.append(f"Why that person: {r['match_rationale']}")
-        c = _roster().get((r["match_name"] or "").strip().lower()) or {}
         if c.get("email"):
             lines.append(f"Their address: {c['email']}"
                          + (f" ({c['unit']})" if c.get("unit") else ""))
@@ -992,10 +1072,16 @@ def _opportunity_context(conn, opp_id: str) -> str:
                         for p in (c.get("ncsa_contact") or []) if p.get("name"))
         if via:
             lines.append(f"Our people who already know them: {via}")
+    intro = _intro(r, c, due)
+    if intro["eligible"]:
+        lines += ["", intro["rules"]]
+    elif r.get("match_name"):
+        lines += ["", f"No intro email: {intro['reason']}. If asked for one, say so."]
     # The stored synopsis, not a fresh fetch of the solicitation. Re-fetching
     # here would put a third-party site in a user-facing request path.
-    lines += ["", "Synopsis as captured:", (r["synopsis"] or "")[:8000]]
-    return "\n".join(lines)
+    synopsis = (r["synopsis"] or "")[:8000]
+    lines += ["", "Synopsis as captured:", synopsis]
+    return {"text": "\n".join(lines), "synopsis": synopsis, "intro": intro}
 
 
 @app.post("/api/models")
@@ -1071,10 +1157,11 @@ def chat(request: Request, payload: dict = Body(...)):
     # which is why the page offers copy and export.
     content, usage = _complete(
         gw,
-        [{"role": "system", "content": f"{CHAT_SYSTEM}\n\nTHE CALL:\n{context}"}] + clean,
+        [{"role": "system", "content": f"{CHAT_SYSTEM}\n\nTHE CALL:\n{context['text']}"}] + clean,
         max_tokens=min(int(payload.get("max_tokens") or 1200), 4000),
         temperature=0.2)
-    return {"content": content, "usage": usage, "model": gw["model"]}
+    return {"content": content, "usage": usage, "model": gw["model"],
+            "unverified_quotes": unverified_quotes(content, context["synopsis"])}
 
 
 # --------------------------------------------------------------------------
@@ -1549,6 +1636,20 @@ def get_opportunity(request: Request, opportunity_id: str):
         "synopsis": (syn or "")[:8000],
         "feedback": get_feedback(opportunity_id)["feedback"],
     }
+
+
+@app.get("/api/opportunities/{opportunity_id}/intro")
+def get_intro_brief(request: Request, opportunity_id: str):
+    """What an assistant needs to draft an intro to this call's roster match:
+    whether one may be written, the rules it must follow, and the call as the
+    dashboard chat sees it. No model call: the caller writes the email."""
+    auth.require_user(request)
+    conn = _conn()
+    try:
+        context = _opportunity_context(conn, db.canonical_id(conn, opportunity_id))
+    finally:
+        conn.close()
+    return context["intro"] | {"call": context["text"]}
 
 
 @app.get("/api/feeds/{feed}")
