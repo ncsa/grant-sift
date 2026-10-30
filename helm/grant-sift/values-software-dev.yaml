@@ -77,7 +77,7 @@ config:
   GRANT_SIFT_SMTP_HOST: outbound-relays.techservices.illinois.edu
   GRANT_SIFT_SMTP_PORT: "25"
   # Nightly pipeline, in the serving process.
-  GRANT_SIFT_DAILY_AT: "06:00"
+  GRANT_SIFT_DAILY_AT: "04:00"
   GRANT_SIFT_DAILY_TZ: America/Chicago
   GRANT_SIFT_DAILY_CATCHUP: "on"
   # Header-strip "Ops & signal" link (opens Grafana; no iframe). Empty hides it.

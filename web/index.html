@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=1">
+<link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
 <header class="strip">
@@ -54,9 +54,6 @@
           </div>
         </div>
       </div>
-      <button type="button" class="tbtn solid" id="chatbtn" aria-haspopup="dialog">
-        <span class="dot" aria-hidden="true"></span><span id="chatbtn-lbl">Set up AI chat</span>
-      </button>
       <div class="menuwrap">
         <button type="button" class="acct" id="acctbtn" aria-haspopup="menu" aria-expanded="false"
                 aria-controls="acctmenu" aria-label="Account">
@@ -68,8 +65,8 @@
           <div class="mgrp">
             <button type="button" class="mitem" role="menuitem" id="m-chat">
               <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
-              <span class="mtxt"><b>AI chat</b><small>Key for Ask and Idea match</small></span>
-              <span class="status" data-chatstatus>Not set up</span>
+              <span class="mtxt"><b>AI model</b><small>For Ask and Idea match</small></span>
+              <span class="status" data-chatstatus></span>
             </button>
             <button type="button" class="mitem" role="menuitem" id="m-digests">
               <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
@@ -253,47 +250,6 @@
   <footer id="foot"></footer>
 </main>
 
-<div class="modal-backdrop" id="chat-modal" hidden>
-  <div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="chat-title">
-    <header>
-      <h2 id="chat-title">AI chat</h2>
-      <button type="button" class="x" id="chat-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-    </header>
-    <section class="conn" id="conn" aria-labelledby="conn-h">
-      <div class="startnote" data-notready>
-        <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
-        <span><b>Start here.</b> Add your Lumen key to turn on <b>Ask about this call</b> and <b>Idea match</b>.</span>
-      </div>
-      <div class="connbody">
-        <div class="connhead">
-          <h3 id="conn-h">Connection</h3>
-          <span class="status" data-chatstatus>Not set up</span>
-        </div>
-        <form id="k-form" class="keyf">
-          <label class="flbl2" for="k-key">Lumen API key</label>
-          <span class="keyrow">
-            <input id="k-key" type="password" placeholder="sk_…" autocomplete="off">
-            <button type="submit" class="primary">Save</button>
-          </span>
-          <span class="help" id="k-note">Your Lumen project key. Kept in this browser tab only; never stored on the server.</span>
-        </form>
-        <details class="provider" id="k-provider">
-          <summary>Use a different provider</summary>
-          <p class="help">Any OpenAI-compatible endpoint: Lumen, OpenAI, OpenRouter (for Claude),
-            Gemini’s OpenAI bridge, Groq. It must speak /v1/chat/completions; extend
-            hosts via GRANT_SIFT_CHAT_ALLOWED_HOSTS if needed.</p>
-          <label class="flbl2" for="k-base">Base URL</label>
-          <input id="k-base" type="url" placeholder="https://lumen.ncsa.illinois.edu/v1"
-                 value="https://lumen.ncsa.illinois.edu/v1">
-          <label class="flbl2" for="k-model">Model</label>
-          <input id="k-model" type="text" placeholder="e.g. gemma-4-31b-it, gpt-4o, anthropic/claude-sonnet-4"
-                 value="gemma-4-31b-it">
-        </details>
-      </div>
-    </section>
-  </div>
-</div>
-
 <div class="modal-backdrop" id="digest-modal" hidden>
   <div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="digest-title">
     <header>
@@ -371,7 +327,7 @@
       <div>
         <h2 id="shelf-title">Idea match</h2>
         <p>Describe an idea, find matching calls, and keep a shortlist. Nothing is
-          sent to or stored on the server — ideas stay in this browser only.</p>
+          stored on the server — your idea and shortlist stay in this browser only.</p>
       </div>
       <button type="button" class="x" id="shelf-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </header>
@@ -423,6 +379,59 @@
   </div>
 </div>
 
-<script src="app.js?v=1"></script>
+<div class="modal-backdrop" id="chat-modal" hidden>
+  <div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="chat-title">
+    <header>
+      <h2 id="chat-title">AI model</h2>
+      <button type="button" class="x" id="chat-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </header>
+    <div class="aipanel">
+      <p class="help">What <b>Ask about this call</b> and <b>Idea match</b> run on.</p>
+      <fieldset class="modepick">
+        <legend class="sr">Model</legend>
+        <label class="opt">
+          <input type="radio" name="k-mode" value="shared" id="k-shared">
+          <span><b>NCSA default <i class="inuse" id="k-shared-use" hidden>In use</i></b>
+            <small id="k-shared-note">Nothing to set up. Your text stays at NCSA.</small></span>
+        </label>
+        <label class="opt">
+          <input type="radio" name="k-mode" value="own" id="k-own">
+          <span><b>Your own key <i class="inuse" id="k-own-use" hidden>In use</i></b>
+            <small>A stronger model through any OpenAI-compatible router. Your text goes to that provider.</small></span>
+        </label>
+      </fieldset>
+      <form id="k-form" class="keyf" hidden>
+        <label class="flbl2" for="k-preset">Provider</label>
+        <select id="k-preset">
+          <option value="https://lumen.ncsa.illinois.edu/v1">NCSA Lumen</option>
+          <option value="https://openrouter.ai/api/v1">OpenRouter (Claude, GPT, Gemini…)</option>
+          <option value="https://api.openai.com/v1">OpenAI</option>
+          <option value="https://api.groq.com/openai/v1">Groq</option>
+          <option value="">Other…</option>
+        </select>
+        <input id="k-base" type="url" aria-label="Base URL" placeholder="https://…/v1"
+               value="https://lumen.ncsa.illinois.edu/v1" hidden>
+        <label class="flbl2" for="k-key">API key</label>
+        <input id="k-key" type="password" placeholder="sk-…" autocomplete="off">
+        <label class="flbl2" for="k-model">Model</label>
+        <span class="keyrow">
+          <input id="k-model" type="text" list="k-models" autocomplete="off"
+                 placeholder="e.g. anthropic/claude-sonnet-4, gpt-4o">
+          <button type="button" class="secondary" id="k-load">List models</button>
+        </span>
+        <datalist id="k-models"></datalist>
+        <div class="savebar">
+          <button type="submit" class="primary" id="k-apply">Use this model</button>
+          <span class="help" id="k-note" aria-live="polite">Kept in this browser tab only; never stored on the server.</span>
+        </div>
+      </form>
+      <p class="mcpnote">For a stronger model with your own files and history, use
+        <a href="https://github.com/ncsa/grant-sift/wiki/Grant-Sift-in-Claude:-setup" target="_blank" rel="noopener">Grant Sift’s MCP server in Claude or ChatGPT</a>.
+        Your text and roster data then go to that provider.</p>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=2"></script>
 </body>
 </html>

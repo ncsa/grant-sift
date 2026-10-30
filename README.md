@@ -102,7 +102,8 @@ Two properties worth preserving:
 scores already in the database, so nothing user-facing depends on the gateway
 being up. The chat
 proxy and Idea match (`/api/focus`, `/api/rescore`) are the exceptions: both
-run on the viewer’s own key and degrade to a disabled control without one.
+call the model per request, on the server’s Lumen key by default or the
+viewer’s own key if they bring one.
 
 **Sources are pinned, not crawled.** Nothing is discovered by following links
 out of a page; everything comes from `config/sources.yaml`. That is the
@@ -453,10 +454,26 @@ claude mcp add --transport http grant-sift https://grant-sift.software-dev.ncsa.
 
 ## Chat (“Ask about this call”)
 
-Each ask is a proxied Lumen `/chat/completions` call with the viewer’s own key
-(Personalize panel → `sessionStorage`). The server never stores the key or the
-transcript; the browser holds the conversation for that tab only (copy/export
-to keep it). Lumen has no CORS, so the browser cannot call it directly.
+Each ask is a proxied `/chat/completions` call. With no setup it runs on the
+server’s own Lumen key and model (`GRANT_SIFT_LLM_API_KEY`,
+`GRANT_SIFT_LLM_MODEL`, default `gemma-4-31b-it`), so the viewer’s text stays
+at NCSA. **AI model** in the account menu (or “use your own” next to the model
+name) switches both chat and Idea match to the viewer’s own key and model on
+any OpenAI-compatible router; that key lives in the tab’s memory only. The
+server never stores a key or the transcript; the browser holds the
+conversation for that tab only (copy/export to keep it). Lumen has no CORS, so
+the browser cannot call it directly.
+
+**Budget.** gemma costs about 0.16 Lumen coins per million tokens: roughly
+0.005 coins per chat conversation and 0.015 per Idea match search, against a
+refill of 24 coins a day. The only guard is the in-memory per-user hourly
+limit (`GRANT_SIFT_CHAT_PER_HOUR` 60, `GRANT_SIFT_FOCUS_PER_HOUR` 6,
+`GRANT_SIFT_RESCORE_PER_HOUR` 30). When Lumen is out of coins the page says
+the shared model is busy rather than showing the gateway’s error. Ingest
+scoring spends the same key, so a drained bucket delays scoring until it
+refills (calls are picked up next run); a separate ingest key removes that.
+
+On the shared key the viewer’s `model` and `base_url` are ignored.
 
 **What the model sees.** Every turn builds a system message from that
 opportunity’s stored row — title, funder, deadline, award, URL, pipeline score
@@ -466,7 +483,7 @@ it) — then appends the chat turns. It does **not** re-fetch the live
 solicitation. Answers that need the full PDF should say so and point at the
 dashboard link.
 
-`base_url` must be https and on `GRANT_SIFT_CHAT_ALLOWED_HOSTS` (exact host or
+With the viewer’s own key, `base_url` must be https and on `GRANT_SIFT_CHAT_ALLOWED_HOSTS` (exact host or
 `.suffix` like `.openai.azure.com`). Defaults cover Lumen, OpenAI, OpenRouter
 (Claude etc.), Gemini’s OpenAI bridge, Groq, Fireworks, Together, DeepSeek,
 Mistral, and Azure OpenAI. The proxy speaks **OpenAI-compatible**
@@ -488,11 +505,11 @@ idea ──► Match with all open calls ──► prune ──► edit idea ─
 
 **Nothing about the idea is stored on the server.** The paragraph, the kept
 calls and the recommendation live in `localStorage` / the tab only — the same
-posture as the chat key. Clear browser data and they are gone; they do not
+posture as the chat transcript. Clear browser data and they are gone; they do not
 follow you to another device.
 
-**Two endpoints, both on the viewer’s own key** (same Personalize gateway as
-chat; disabled without a key):
+**Two endpoints**, on the server’s Lumen key by default or the viewer’s own
+(same AI model setting as chat):
 
 | Endpoint | Role | Cost (approx.) |
 | --- | --- | --- |

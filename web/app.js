@@ -211,27 +211,6 @@ function whenHTML(o) {
   return `<div class="d">${away}<span class="u">${away === 1 ? "day" : "days"}</span></div>${due}`;
 }
 
-// Asking without a key opens the key field where the chat would have been,
-// rather than sending people off to a settings panel and back.
-function keycardHTML(id, kind) {
-  const ask = kind === "ask";
-  return `<section class="keycard" data-keycard="${esc(id)}" hidden aria-labelledby="kc-${esc(id)}">
-      <div>
-        <h3 id="kc-${esc(id)}">${ask ? "Connect AI chat to ask about this call" : "Connect AI chat to match your idea"}</h3>
-        <p>One-time step. The same key also turns on ${ask ? "Idea match" : "Ask about this call"}.</p>
-      </div>
-      <form class="keyf" data-keyform="${esc(id)}">
-        <label class="flbl2" for="kk-${esc(id)}">Lumen API key</label>
-        <span class="keyrow">
-          <input id="kk-${esc(id)}" type="password" placeholder="sk_…" autocomplete="off">
-          <button type="submit" class="primary">${ask ? "Save and ask" : "Save and match"}</button>
-        </span>
-        <span class="help">Your Lumen project key. Kept in this browser tab only; never stored on the server.</span>
-      </form>
-      <button type="button" class="linkbtn" data-provider>Use a different provider</button>
-    </section>`;
-}
-
 function rowHTML(o, opts = {}) {
   const away = daysAway(o.deadline);
   const soon = away !== null && away >= 0 && away <= 30;
@@ -334,17 +313,13 @@ function rowHTML(o, opts = {}) {
         <input type="text" maxlength="500" placeholder="one comment, optional: why?" data-fbnote="${esc(o.id)}">
         <button class="vote" data-fbsend="${esc(o.id)}">Send</button>
       </div>
-      ${keycardHTML(o.id, "ask")}
       <div class="chat" data-chatbox="${esc(o.id)}">
         <div class="chathead">
           <b>Ask about this call</b>
-          <span class="meta">model <span class="model" data-chatmodel="${esc(o.id)}"></span>
-            · not stored on the server</span>
+          <span class="meta">${aiMetaHTML()}</span>
         </div>
-        <div class="privacy">Not recorded. This conversation lives only in this
-          browser tab, goes to your own API key through a proxy that stores
-          nothing, and is gone when you close or reload the tab. Copy or export
-          it if you want to keep it.</div>
+        <div class="privacy">${esc(privacyText())}</div>
+        ${MCP_NOTE}
         <div class="log" data-chatlog="${esc(o.id)}"></div>
         <form data-chatform="${esc(o.id)}">
           <input type="text" placeholder="e.g. what would we need a domain PI for here?" data-chatinput="${esc(o.id)}" aria-label="Your question">
@@ -439,7 +414,6 @@ async function render() {
     const log = document.querySelector(`[data-chatlog="${CSS.escape(id)}"]`);
     if (!box || !log || !(CHATS[id] || []).length) continue;
     box.classList.add("on");
-    paintChatModel(id);
     log.innerHTML = CHATS[id].map(turnHTML).join("");
   }
 
@@ -494,23 +468,54 @@ document.getElementById("pager").addEventListener("click", e => {
 let API = false;
 const CHATS = {};                       // opportunity id -> [{role, content}]
 
-// The key lives in this variable and nowhere else: not in storage, not on
-// the server. Saving it only makes it the one Ask and Idea match use.
-let CHAT_KEY = "";
-const keyBar = () => ({
-  key:   CHAT_KEY,
-  model: document.getElementById("k-model").value.trim(),
-  base:  document.getElementById("k-base").value.trim(),
-});
+// Ask and Idea match run on the server's shared NCSA model by default, so
+// they need no setup. A key of the viewer's own switches both to a model of
+// their choosing. That key lives in this variable and nowhere else: not in
+// storage, not on the server.
+let AI = { shared: false, model: "", gateway: "" };     // from /api/config
+// What "Use this model" applied, not what the form says: editing a field must
+// not change the model until the viewer applies it.
+let OWN = null;                                          // { key, model, base }
+const keyBar = () => OWN ? { ...OWN } : { key: "", model: AI.model, base: "" };
+const aiReady = () => !!OWN || AI.shared;
+
+// One line where the AI features are: the other way to use them, and its cost.
+const MCP_NOTE = `<p class="mcpnote">For a stronger model with your own files and history,
+  use <a href="https://github.com/ncsa/grant-sift/wiki/Grant-Sift-in-Claude:-setup" target="_blank"
+  rel="noopener">Grant Sift’s MCP server in Claude or ChatGPT</a>. Your text and roster data then
+  go to that provider.</p>`;
+
+function hostOf(url) {
+  try { return new URL(url).hostname; } catch (e) { return ""; }
+}
+
+// "gemma-4-31b-it" and where it runs, for the quiet line next to each feature.
+function aiMetaHTML() {
+  const { model, base } = keyBar();
+  if (!aiReady()) {
+    return `No model yet · <button type="button" class="linkbtn" data-aimodel>Add your key</button>`;
+  }
+  const where = OWN ? `your key, ${hostOf(base)}` : "NCSA Lumen";
+  return `<span class="model">${esc(model || "—")}</span> · ${esc(where)}`
+    + ` · <button type="button" class="linkbtn" data-aimodel>${OWN ? "change" : "use your own"}</button>`;
+}
+
+function privacyText() {
+  const signed = AUTH.enforced && AUTH.authenticated
+    ? " Your sign-in is known to the proxy in front of this app, so it is private rather than anonymous."
+    : "";
+  const via = OWN ? `goes to ${hostOf(keyBar().base)} on your own key` : "goes to NCSA Lumen";
+  return `Not stored. This conversation lives only in this browser tab, ${via}`
+    + ` through a proxy that keeps nothing, and is gone when you reload.${signed}`
+    + " Copy or export it to keep it.";
+}
 
 function saveChatSettings() {
   try {
-    const { model, base } = keyBar();
+    const model = document.getElementById("k-model").value.trim();
+    const base = document.getElementById("k-base").value.trim();
     sessionStorage.setItem("gs.chat", JSON.stringify({ model, base }));
   } catch (e) {}
-  document.querySelectorAll("[data-chatmodel]").forEach(el => {
-    el.textContent = keyBar().model || "—";
-  });
 }
 
 // sessionStorage, not localStorage: the key should not outlive the tab.
@@ -523,35 +528,135 @@ try {
 ["k-base", "k-model"].forEach(id =>
   document.getElementById(id).addEventListener("change", saveChatSettings));
 
-function saveKey(value) {
-  CHAT_KEY = (value || "").trim();
-  document.getElementById("k-key").value = CHAT_KEY;
-  paintChatStatus();
-  return !!CHAT_KEY;
+// The provider list fills the base URL; "Other…" shows it for editing.
+function syncPreset() {
+  const base = document.getElementById("k-base");
+  const preset = document.getElementById("k-preset");
+  const known = [...preset.options].some(o => o.value && o.value === base.value.trim());
+  preset.value = known ? base.value.trim() : "";
+  base.hidden = known;
+}
+document.getElementById("k-preset").addEventListener("change", e => {
+  const base = document.getElementById("k-base");
+  if (e.target.value) base.value = e.target.value;
+  base.hidden = !!e.target.value;
+  if (!e.target.value) base.focus();
+  document.getElementById("k-models").innerHTML = "";
+  saveChatSettings();
+  syncApply();
+});
+syncPreset();
+
+// Every place that names the model repaints from here.
+function paintAI() {
+  const own = !!OWN;
+  document.querySelectorAll("[data-chatstatus]").forEach(el => {
+    el.classList.toggle("ready", aiReady());
+    el.textContent = own ? "Your key" : AI.shared ? "NCSA" : "Not set up";
+  });
+  document.querySelectorAll(".chathead .meta, [data-ailine]").forEach(el => {
+    el.innerHTML = aiMetaHTML();
+  });
+  document.querySelectorAll(".chat .privacy").forEach(el => {
+    el.textContent = privacyText();
+  });
+  paintAIPanel();
 }
 
-// "Set up AI chat" stays the loudest thing in the top bar until a key is
-// saved; then it quietens to an ordinary "AI chat" button.
-function paintChatStatus() {
-  const ready = !!CHAT_KEY;
-  const btn = document.getElementById("chatbtn");
-  btn.classList.toggle("solid", !ready);
-  document.getElementById("chatbtn-lbl").textContent = ready ? "AI chat" : "Set up AI chat";
-  document.getElementById("conn").classList.toggle("notready", !ready);
-  document.querySelectorAll("[data-chatstatus]").forEach(el => {
-    el.classList.toggle("ready", ready);
-    el.textContent = ready ? "Ready" : "Not set up";
-  });
+// The panel alone. Opening it must not repaint the page: the link that opened
+// it would be replaced, and focus could not go back to it on close.
+function paintAIPanel() {
+  const own = !!OWN;
+  const shared = document.getElementById("k-shared");
+  document.getElementById("k-shared-use").hidden = own || !AI.shared;
+  document.getElementById("k-own-use").hidden = !own;
+  shared.disabled = !AI.shared;
+  document.getElementById("k-shared-note").textContent = AI.shared
+    ? `${AI.model} on NCSA Lumen. Nothing to set up; your text stays at NCSA.`
+    : "Not available on this server.";
+  if (document.activeElement?.name !== "k-mode") {
+    (own || !AI.shared ? document.getElementById("k-own") : shared).checked = true;
+    document.getElementById("k-form").hidden = !(own || !AI.shared);
+  }
+  syncApply();
 }
+
+// The form against what is in use. The button says "In use" when they match
+// and comes back the moment any field differs, so it is always clear whether
+// there is something left to apply.
+function formOwn() {
+  return { key:   document.getElementById("k-key").value.trim(),
+           model: document.getElementById("k-model").value.trim(),
+           base:  document.getElementById("k-base").value.trim() };
+}
+function syncApply() {
+  const f = formOwn();
+  const applied = !!OWN && f.key === OWN.key && f.model === OWN.model && f.base === OWN.base;
+  const btn = document.getElementById("k-apply");
+  btn.disabled = applied;
+  btn.classList.toggle("done", applied);
+  btn.textContent = applied ? "\u2713 In use" : OWN ? "Switch to this model" : "Use this model";
+  const note = document.getElementById("k-note");
+  note.classList.toggle("ok", applied);
+  note.textContent = applied
+    ? `Ask and Idea match now use ${OWN.model} on ${hostOf(OWN.base)}, for this tab.`
+    : OWN ? "Not applied yet. Still using " + OWN.model + "."
+    : "Kept in this browser tab only; never stored on the server.";
+}
+["k-key", "k-model", "k-base"].forEach(id =>
+  document.getElementById(id).addEventListener("input", syncApply));
+
+document.querySelectorAll('input[name="k-mode"]').forEach(r => r.addEventListener("change", () => {
+  const own = document.getElementById("k-own").checked;
+  document.getElementById("k-form").hidden = !own;
+  if (!own) {
+    OWN = null;
+    document.getElementById("k-key").value = "";
+    paintAI();
+  } else {
+    document.getElementById("k-key").focus();
+  }
+}));
 
 document.getElementById("k-form").addEventListener("submit", e => {
   e.preventDefault();
-  const ok = saveKey(document.getElementById("k-key").value);
-  document.getElementById("k-note").textContent = ok
-    ? "Saved for this tab. Ask about this call and Idea match are on."
-    : "Your Lumen project key. Kept in this browser tab only; never stored on the server.";
+  const key = document.getElementById("k-key").value.trim();
+  const model = document.getElementById("k-model").value.trim();
+  const note = document.getElementById("k-note");
+  if (!key) { note.textContent = "Paste your API key first."; document.getElementById("k-key").focus(); return; }
+  if (!model) { note.textContent = "Name a model, or list the ones your key can use."; document.getElementById("k-model").focus(); return; }
+  OWN = formOwn();
+  saveChatSettings();
+  paintAI();
 });
-paintChatStatus();
+
+// What the key can reach, as suggestions for the model field.
+document.getElementById("k-load").addEventListener("click", async e => {
+  const btn = e.currentTarget;
+  const note = document.getElementById("k-note");
+  const api_key = document.getElementById("k-key").value.trim();
+  if (!api_key) { note.textContent = "Paste your API key first."; document.getElementById("k-key").focus(); return; }
+  btn.disabled = true;
+  note.textContent = "Listing models…";
+  try {
+    const r = await fetch("api/models", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key, base_url: document.getElementById("k-base").value.trim() }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.detail || `failed (${r.status})`);
+    const ids = (d.models || []).sort();
+    document.getElementById("k-models").innerHTML =
+      ids.map(m => `<option value="${esc(m)}"></option>`).join("");
+    note.textContent = ids.length
+      ? `${ids.length} models. Start typing in Model to pick one.` : "The provider listed no models.";
+    document.getElementById("k-model").focus();
+  } catch (err) {
+    note.textContent = String(err.message || err).slice(0, 160);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // ---- Idea match: idea text -> matching calls -> shortlist (browser-only) --
 //
@@ -560,7 +665,6 @@ paintChatStatus();
 // panel and do not filter the homepage list.
 
 const SHELF_KEY = "gs.shortlist";
-const SHELF_KEYCARD = "__idea";
 let SHELF = { idea: "", items: [], recommendation: "" };
 let _scoreBusy = false;
 let _scoredIdea = "";
@@ -652,7 +756,8 @@ function renderShelf() {
           title="Describe the work, then match. Rematches the catalogue and ranks what it finds (~1 min). Editing the idea and leaving the field also re-ranks kept calls.">Match with all open calls</button>
         <span class="hint" id="sh-hint" aria-live="polite"></span>
       </div>
-      ${keycardHTML(SHELF_KEYCARD, "match")}
+      <p class="ailine" data-ailine>${aiMetaHTML()}</p>
+      ${MCP_NOTE}
     </div>
     ${SHELF.recommendation ? recommendationHTML(SHELF.recommendation) : ""}
     ${cards}`;
@@ -692,9 +797,9 @@ async function runShelfSearch() {
   saveShelf();
   if (!idea) { setShelfHint("Describe the idea first."); return; }
   const { key, model, base } = keyBar();
-  if (!key) {
+  if (!aiReady()) {
     setShelfHint("");
-    showKeycard(document.getElementById("shelf-body"), SHELF_KEYCARD);
+    openChatPanel(document.getElementById("sh-search"));
     return;
   }
   _searchBusy = true;
@@ -789,9 +894,9 @@ async function scoreShelf() {
     return;
   }
   const { key, model, base } = keyBar();
-  if (!key) {
+  if (!aiReady()) {
     if (hint) hint.textContent = "";
-    showKeycard(document.getElementById("shelf-body"), SHELF_KEYCARD);
+    openChatPanel(document.getElementById("sh-search"));
     return;
   }
   _scoreBusy = true;
@@ -854,22 +959,23 @@ document.getElementById("shelf-body").addEventListener("focusout", e => {
 
 // Modals hold focus while open and hand it back to whatever opened them,
 // named explicitly rather than read from activeElement: Safari does not focus
-// a clicked button.
-let MODAL_RETURN = null;
+// a clicked button. Each keeps its own, because AI model opens over Idea match.
 function showModal(m, focusEl, returnTo) {
-  MODAL_RETURN = returnTo;
+  m._returnTo = returnTo;
   m.hidden = false; m.classList.add("on");
   (focusEl || m.querySelector(".x")).focus();
 }
 function hideModal(m) {
   if (m.hidden) return;
   m.hidden = true; m.classList.remove("on");
-  if (MODAL_RETURN && MODAL_RETURN.isConnected) MODAL_RETURN.focus();
-  MODAL_RETURN = null;
+  if (m._returnTo && m._returnTo.isConnected) m._returnTo.focus();
+  m._returnTo = null;
 }
+// Later in the document paints on top, so the last open one is the top one.
+const topModal = () => [...document.querySelectorAll(".modal-backdrop.on")].pop();
 document.addEventListener("keydown", e => {
   if (e.key !== "Tab") return;
-  const m = document.querySelector(".modal-backdrop.on .modal");
+  const m = topModal()?.querySelector(".modal");
   if (!m) return;
   const f = [...m.querySelectorAll("a[href], button, input, select, textarea, summary, [tabindex]")]
     .filter(el => !el.disabled && el.tabIndex >= 0 && el.offsetParent !== null);
@@ -944,12 +1050,6 @@ function turnHTML(t) {
   return `<div class="turn ${role}"><span class="from">${esc(label)}</span>${body}</div>`;
 }
 
-function paintChatModel(id, root) {
-  root = root || document;
-  const el = root.querySelector(`[data-chatmodel="${CSS.escape(id)}"]`);
-  if (el) el.textContent = keyBar().model || "—";
-}
-
 function cardRoot(el) {
   return el.closest(".row") || document;
 }
@@ -1006,14 +1106,15 @@ function returnTarget(el) {
   return menu ? document.querySelector(`[aria-controls="${menu.id}"]`) : el;
 }
 
-function openChatPanel(from, opts = {}) {
+function openChatPanel(from) {
   closeMenus();
-  if (opts.provider) document.getElementById("k-provider").open = true;
-  showModal(document.getElementById("chat-modal"), document.getElementById("k-key"),
-            returnTarget(from) || document.getElementById("chatbtn"));
+  paintAIPanel();
+  const first = document.getElementById("k-form").hidden
+    ? document.querySelector('input[name="k-mode"]:checked') : document.getElementById("k-key");
+  showModal(document.getElementById("chat-modal"), first,
+            returnTarget(from) || document.getElementById("acctbtn"));
 }
 function closeChatPanel() { hideModal(document.getElementById("chat-modal")); }
-document.getElementById("chatbtn").addEventListener("click", e => openChatPanel(e.currentTarget));
 document.getElementById("m-chat").addEventListener("click", e => openChatPanel(e.currentTarget));
 document.getElementById("chat-close").addEventListener("click", closeChatPanel);
 document.getElementById("chat-modal").addEventListener("click", e => {
@@ -1037,11 +1138,10 @@ document.getElementById("digest-modal").addEventListener("click", e => {
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") {
     closeMenus();
-    closeShelf();
-    closeRoster();
-    closeSources();
-    closeChatPanel();
-    closeDigests();
+    const close = { "shelf-modal": closeShelf, "roster-modal": closeRoster,
+                    "sources-modal": closeSources, "chat-modal": closeChatPanel,
+                    "digest-modal": closeDigests }[topModal()?.id];
+    if (close) close();
   }
 });
 
@@ -1075,14 +1175,14 @@ document.getElementById("roster-modal").addEventListener("click", e => {
   if (e.target === e.currentTarget) closeRoster();
 });
 // In-context ways in: "Who we know →" on a match, "Manage sources" on the
-// coverage notice, "Use a different provider" on a key card.
+// coverage notice, "use your own" next to a model name.
 document.addEventListener("click", e => {
   const r = e.target.closest("[data-open-roster]");
   if (r) return openRoster(r);
   const s = e.target.closest("[data-open-sources]");
   if (s) return openSources(s);
-  const p = e.target.closest("[data-provider]");
-  if (p) return openChatPanel(p, { provider: true });
+  const p = e.target.closest("[data-aimodel]");
+  if (p) return openChatPanel(p);
 });
 
 let AUTH = { mode: "off", enforced: false, authenticated: false, username: null };
@@ -1448,63 +1548,24 @@ function onCardClick(e) {
   if (chat) {
     const id = chat.dataset.chat;
     const root = cardRoot(chat);
-    if (!keyBar().key) {
-      const card = root.querySelector(`[data-keycard="${CSS.escape(id)}"]`);
-      if (card && !card.hidden) { card.hidden = true; chat.setAttribute("aria-expanded", "false"); }
-      else showKeycard(root, id);
-      return;
-    }
+    if (!aiReady()) { openChatPanel(chat); return; }
     openChat(root, id, true);
   }
 }
 
-// Open (or with toggle, flip) a row's chat box. Also the end of "Save and ask".
+// Open (or with toggle, flip) a row's chat box.
 function openChat(root, id, toggle) {
   const box = root.querySelector(`[data-chatbox="${CSS.escape(id)}"]`);
   const btn = root.querySelector(`[data-chat="${CSS.escape(id)}"]`);
-  const card = root.querySelector(`[data-keycard="${CSS.escape(id)}"]`);
-  if (card) card.hidden = true;
   if (toggle) box.classList.toggle("on"); else box.classList.add("on");
   if (btn) btn.setAttribute("aria-expanded", String(box.classList.contains("on")));
   if (!box.classList.contains("on")) return;
-  paintChatModel(id, root);
-  const pv = box.querySelector(".privacy");
-  if (pv && AUTH.enforced && AUTH.authenticated) {
-    pv.textContent = "Not stored. This conversation lives only in this browser"
-      + " tab, goes to your own API key through a proxy that keeps nothing,"
-      + " and is gone when you reload. Your sign-in is known to the proxy in"
-      + " front of this app, so it is private rather than anonymous."
-      + " Copy or export it to keep it.";
-  }
+  box.querySelector(".chathead .meta").innerHTML = aiMetaHTML();
+  box.querySelector(".privacy").textContent = privacyText();
   box.querySelector("input").focus();
 }
 document.getElementById("list").addEventListener("click", onCardClick);
 document.getElementById("shelf-body").addEventListener("click", onCardClick);
-
-function showKeycard(root, id) {
-  const card = root.querySelector(`[data-keycard="${CSS.escape(id)}"]`);
-  if (!card) return;
-  card.hidden = false;
-  const btn = root.querySelector(`[data-chat="${CSS.escape(id)}"]`);
-  if (btn) btn.setAttribute("aria-expanded", "true");
-  card.querySelector("input").focus();
-}
-
-// "Save and ask" / "Save and match": save the key, then carry on with what
-// the person was doing when we asked for it.
-document.addEventListener("submit", e => {
-  const form = e.target.closest("[data-keyform]");
-  if (!form) return;
-  e.preventDefault();
-  if (!saveKey(form.querySelector("input").value)) {
-    form.querySelector("input").focus();
-    return;
-  }
-  document.querySelectorAll("[data-keycard]").forEach(c => { c.hidden = true; });
-  const id = form.dataset.keyform;
-  if (id === SHELF_KEYCARD) { runShelfSearch(); return; }
-  openChat(cardRoot(form), id);
-});
 
 function paintAccount() {
   const name = AUTH.authenticated ? (AUTH.username || AUTH.display || "") : "";
@@ -1626,12 +1687,8 @@ async function onChatSubmit(e) {
 
   const { key, model, base } = keyBar();
   const hint = root.querySelector(`[data-chathint="${CSS.escape(id)}"]`);
-  if (!key) {
-    showKeycard(root, id);
-    return;
-  }
+  if (!aiReady()) { openChatPanel(form); return; }
 
-  paintChatModel(id, root);
   const log = root.querySelector(`[data-chatlog="${CSS.escape(id)}"]`);
   CHATS[id] = CHATS[id] || [];
   CHATS[id].push({ role: "user", content: q });
@@ -1650,12 +1707,13 @@ async function onChatSubmit(e) {
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { hint.textContent = d.detail || `failed (${r.status})`; return; }
-    CHATS[id].push({ role: "assistant", content: d.content, model });
-    log.insertAdjacentHTML("beforeend", turnHTML({ role: "assistant", content: d.content, model }));
+    const used = d.model || model;
+    CHATS[id].push({ role: "assistant", content: d.content, model: used });
+    log.insertAdjacentHTML("beforeend", turnHTML({ role: "assistant", content: d.content, model: used }));
     const u = d.usage || {};
     hint.textContent = u.prompt_tokens
-      ? `${u.prompt_tokens} in / ${u.completion_tokens} out tokens · ${model}`
-      : model;
+      ? `${u.prompt_tokens} in / ${u.completion_tokens} out tokens · ${used}`
+      : used;
     log.scrollTop = log.scrollHeight;
   } catch (err) {
     hint.textContent = "could not reach the server";
@@ -1829,6 +1887,7 @@ fetch("api/catalogue")
 fetch("/api/config")
   .then(r => r.ok ? r.json() : null)
   .then(cfg => {
+    if (cfg && cfg.ai) { AI = cfg.ai; paintAI(); }
     const url = cfg && (cfg.grafana_url || cfg.grafana_embed_url);
     if (!url) return;
     const link = document.getElementById("grafana-link");

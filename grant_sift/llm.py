@@ -1,4 +1,10 @@
-"""Model calls. All of these run offline at ingest, never in a request path."""
+"""Model calls at ingest: extraction and assessment, run offline by the pipeline.
+
+The gateway settings below (BASE_URL, API_KEY, MODEL) are also the web app's
+default for Idea match and chat on a call, so those work without the viewer
+bringing a key. That request-path code lives in server.py, not here: nothing
+in this module is called from a request.
+"""
 
 import json
 import os

@@ -235,7 +235,7 @@ kubectl -n grant-sift rollout restart deploy/grant-sift
 
 ## Nightly pipeline
 
-`GRANT_SIFT_DAILY_AT: "06:00"` with `GRANT_SIFT_DAILY_TZ: America/Chicago`.
+`GRANT_SIFT_DAILY_AT: "04:00"` with `GRANT_SIFT_DAILY_TZ: America/Chicago`.
 
 It runs on a background thread inside the serving process, **not** as a separate
 pod. SQLite's WAL mode coordinates writers through a shared-memory index that is

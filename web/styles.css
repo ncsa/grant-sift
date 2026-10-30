@@ -65,11 +65,6 @@ a:hover { color: var(--il-blue); text-decoration: underline; }
   border: 1px solid #4A6290; border-radius: 8px;
 }
 .tbtn:hover, .tbtn[aria-expanded="true"] { background: rgba(255, 255, 255, 0.14); }
-.tbtn.solid { color: var(--il-blue); background: #fff; border-color: #fff; font-weight: 600;
-              padding: 0 14px 0 12px; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); }
-.tbtn.solid:hover { background: var(--tint-blue); }
-.tbtn .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--il-orange); }
-.tbtn:not(.solid) .dot { display: none; }
 #databtn .flag { width: 8px; height: 8px; border-radius: 999px; background: var(--il-orange); }
 #shelfbtn .n {
   font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
@@ -374,15 +369,31 @@ h2.title a { color: var(--il-blue); }
 .modal.panel header { padding: 20px 24px 16px; margin: 0; border-bottom: 1px solid var(--rule); align-items: center; }
 .flbl2 { display: block; font-size: 13px; font-weight: 600; color: var(--il-blue); }
 .help { font-size: 12.5px; color: var(--text-3); line-height: 1.45; }
-.conn { margin: 20px 24px 24px; border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; }
-.conn.notready { border-color: #F2B48F; }
-.conn .startnote { display: flex; gap: 10px; align-items: flex-start; padding: 12px 16px;
-                   background: var(--notice-bg); color: var(--notice-fg); font-size: 13.5px; }
-.conn .startnote b { font-weight: 600; }
-.conn:not(.notready) .startnote { display: none; }
-.connbody { padding: 16px 16px 18px; display: flex; flex-direction: column; gap: 14px; }
-.connhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.connhead h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.aipanel { padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 14px; }
+.aipanel > .help { margin: 0; }
+.modepick { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 8px; }
+.modepick .opt { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; cursor: pointer;
+                 border: 1px solid var(--rule); border-radius: 10px; }
+.modepick .opt:has(input:checked) { border-color: var(--il-blue); background: var(--tint-blue); }
+.modepick .opt:has(input:disabled) { opacity: .55; cursor: default; }
+.modal .modepick input[type=radio] { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--il-blue); }
+.modepick b { display: block; font-size: 14px; font-weight: 600; color: var(--il-blue); }
+.modepick small { display: block; font-size: 12.5px; color: var(--text-3); line-height: 1.45; margin-top: 2px; }
+.aipanel .keyf .flbl2 { margin-top: 6px; }
+.modal .aipanel .keyf input, .modal .aipanel .keyf select { width: 100%; height: 40px; }
+.modal .aipanel .keyrow input { height: 40px; }
+.aipanel .savebar { margin-top: 8px; }
+.inuse { font-style: normal; font-size: 11px; font-weight: 600; letter-spacing: .02em; margin-left: 6px;
+         padding: 1px 8px; border-radius: 999px; color: #fff; background: var(--il-blue); vertical-align: 1px; }
+#k-apply.done { color: var(--il-blue); background: var(--tint-blue); border-color: var(--tint-blue); opacity: 1; cursor: default; }
+#k-note.ok { color: var(--il-blue); font-weight: 600; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* The model and how to change it, said quietly next to each AI feature. */
+.ailine { margin: 8px 0 0; font-size: 12.5px; color: var(--text-3); }
+.ailine .model, .chathead .model { color: var(--text-2); font-weight: 600; }
+.ailine .linkbtn, .chathead .linkbtn { font-size: 12.5px; min-height: 0; padding: 0; }
+.mcpnote { margin: 6px 0 0; font-size: 12px; color: var(--text-3); line-height: 1.45; max-width: 68ch; }
+.chat .mcpnote { margin: 0 0 10px; }
 .keyf, .modal .keyf { display: flex; flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: 6px; }
 .modal .keyrow input { height: 44px; border-color: var(--border-strong); border-radius: 10px; }
 .keyrow { display: flex; gap: 8px; }
@@ -391,13 +402,6 @@ h2.title a { color: var(--il-blue); }
   color: var(--il-blue); background: #fff; border: 1px solid var(--border-strong); border-radius: 10px;
 }
 .keyrow .primary { border-radius: 10px; }
-.provider { border-top: 1px solid var(--rule); padding-top: 12px; display: flex; flex-direction: column; }
-.provider summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--il-industrial);
-                    min-height: 28px; display: flex; align-items: center; }
-.provider[open] { gap: 0; }
-.provider .help { margin: 10px 0 2px; }
-.provider .flbl2 { margin: 10px 0 6px; }
-.modal .provider input { width: 100%; height: 40px; }
 .digestf { padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 12px; }
 .digestf .help { margin: 0; }
 .digestf input[type=email] { width: 100%; height: 40px; margin-top: -6px; background: var(--surface-2); }
@@ -416,14 +420,6 @@ h2.title a { color: var(--il-blue); }
   background: none; border: 0; padding: 0 4px; min-height: 28px; cursor: pointer;
 }
 .linkbtn:hover { text-decoration: underline; color: var(--il-blue); }
-
-/* Asking without a key: the key field, in place of the chat box. */
-.keycard { border: 1px solid #F2B48F; border-radius: 12px; padding: 18px 20px 20px;
-           display: flex; flex-direction: column; gap: 14px; }
-.keycard h3 { margin: 0; font-size: 16px; font-weight: 600; }
-.keycard p { margin: 4px 0 0; font-size: 13.5px; color: var(--text-2); }
-.keycard .keyrow input { border: 2px solid var(--il-industrial); }
-.keycard .linkbtn { align-self: flex-start; padding: 0; }
 
 /* ---- pager ---- */
 .pager { margin-top: 32px; display: flex; flex-wrap: wrap; justify-content: center;
