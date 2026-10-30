@@ -13,10 +13,11 @@ grants_gov:
 # the Illinois Research Board's copy was the only one we had.
 #
 # Key: GRANT_SIFT_SAM_API_KEY, a personal key from the SAM.gov Account
-# Details page (helm: secrets.GRANT_SIFT_SAM_API_KEY). For a non-federal user
-# with no SAM.gov role it allows 10 requests a DAY, which is the budget this
-# is sized to: one search per query below, then descriptions with whatever
-# of `max_requests` is left. Descriptions not read are read on a later run.
+# Details page, set on the cluster (helm/grant-sift/README.md, "SAM.gov key").
+# For a non-federal user with no SAM.gov role it allows 10 requests a DAY,
+# which is the budget this is sized to: one search per query below, then
+# descriptions with whatever of `max_requests` is left. Descriptions not read
+# are read on a later run.
 # A key with a role allows 1,000; raise `max_requests` if yours has one.
 #
 # SAM.gov is mostly procurement, so it is filtered three times: the search

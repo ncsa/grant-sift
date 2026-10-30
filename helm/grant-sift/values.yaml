@@ -153,7 +153,9 @@ secrets:
   existingSecretKey: GRANT_SIFT_LLM_API_KEY
   # Optional: SAM.gov public API key (SAM.gov > Account Details), for the
   # sam.gov source in config/sources.yaml. Without it that source fails
-  # loudly each week and every other source runs as before.
+  # loudly each week and every other source runs as before. Leave this
+  # empty and set the key once on the cluster instead (README); upgrades
+  # keep the value already in the Secret.
   GRANT_SIFT_SAM_API_KEY: ""
   # Key name inside existingSecret that holds it.
   samApiKeySecretKey: GRANT_SIFT_SAM_API_KEY
