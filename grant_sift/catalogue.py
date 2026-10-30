@@ -345,7 +345,7 @@ def _neg_str(s):
 # The query
 # ---------------------------------------------------------------------------
 
-_PRIVATE = ("_days", "_award", "_funder", "_short", "_words", "_rel")
+_PRIVATE = ("_days", "_award", "_funder", "_funders", "_short", "_words", "_rel")
 
 
 def load(conn, contacts):
@@ -354,6 +354,11 @@ def load(conn, contacts):
         o["_days"] = days_away(o["deadline"])
         o["_award"] = _award(o)
         o["_funder"] = funder_family(o)
+        # Plus the funder of every copy folded into it, so picking "Illinois
+        # Research Board" still finds the calls the Board lists that grants.gov
+        # carries too. A folded grants.gov copy has the shown copy's agency.
+        o["_funders"] = {o["_funder"]} | {
+            a["source"] for a in o.get("also_listed") or [] if a["source"] != "grants.gov"}
         o["_short"] = _short_text(o)
         o["_words"] = sorted(set(_WORD.findall(o["_short"] + " " + (o["summary"] or "").lower())))
     return rows
@@ -416,7 +421,7 @@ def search(conn, rows, principal, *, q="", ids=(), area="", funder="",
             continue
         if area and o["match_domain"] != area:
             continue
-        if funders and o["_funder"].lower() not in funders:
+        if funders and not {f.lower() for f in o["_funders"]} & funders:
             continue
         if categories and (o["category"] or "").lower() not in categories:
             continue
@@ -475,8 +480,9 @@ def facets(conn, rows):
     for o in rows:
         if o["match_domain"]:
             areas[o["match_domain"]] = areas.get(o["match_domain"], 0) + 1
-        if o["_funder"]:
-            funders[o["_funder"]] = funders.get(o["_funder"], 0) + 1
+        for f in o["_funders"]:
+            if f:
+                funders[f] = funders.get(f, 0) + 1
 
     def ranked(d):
         # Commonest first: the list is long and the head is where nearly
