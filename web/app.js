@@ -176,12 +176,36 @@ const ICON_DOWN = `<svg class="ico" width="14" height="14" viewBox="0 0 24 24" f
 
 // Countdown first, date second: "13 days / Due Nov 4, 2026". The old layout
 // put the day of the month in the big figure, which read as a count.
+// The dates the call's other listings give, where they differ from the one
+// shown. The soonest is not always the one that applies -- grants.gov's is an
+// announcement's expiry, the Research Board's may be a campus internal
+// deadline or one round of several -- so each is shown with its source.
+function otherDatesHTML(o) {
+  const shownFrom = o.deadline_from || o.source;
+  const seen = new Set([`${shownFrom}|${o.deadline || ""}`]);
+  const lines = [{ source: o.source, deadline: o.listed_deadline }, ...(o.also_listed || [])]
+    .filter(l => {
+      const k = `${l.source}|${l.deadline || ""}`;
+      if (seen.has(k) || (l.deadline || "") === (o.deadline || "")) return false;
+      seen.add(k);
+      return true;
+    })
+    .map(l => `<li><span class="src">${esc(l.source)}</span> ${l.deadline
+      ? esc(longDate(l.deadline)) + (daysAway(l.deadline) < 0 ? " (passed)" : "")
+      : "no date"}</li>`);
+  return lines.length ? `<ul class="others" aria-label="Other listings' dates">${lines.join("")}</ul>` : "";
+}
+
 function whenHTML(o) {
   const away = daysAway(o.deadline);
+  const others = otherDatesHTML(o);
   if (!o.deadline || away > SENTINEL_DAYS) {
-    return `<div class="d word">Rolling</div><div class="m">No fixed date</div>`;
+    return `<div class="d word">Rolling</div><div class="m">No fixed date</div>${others}`;
   }
-  const due = `<div class="m">Due ${esc(longDate(o.deadline))}</div>`;
+  // A sooner date from another listing (an NIH receipt date or a campus
+  // internal deadline, where grants.gov has the expiry) names its source.
+  const from = o.deadline_from ? `<div class="m per">per ${esc(o.deadline_from)}</div>` : "";
+  const due = `<div class="m">Due ${esc(longDate(o.deadline))}</div>${from}${others}`;
   if (away < 0) return `<div class="d word">Passed</div>${due}`;
   if (away === 0) return `<div class="d word">Today</div>${due}`;
   return `<div class="d">${away}<span class="u">${away === 1 ? "day" : "days"}</span></div>${due}`;
@@ -236,10 +260,14 @@ function rowHTML(o, opts = {}) {
   }
   // Other listings of this same call, folded in server-side. Worth a link:
   // the Research Board's copy is where a campus limited submission shows.
-  if (o.also_listed && o.also_listed.length) {
-    meta.push(`<span class="also">also on ${o.also_listed.map(a => a.url
-      ? `<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.source)}</a>`
-      : esc(a.source)).join(", ")}</span>`);
+  const alsoOn = new Map();
+  for (const a of o.also_listed || []) {
+    if (a.source !== o.source && !alsoOn.has(a.source)) alsoOn.set(a.source, a.url);
+  }
+  if (alsoOn.size) {
+    meta.push(`<span class="also">also on ${[...alsoOn].map(([src, url]) => url
+      ? `<a href="${esc(url)}" target="_blank" rel="noopener" title="This call's listing on ${esc(src)}">${esc(src)}</a>`
+      : esc(src)).join(", ")}</span>`);
   }
   if (kept) meta.push(kept);
   if (verdict) meta.push(verdict);

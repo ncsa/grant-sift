@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from datetime import date, timedelta
 
-from grant_sift import db, pipeline
+from grant_sift import catalogue, db, pipeline
 
 SOON = (date.today() + timedelta(days=40)).isoformat()
 PAST = (date.today() - timedelta(days=40)).isoformat()
@@ -27,7 +27,8 @@ CURIOSS = {"id": "fnd:curioss", "source": "CURIOSS", "agency": "CURIOSS",
            "title": "NIH Research Software Engineer (RSE) Award",
            "url": NIH_URL, "deadline": SOON, "synopsis": "Salary support.",
            "raw": {"url": NIH_URL}}
-IRB = {"id": "fnd:irb", "source": "Illinois Research Board",
+IRB_PAGE = "https://research.illinois.edu/rfp/grants-support-research-software-engineers"
+IRB = {"id": "fnd:irb", "source": "Illinois Research Board", "page_url": IRB_PAGE,
        "agency": "National Institutes of Health",
        "title": "Grants to Support Research Software Engineers Developing Software "
                 "and Tools for Biomedical and/or Behavioral Health",
@@ -202,8 +203,104 @@ class Catalogue(Base):
         rows = pipeline.catalogue_rows(self.conn, {})
         self.assertEqual([r["id"] for r in rows], [GG["id"]])
         self.assertEqual(rows[0]["also_listed"],
-                         [{"source": "Illinois Research Board", "url": NIH_URL}])
+                         [{"source": "Illinois Research Board", "url": IRB_PAGE,
+                           "deadline": SOON}])
         self.assertEqual(rows[0]["human"]["verdict"], "down")
+
+
+class ListingPages(Base):
+    def test_also_listed_falls_back_to_the_source_url(self):
+        listing = "https://curioss.org/resources/funding-opportunities/"
+        db.record_source_run(self.conn, "CURIOSS", "page", listing, True, 1)
+        self.add(GG, CURIOSS)
+        self.conn.execute("UPDATE opportunities SET page_url = NULL WHERE id = ?", (CURIOSS["id"],))
+        self.link()
+        db.save_assessment(self.conn, GG["id"], {"score": 80, "category": "ci_program"}, "m", "h")
+        row = pipeline.catalogue_rows(self.conn, {})[0]
+        self.assertEqual(row["also_listed"][0]["url"], listing)
+
+    def test_source_kind_and_url_stay_current(self):
+        db.record_source_run(self.conn, "CURIOSS", "feed", "https://curioss.org/feed.xml", True, 1)
+        db.record_source_run(self.conn, "CURIOSS", "page", "https://curioss.org/list/", True, 1)
+        r = self.conn.execute("SELECT kind, url FROM sources WHERE name = 'CURIOSS'").fetchone()
+        self.assertEqual(tuple(r), ("page", "https://curioss.org/list/"))
+
+    def test_page_recovered_from_the_synthetic_id(self):
+        page = "https://research.illinois.edu/rfp/some-call"
+        title = "Grants for Some Call"
+        self.add({"id": f"fnd:{db.synthetic_id(page, title)}", "source": "Illinois Research Board",
+                  "title": title, "url": NIH_URL})
+        self.conn.execute("UPDATE opportunities SET page_url = NULL")
+        db.page_changed(self.conn, "https://research.illinois.edu/rfp/other", "x")
+        db.page_changed(self.conn, page, "y")
+        self.assertEqual(db.fill_page_urls(self.conn), 1)
+        self.assertEqual(self.conn.execute("SELECT page_url FROM opportunities").fetchone()[0], page)
+
+
+class SoonestDeadline(Base):
+    """PAR-27-003: grants.gov holds the announcement's expiry, the Research
+    Board the next receipt date. The call is as urgent as the sooner one."""
+
+    LATER = (date.today() + timedelta(days=900)).isoformat()
+    SOONER = (date.today() + timedelta(days=20)).isoformat()
+
+    def setUp(self):
+        super().setUp()
+        self.gg = dict(GG, deadline=self.LATER)
+        self.irb = dict(IRB, deadline=self.SOONER)
+        self.add(self.gg, self.irb)
+        self.link()
+        db.save_assessment(self.conn, GG["id"], {"score": 70, "category": "ci_program"}, "m", "h")
+
+    def test_next_due(self):
+        self.assertEqual(db.next_due(self.conn),
+                         {GG["id"]: (self.SOONER, "Illinois Research Board")})
+
+    def test_card_shows_and_sorts_by_the_sooner_date(self):
+        other = {"id": "gg:9", "source": "grants.gov", "title": "Unrelated Call",
+                 "url": "", "deadline": (date.today() + timedelta(days=60)).isoformat()}
+        self.add(other)
+        db.save_assessment(self.conn, "gg:9", {"score": 99, "category": "ci_program"}, "m", "h")
+        rows = pipeline.catalogue_rows(self.conn, {})
+        self.assertEqual([r["id"] for r in rows], [GG["id"], "gg:9"])
+        self.assertEqual(rows[0]["deadline"], self.SOONER)
+        self.assertEqual(rows[0]["deadline_from"], "Illinois Research Board")
+        self.assertEqual(rows[0]["listed_deadline"], self.LATER)
+        self.assertIsNone(rows[1]["deadline_from"])
+
+    def test_closing_soon_digest_sees_it(self):
+        items = pipeline.build_digest(self.conn, "closing-soon", respect_sent_log=False)
+        self.assertEqual([i["id"] for i in items], [GG["id"]])
+        self.assertIn("(per Illinois Research Board)",
+                      pipeline.render_digest("closing-soon", items, []))
+
+    def test_closed_or_later_copies_change_nothing(self):
+        self.conn.execute("UPDATE opportunities SET deadline = ? WHERE id = ?", (PAST, IRB["id"]))
+        self.assertEqual(db.next_due(self.conn), {})
+        self.conn.execute("UPDATE opportunities SET deadline = ? WHERE id = ?",
+                          ((date.today() + timedelta(days=1000)).isoformat(), IRB["id"]))
+        self.assertEqual(db.next_due(self.conn), {})
+
+    def test_date_range_matches_any_listings_date(self):
+        later_round = (date.today() + timedelta(days=100)).isoformat()
+        self.add(dict(IRB, id="fnd:irb2", deadline=later_round,
+                      page_url=IRB_PAGE + "-round-2"))
+        self.link()
+        rows = catalogue.load(self.conn, {})
+
+        def hits(lo, hi):
+            return [o["id"] for o in catalogue.search(
+                self.conn, rows, None, deadline_from=lo, deadline_to=hi)]
+        around = lambda d: ((date.fromisoformat(d) - timedelta(days=1)).isoformat(),
+                            (date.fromisoformat(d) + timedelta(days=1)).isoformat())
+        self.assertEqual(hits(*around(self.SOONER)), [GG["id"]])      # the shown date
+        self.assertEqual(hits(*around(later_round)), [GG["id"]])     # the second round
+        self.assertEqual(hits(*around(self.LATER)), [GG["id"]])      # grants.gov's own
+        self.assertEqual(hits(*around((date.today() + timedelta(days=300)).isoformat())), [])
+
+    def test_rolling_funder_copy_takes_a_stated_date(self):
+        self.conn.execute("UPDATE opportunities SET deadline = NULL WHERE id = ?", (GG["id"],))
+        self.assertEqual(db.next_due(self.conn)[GG["id"]][0], self.SOONER)
 
 
 if __name__ == "__main__":

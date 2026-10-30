@@ -408,6 +408,7 @@ def ingest(conn, sources, prefilter, verbose=True):
     # Rows stored before call_keys existed, or by a source not read today,
     # get their keys here; it is a regex per row, not a fetch.
     db.fill_missing_keys(conn)
+    db.fill_page_urls(conn)
     groups = db.link_duplicates(conn, aggregator_names(sources))
     stats["duplicate"] = sum(len(g["members"]) - 1 for g in groups)
     if verbose and groups:
@@ -763,12 +764,17 @@ def catalogue_rows(conn, contacts, min_score=0):
     # something the shown copy does not -- the Research Board listing a call is
     # how a campus limited submission surfaces -- and a verdict given on a copy
     # since folded in still stands.
+    # Linked to the listing itself -- the Research Board's /rfp/ page, the
+    # CURIOSS list -- not to the call's own link, which the card already has.
+    # A record with no page of its own falls back to its source's URL.
     also = {}
     for d in conn.execute(
-            "SELECT id, source, url, duplicate_of FROM opportunities "
-            "WHERE duplicate_of IS NOT NULL ORDER BY source"):
+            """SELECT d.id, d.source, d.deadline, d.duplicate_of,
+                      COALESCE(d.page_url, s.url) AS url
+               FROM opportunities d LEFT JOIN sources s ON s.name = d.source
+               WHERE d.duplicate_of IS NOT NULL ORDER BY d.source, d.deadline"""):
         also.setdefault(d["duplicate_of"], []).append(d)
-    return [
+    out = [
         # The synopsis is not carried. It was 0.96 MB of a 2.56 MB payload,
         # and the generated summary replaces it in the list; the full text is
         # read from the database where it is needed (one call in full, chat).
@@ -780,11 +786,29 @@ def catalogue_rows(conn, contacts, min_score=0):
         | {"axes": _loads(r["axes_json"]), "facts": _loads(r["facts_json"])}
         | {"human": verdicts.get(r["id"]) or next(
             (verdicts[d["id"]] for d in also.get(r["id"], []) if d["id"] in verdicts), None)}
-        | {"also_listed": [{"source": d["source"], "url": d["url"]}
-                           for d in also.get(r["id"], []) if d["source"] != r["source"]]}
+        # Every other listing, a second one from the same source included: the
+        # Research Board lists a call once per round, each with its own date.
+        | {"also_listed": [{"source": d["source"], "url": d["url"], "deadline": d["deadline"]}
+                           for d in also.get(r["id"], [])]}
         | {"contact": contacts.get((r["match_name"] or "").strip().lower())}
         for r in rows
     ]
+    _soonest(conn, out)
+    # Re-sorted, since a sooner date from another listing moves a call up.
+    out.sort(key=lambda o: (o["deadline"] is None, o["deadline"] or "", -(o["score"] or 0)))
+    return out
+
+
+def _soonest(conn, items):
+    """Give each call its soonest upcoming deadline across its listings
+    (db.next_due), naming the listing in `deadline_from` when it is not the
+    shown copy's own. The shown copy's own date stays in `listed_deadline`."""
+    due = db.next_due(conn)
+    for o in items:
+        o["listed_deadline"] = o["deadline"]
+        o["deadline_from"] = None
+        if o["id"] in due:
+            o["deadline"], o["deadline_from"] = due[o["id"]]
 
 
 # --------------------------------------------------------------------------
@@ -851,6 +875,8 @@ def build_digest(conn, feed, since_days=7, respect_sent_log=True, roster=None):
     test = FEEDS[feed]
     verdicts = db.human_verdicts(conn)
     contacts = contact_index(roster or [])
+    rows = [dict(r) for r in rows]
+    _soonest(conn, rows)            # before the test: closing-soon reads the date
     items = []
     for r in rows:
         if not test(r):
@@ -861,7 +887,7 @@ def build_digest(conn, feed, since_days=7, respect_sent_log=True, roster=None):
             "SELECT 1 FROM sent_log WHERE feed=? AND opportunity_id=?", (feed, r["id"])
         ).fetchone():
             continue
-        it = dict(r)
+        it = r
         it["contact"] = contacts.get((r["match_name"] or "").strip().lower())
         items.append(it)
     return items
@@ -877,7 +903,8 @@ def render_digest(feed, items, stale):
     for it in items:
         lines.append(f"[{it['score']}] {it['title']}")
         lines.append(f"    {it['agency'] or it['source']}"
-                     + (f" · closes {it['deadline']}" if it["deadline"] else " · rolling"))
+                     + (f" · closes {it['deadline']}" if it["deadline"] else " · rolling")
+                     + (f" (per {it['deadline_from']})" if it.get("deadline_from") else ""))
         if it.get("award_ceiling"):
             lines.append(f"    up to {it['award_ceiling']}")
         if it.get("indirect_cap"):
