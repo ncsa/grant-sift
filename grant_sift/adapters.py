@@ -8,7 +8,7 @@ foundation-page one, which needs it to read.
 """
 
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from html import unescape
 from urllib.parse import urljoin, urlsplit
 from xml.etree import ElementTree
@@ -176,6 +176,174 @@ def grants_gov(agencies=None, rows=250):
             })
     if start < total:
         raise RuntimeError(f"grants.gov returned {start} of {total} opportunities")
+    return _dedupe(records)
+
+
+# --------------------------------------------------------------------------
+# SAM.gov
+# --------------------------------------------------------------------------
+
+# Research contract calls -- DARPA, ONR, AFRL and ARPA-H Broad Agency
+# Announcements -- are posted to SAM.gov and never reach grants.gov. Before
+# this source the Illinois Research Board's copy was the only one we had.
+SAM_URL = "https://api.sam.gov/opportunities/v2/search"
+SAM_DESC_URL = "https://api.sam.gov/prod/opportunities/v1/noticedesc"
+
+# The notice types that can be a call: solicitation, combined
+# synopsis/solicitation, presolicitation, special notice. Award notices,
+# sources sought, surplus sales and justifications cannot.
+SAM_PTYPES = {
+    "o": "solicitation",
+    "k": "combined synopsis/solicitation",
+    "p": "presolicitation",
+    "s": "special notice",
+}
+
+
+class SamBudgetSpent(RuntimeError):
+    """The run's SAM.gov request budget is used up. Not a failure of the
+    notice: its description is fetched on a later run, so nothing is cached."""
+
+
+class SamClient:
+    """Counts every request against one per-run budget.
+
+    A personal key for a non-federal user with no SAM.gov role allows 10
+    requests a day (open.gsa.gov, API key rate limits). A 429 mid-run would
+    fail the search, so the searches are spent first and descriptions get
+    whatever is left; the rest are read on later runs.
+    """
+
+    def __init__(self, api_key, max_requests=9):
+        if not api_key:
+            raise RuntimeError("sam.gov: no API key; set GRANT_SIFT_SAM_API_KEY")
+        self.key = api_key
+        self.left = int(max_requests)
+
+    def get(self, url, params):
+        if self.left <= 0:
+            raise SamBudgetSpent("sam.gov request budget spent for this run")
+        self.left -= 1
+        # requests puts the full URL, api_key included, into its exception
+        # messages, and those are stored in sources.last_error and printed.
+        # So nothing from requests is re-raised as is.
+        try:
+            r = requests.get(url, params={**params, "api_key": self.key},
+                             headers=HEADERS, timeout=TIMEOUT)
+        except requests.RequestException as exc:
+            raise RuntimeError(f"sam.gov {urlsplit(url).path}: {type(exc).__name__}") from None
+        if r.status_code == 429:
+            self.left = 0
+            raise RuntimeError("sam.gov: daily rate limit reached (429)")
+        if r.status_code >= 400:
+            raise RuntimeError(f"sam.gov {urlsplit(url).path}: HTTP {r.status_code} "
+                               f"{r.text[:160].replace(self.key, '***')}")
+        return r
+
+    def detail(self, notice_id):
+        """The description of one notice, which search returns only as a link.
+
+        A notice posted without one answers 404 "Description not found"; that
+        is an answer, cached like any other, not a failure to retry.
+        """
+        try:
+            r = self.get(SAM_DESC_URL, {"noticeid": notice_id})
+        except RuntimeError as exc:
+            if "HTTP 404" in str(exc):
+                return {}
+            raise
+        try:
+            desc = r.json().get("description") or ""
+        except ValueError:
+            desc = r.text
+        desc = _strip_html(desc)
+        return {"synopsis": desc} if desc else {}
+
+
+def _sam_keep(n, cfg):
+    """Whether one notice is a research call worth reading.
+
+    SAM.gov is overwhelmingly procurement, so the search is narrowed by office
+    in config and this narrows again: a callable notice type, still active,
+    not an announcement about a call (`exclude_terms`: RFIs, proposers'
+    days), and either a BAA-like title or an R&D NAICS code (5417).
+    """
+    if str(n.get("active") or "").lower() not in ("yes", "true"):
+        return False
+    kind = str(n.get("baseType") or n.get("type") or "").strip().lower()
+    if kind not in SAM_PTYPES.values():
+        return False
+    title = n.get("title") or ""
+    if _sam_terms(cfg.get("exclude_terms"), title):
+        return False
+    naics = str(n.get("naicsCode") or "")
+    if any(naics.startswith(p) for p in cfg.get("naics", ["5417"])):
+        return True
+    return _sam_terms(cfg.get("title_terms"), title)
+
+
+def _sam_terms(terms, title):
+    """Whether `title` holds any of `terms` as whole words, any case."""
+    if not terms:
+        return False
+    pattern = r"\b(?:" + "|".join(re.escape(t) for t in terms) + r")(?!\w)"
+    return bool(re.search(pattern, title, re.I))
+
+
+def sam_gov(cfg, client, today=None):
+    """Active research calls from the offices named in `cfg["queries"]`.
+
+    One search per query, posted within `lookback_days` (the API allows a
+    year at most). A query with more notices than one page holds is refused,
+    not truncated: narrow it in config.
+    """
+    today = today or date.today()
+    look = min(int(cfg.get("lookback_days") or 364), 364)
+    span = {"postedFrom": (today - timedelta(days=look)).strftime("%m/%d/%Y"),
+            "postedTo": today.strftime("%m/%d/%Y")}
+    limit = min(int(cfg.get("limit") or 1000), 1000)
+
+    records = []
+    for q in cfg.get("queries") or []:
+        q = dict(q)
+        name = q.pop("name")
+        agency = q.pop("agency", name)
+        path_re = q.pop("match", None)
+        body = client.get(SAM_URL, {**q, **span, "limit": limit, "offset": 0}).json()
+        total = int(body.get("totalRecords") or 0)
+        if total > limit:
+            raise RuntimeError(
+                f"sam.gov {name}: {total} notices, over one page of {limit}. "
+                "Narrow the query in config/sources.yaml -- reading the first "
+                "page would be a quietly incomplete list")
+        for n in body.get("opportunitiesData") or []:
+            nid = str(n.get("noticeId") or "")
+            if not nid or not _sam_keep(n, cfg):
+                continue
+            path = f"{n.get('fullParentPathName') or ''} {n.get('fullParentPathCode') or ''}"
+            if path_re and not re.search(path_re, path, re.I):
+                continue
+            records.append({
+                "id": f"sam:{nid}",
+                "source": "sam.gov",
+                "external_id": nid,
+                "title": unescape(n.get("title") or "").strip(),
+                "synopsis": "",
+                "agency": agency,
+                "url": f"https://sam.gov/opp/{nid}/view",
+                # A BAA with no response date closes when SAM archives it.
+                "deadline": _iso(n.get("responseDeadLine")) or _iso(n.get("archiveDate")),
+                "award_ceiling": None,
+                "indirect_cap": None,
+                "raw": {
+                    "number": n.get("solicitationNumber"),
+                    "type": n.get("type"),
+                    "naics": n.get("naicsCode"),
+                    "path": n.get("fullParentPathName"),
+                    "posted": n.get("postedDate"),
+                    "archive": n.get("archiveDate"),
+                },
+            })
     return _dedupe(records)
 
 

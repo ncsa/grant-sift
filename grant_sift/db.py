@@ -377,13 +377,15 @@ def same_call(a: str, b: str) -> bool:
 #             NOFOs ('see PAR-25-123 for the clinical trial required
 #             version'), and those are different calls.
 #   gg:<id>   a grants.gov record, under either of its URL schemes.
+#   sam:<id>  a SAM.gov notice, under any of its URL shapes.
 #   url:<u>   the call's own link, normalised.
 #
 # A number some record holds also joins any record whose link or title names
 # it as a whole token, whatever the scheme (see borrowed_numbers).
 #
 # A key one source holds on differently titled records is an umbrella, not an
-# identifier, and joins nothing (see umbrella() in link_duplicates).
+# identifier, and joins nothing (see umbrella() in link_duplicates). gg: and
+# sam: are exempt: each names exactly one notice, whatever the titles say.
 #
 # Title similarity (same_call) is the fallback, only for an aggregator's copy
 # that no key joined, and only against a non-aggregator's record.
@@ -408,6 +410,11 @@ _NUMBERS = re.compile(
 
 _GRANTS_GOV_LINK = re.compile(
     r"grants\.gov/(?:search-results-detail/|.*[?&]oppid=)(\d+)", re.I)
+
+# A SAM.gov notice, however it is linked: /opp/<id>/view (the API's uiLink),
+# /workspace/contract/opp/<id>/view (what a signed-in user copies, and what
+# the Research Board links), beta.sam.gov, with or without /view.
+_SAM_LINK = re.compile(r"sam\.gov/(?:workspace/contract/)?opp/([0-9a-f]{32})\b", re.I)
 
 _TRACKING = re.compile(r"^(utm_|fbclid$|gclid$|mc_[ce]id$|_hs)")
 
@@ -443,6 +450,9 @@ def _url_key(url: str):
     m = _GRANTS_GOV_LINK.search(u)
     if m:
         return f"gg:{m.group(1)}"
+    m = _SAM_LINK.search(u)
+    if m:
+        return f"sam:{m.group(1).lower()}"
     if not re.match(r"https?://", u, re.I):
         return None
     parts = urlsplit(u)
@@ -643,7 +653,7 @@ def link_duplicates(conn, aggregators=(), apply=True) -> list:
 
     joined = {}                                   # id -> the keys that joined it
     for key, ids in holders.items():
-        if len(ids) < 2 or (not key.startswith("gg:") and umbrella(ids)):
+        if len(ids) < 2 or (not key.startswith(("gg:", "sam:")) and umbrella(ids)):
             continue
         for i in ids:
             joined.setdefault(i, set()).add(key)
@@ -805,6 +815,25 @@ def stale_undated(conn, source: str, older_than_days: int = 7):
            LEFT JOIN detail_cache d ON d.id = o.id
            WHERE o.source = ? AND o.deadline IS NULL AND o.external_id IS NOT NULL
              AND (d.fetched_at IS NULL OR d.fetched_at < ?)""",
+        (source, cutoff),
+    ).fetchall()
+
+
+def missing_detail(conn, source: str, retry_failed_after_days: int = 7):
+    """Shown, live records of `source` whose detail was never fetched, or
+    whose failed fetch is old enough to retry; soonest deadline first.
+
+    For a source whose detail fetch is rationed (sam.gov), so the requests
+    left on a day without a search go to the calls a reader can still act on.
+    """
+    cutoff = (datetime.now(timezone.utc)
+              - timedelta(days=retry_failed_after_days)).isoformat(timespec="seconds")
+    return conn.execute(
+        f"""SELECT o.* FROM opportunities o
+            LEFT JOIN detail_cache d ON d.id = o.id
+            WHERE o.source = ? AND o.external_id IS NOT NULL AND {LIVE}
+              AND (d.id IS NULL OR (d.ok = 0 AND d.fetched_at < ?))
+            ORDER BY o.deadline IS NULL, o.deadline, o.id""",
         (source, cutoff),
     ).fetchall()
 

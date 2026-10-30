@@ -130,9 +130,11 @@ def load_staff(d=Path("config")):
 # --------------------------------------------------------------------------
 
 # Sources whose list response is too thin to classify on, so a per-record
-# detail fetch is worth one request. Gated by db.needs_detail, so a given
-# opportunity is fetched once in its life, not once a morning.
-ENRICH_SOURCES = ("grants.gov",)
+# detail fetch is worth one request: source -> fetch(external_id). Cached by
+# db.detail_cached, so a given opportunity is fetched once in its life, not
+# once a morning. sam.gov is added per run in ingest, since its fetch is
+# bound to the run's key and request budget.
+ENRICH = {"grants.gov": adapters.grants_gov_detail}
 
 # Commit after every record, not in batches. Both long loops make a network
 # call per record, so a batched commit holds SQLite's single writer lock across
@@ -143,7 +145,7 @@ ENRICH_SOURCES = ("grants.gov",)
 COMMIT_EVERY = 1
 
 
-def _enrich(conn, rec, stats, verbose):
+def _enrich(conn, rec, stats, verbose, fetchers=ENRICH):
     """Fill in description and award figures from the per-opportunity endpoint.
 
     grants.gov search2 returns no description, so without this a call whose
@@ -157,7 +159,8 @@ def _enrich(conn, rec, stats, verbose):
     description costs classification quality, dropping the record costs the
     opportunity.
     """
-    if rec.get("source") not in ENRICH_SOURCES or not rec.get("external_id"):
+    fetch = fetchers.get(rec.get("source"))
+    if not fetch or not rec.get("external_id"):
         return
 
     cached = db.detail_cached(conn, rec["id"])
@@ -169,7 +172,10 @@ def _enrich(conn, rec, stats, verbose):
         return
 
     try:
-        detail = adapters.grants_gov_detail(rec["external_id"])
+        detail = fetch(rec["external_id"])
+    except adapters.SamBudgetSpent:
+        stats["detail_deferred"] += 1      # not a failure: next run reads it
+        return
     except Exception as exc:  # noqa: BLE001
         db.save_detail(conn, rec["id"], {}, ok=False)
         stats["detail_failed"] += 1
@@ -219,6 +225,32 @@ def _recheck_undated(conn, stats, verbose):
         print(f"  grants.gov: {stats['archived']} undated calls found archived", flush=True)
 
 
+def _backfill_sam(conn, client, stats):
+    """Read sam.gov descriptions not yet fetched, as far as today's budget goes.
+
+    Search returns no description, and the weekly search day has only a few
+    requests left after the searches, so without this a new office's notices
+    would be scored on titles like "Firefox" for months.
+    """
+    rows = db.missing_detail(conn, "sam.gov")
+    for i, row in enumerate(rows):
+        try:
+            detail = client.detail(row["external_id"])
+        except adapters.SamBudgetSpent:
+            stats["detail_deferred"] += len(rows) - i
+            return
+        except Exception:  # noqa: BLE001
+            db.save_detail(conn, row["id"], {}, ok=False)
+            stats["detail_failed"] += 1
+            conn.commit()
+            continue
+        db.save_detail(conn, row["id"], detail, ok=True)
+        stats["enriched"] += 1
+        if detail.get("synopsis"):
+            db.upsert_opportunity(conn, {**dict(row), "synopsis": detail["synopsis"]})
+        conn.commit()
+
+
 def merge_sources(sources, conn, verbose=True):
     """config/sources.yaml plus anything added through the dashboard.
 
@@ -264,9 +296,10 @@ def aggregator_names(sources):
 
 def ingest(conn, sources, verbose=True):
     stats = {"fetched": 0, "new": 0, "enriched": 0,
-             "detail_cached": 0, "detail_failed": 0, "expired": 0, "archived": 0,
+             "detail_cached": 0, "detail_failed": 0, "detail_deferred": 0, "expired": 0, "archived": 0,
              "pruned": 0, "duplicate": 0}
     sources = merge_sources(sources, conn, verbose)
+    fetchers = dict(ENRICH)
 
     def run(name, kind, url, fn):
         try:
@@ -282,7 +315,7 @@ def ingest(conn, sources, verbose=True):
             records = adapters.drop_expired(records)
             stats["fetched"] += len(records)
             for rec in records:
-                _enrich(conn, rec, stats, verbose)
+                _enrich(conn, rec, stats, verbose, fetchers)
                 # Counted, not dropped: a closed call is still a record of
                 # what was open.
                 if adapters.is_expired(rec):
@@ -308,6 +341,25 @@ def ingest(conn, sources, verbose=True):
         run("grants.gov", "api", adapters.GRANTS_GOV_URL,
             lambda: adapters.grants_gov(agencies=cfg.get("agencies")))
         _recheck_undated(conn, stats, verbose)
+
+    # Searched weekly, since research BAAs stay open for months. A personal
+    # key for a non-federal user with no SAM.gov role allows 10 requests a
+    # day, so the other days spend theirs on descriptions not yet read.
+    sam = sources.get("sam_gov") or {}
+    if sam.get("enabled"):
+        key = os.environ.get("GRANT_SIFT_SAM_API_KEY")
+        budget = sam.get("max_requests", 9)
+        if _due(conn, {"name": "sam.gov", **sam}):
+            def read_sam():
+                client = adapters.SamClient(key, budget)
+                fetchers["sam.gov"] = client.detail
+                return adapters.sam_gov(sam, client)
+            run("sam.gov", "api", adapters.SAM_URL, read_sam)
+        elif key:
+            _backfill_sam(conn, adapters.SamClient(key, budget), stats)
+        if verbose and stats["detail_deferred"]:
+            print(f"  sam.gov: {stats['detail_deferred']} descriptions left for "
+                  "later runs (request budget)", flush=True)
 
     for feed in sources.get("feeds", []):
         run(feed["name"], "feed", feed["url"],

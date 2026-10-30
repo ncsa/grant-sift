@@ -14,7 +14,7 @@ SQLite is a file on the PVC (`/data/grant-sift.db`); there is no separate SQLite
 | oauth2-proxy + Ingress | Traefik → Keycloak login → app |
 | Grafana (optional) | OSS charts for `telemetry_daily`; Infinity → `http://grant-sift:8080/api/stats` |
 | PVC (`nfs-taiga`) | `/data`: `grant-sift.db`, written by the Deployment only |
-| Secret | `GRANT_SIFT_LLM_API_KEY` (pipeline) + `grant-sift-oauth2` (OIDC) + `grant-sift-grafana` (admin) |
+| Secret | `GRANT_SIFT_LLM_API_KEY` (pipeline), optional `GRANT_SIFT_SAM_API_KEY` (sam.gov source) + `grant-sift-oauth2` (OIDC) + `grant-sift-grafana` (admin) |
 | ConfigMap | Non-secret env + mounted `roster.yaml` + Grafana dashboards |
 
 Grafana setup details: **[GRAFANA.md](./GRAFANA.md)**.
@@ -124,6 +124,7 @@ kubectl create namespace grant-sift
 # Pipeline LLM key (gitignored)
 cp helm/grant-sift/values-secrets.example.yaml helm/grant-sift/values-secrets.yaml
 # edit: secrets.GRANT_SIFT_LLM_API_KEY: "sk_..."
+# SAM.gov key (optional, sam.gov source): set on the cluster, see "SAM.gov key"
 
 # oauth2-proxy ↔ Keycloak
 COOKIE_SECRET="$(python3 -c 'import secrets,base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())')"
@@ -268,3 +269,23 @@ Campus SMTP (from [Tech Services KB 47888](https://answers.uillinois.edu/illinoi
 ```bash
 kubectl -n grant-sift exec deploy/grant-sift -- python run.py digest --feed closing-soon --send
 ```
+
+## SAM.gov key
+
+The sam.gov source reads `GRANT_SIFT_SAM_API_KEY`, a personal key from
+SAM.gov > Account Details. It is set once on the cluster and never written to
+a values file: when `secrets.GRANT_SIFT_SAM_API_KEY` is empty, the chart keeps
+whatever value `grant-sift-secrets` already holds (`lookup`). Under
+`helm template` or `--dry-run` it shows as missing; a real upgrade keeps it.
+
+```bash
+read -s SAM_KEY
+kubectl -n grant-sift patch secret grant-sift-secrets --type merge \
+  -p "{\"stringData\":{\"GRANT_SIFT_SAM_API_KEY\":\"$SAM_KEY\"}}"
+kubectl -n grant-sift describe secret grant-sift-secrets   # sizes only
+kubectl -n grant-sift rollout restart deploy/grant-sift
+```
+
+Personal keys expire (about every 90 days). Regenerate on the same SAM.gov
+page and patch again; until then the sam.gov source shows as failed and every
+other source runs as before.
