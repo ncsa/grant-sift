@@ -174,6 +174,47 @@ class Linking(Base):
         self.assertEqual(self.dup_of("fnd:oil"), "gg:363065")
         self.assertIsNone(self.dup_of("fnd:oil2"))
 
+    def test_nsf_bare_grants_gov_number(self):
+        # NSF 26-512 as grants.gov and the Research Board listed it, 2026-10-30.
+        gg = {"id": "gg:363268", "source": "grants.gov", "agency": "NSF", "url":
+              "https://grants.gov/search-results-detail/363268", "deadline": SOON,
+              "title": "Unlocking Dataset Value for AI-Enabled Scientific Discovery (AI Datasets)",
+              "raw": {"number": "26-512", "agencyCode": "NSF"}}
+        irb = {"id": "fnd:aid", "source": "Illinois Research Board", "deadline": SOON,
+               "agency": "National Science Foundation",
+               "title": "Grants for Using AI to Unlock New Insights from Existing "
+                        "Scientific Datasets (AI Datasets)",
+               "url": "https://www.nsf.gov/funding/opportunities/ai-datasets-unlocking-"
+                      "dataset-value-ai-enabled-scientific-discovery/nsf26-512/solicitation#awd_info"}
+        self.assertIn("num:NSF26512", db.call_keys(gg))
+        self.assertNotIn("num:26512", db.call_keys(dict(gg, raw={"number": "26-512"})))
+        self.add(gg, irb)
+        self.link()
+        self.assertEqual(self.dup_of("fnd:aid"), "gg:363268")
+
+    def test_number_borrowed_from_a_linked_pdf(self):
+        # Neither NOAA's nor AFRL's scheme is a pattern; grants.gov's number is.
+        pdf = "https://files.simpler.grants.gov/opportunities/84c7/attachments/d563/"
+        gg = {"id": "gg:1", "source": "grants.gov", "agency": "DOD-AFOSR", "url": "",
+              "deadline": SOON, "raw": {"number": "NOFOAFRLAFOSR20260001"},
+              "title": "Fiscal Year 2027 Defense University Research Instrumentation Program (DURIP)"}
+        irb = {"id": "fnd:duirp", "source": "Illinois Research Board", "deadline": SOON,
+               "title": "Defense University Research Instrumentation Program (DUIRP)",
+               "url": pdf + "NOFOAFRLAFOSR20260001.pdf"}
+        near = dict(irb, id="fnd:near", url=pdf + "NOFOAFRLAFOSR202600012.pdf")
+        self.add(gg, irb, near)
+        self.link()
+        self.assertEqual(self.dup_of("fnd:duirp"), "gg:1")
+        self.assertIsNone(self.dup_of("fnd:near"))
+
+    def test_short_numbers_borrow_nothing(self):
+        gg = {"id": "gg:2", "source": "grants.gov", "agency": "DOS", "url": "",
+              "deadline": SOON, "title": "Public Diplomacy Grants", "raw": {"number": "2301"}}
+        irb = {"id": "fnd:s", "source": "Illinois Research Board", "deadline": SOON,
+               "title": "Something Else Entirely", "url": "https://example.org/2301"}
+        self.add(gg, irb)
+        self.assertEqual(self.link(), [])
+
     def test_unlinking_when_the_key_goes(self):
         self.add(GG, CURIOSS)
         self.link()

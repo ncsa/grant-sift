@@ -358,6 +358,9 @@ def same_call(a: str, b: str) -> bool:
 #   gg:<id>   a grants.gov record, under either of its URL schemes.
 #   url:<u>   the call's own link, normalised.
 #
+# A number some record holds also joins any record whose link or title names
+# it as a whole token, whatever the scheme (see borrowed_numbers).
+#
 # A key one source holds on differently titled records is an umbrella, not an
 # identifier, and joins nothing (see umbrella() in link_duplicates).
 #
@@ -441,14 +444,21 @@ def call_keys(rec) -> set:
             raw = json.loads(raw)
         except ValueError:
             # Stored raw is cut at 20,000 chars, which can break the JSON.
-            m = re.search(r'"number":\s*"([^"]+)"', raw)
-            raw = {"number": m.group(1)} if m else {}
+            raw = {k: m.group(1) for k in ("number", "agencyCode")
+                   if (m := re.search(rf'"{k}":\s*"([^"]+)"', raw))}
     raw = raw if isinstance(raw, dict) else {}
 
     keys = set()
     for ident in (raw.get("number"), raw.get("pubNumber"), raw.get("opportunity_number")):
         if ident:
             keys |= _numbers(ident, whole=True)
+    # grants.gov files NSF solicitations under the bare number ('26-512'),
+    # which every other copy writes as NSF 26-512 or links as /nsf26-512/.
+    # 88 of 132 NSF records carried no number key for it.
+    if str(raw.get("agencyCode") or "").upper().startswith("NSF"):
+        m = re.fullmatch(r"\s*(\d{2})-(\d{3,4})\s*", str(raw.get("number") or ""))
+        if m:
+            keys.add(_number_key(f"NSF{m.group(1)}{m.group(2)}"))
     keys |= _numbers(rec.get("title"))
     keys |= _numbers(rec.get("url"))
     u = _url_key(rec.get("url"))
@@ -528,6 +538,35 @@ def next_due(conn) -> dict:
     return out
 
 
+_TOKEN_SPLIT = re.compile(r"[\s/?&=#()\[\],;:]+")
+
+
+def borrowed_numbers(rows, holders):
+    """(id, key) for each number key another record holds that this one's
+    link or title names, but no pattern recognised.
+
+    _NUMBERS knows a handful of schemes; grants.gov's `number` covers every
+    agency. The Research Board links the grants.gov PDF for a NOAA call
+    (.../NOAA-NOS-NCCOS-2026-32934.pdf) and AFRL's (.../NOFOAFRLAFOSR20260001.pdf),
+    and neither scheme is a pattern. So the numbers already held are the
+    vocabulary: a link or title token that normalises to one of them is it.
+
+    Whole tokens only, never substrings, and only numbers long enough to
+    have passed _numbers' whole-identifier rule, so 'TTHP' or '2301' borrow
+    nothing.
+    """
+    known = {k for k in holders if k.startswith("num:") and len(k) >= 12}
+    out = set()
+    for r in rows:
+        text = f"{r['url'] or ''} {r['title'] or ''}"
+        for tok in _TOKEN_SPLIT.split(text):
+            tok = re.sub(r"\.(pdf|html?|docx?|aspx?)$", "", tok, flags=re.I)
+            k = _number_key(tok)
+            if k in known and r["id"] not in holders[k]:
+                out.add((r["id"], k))
+    return sorted(out)
+
+
 def _tier(source, kinds, aggregators) -> int:
     """Which copy is shown: the funder's API, then the funder's own pages,
     then lists and feeds that relist other funders' calls."""
@@ -550,12 +589,14 @@ def link_duplicates(conn, aggregators=(), apply=True) -> list:
     aggregators = set(aggregators)
     kinds = {r["name"]: r["kind"] for r in conn.execute("SELECT name, kind FROM sources")}
     rows = {r["id"]: r for r in conn.execute(
-        """SELECT id, source, title, agency, deadline, synopsis, award_ceiling,
+        """SELECT id, source, title, agency, url, deadline, synopsis, award_ceiling,
                   first_seen, duplicate_of FROM opportunities""")}
     holders = {}
     for r in conn.execute("SELECT key, opportunity_id FROM call_keys"):
         if r["opportunity_id"] in rows:
             holders.setdefault(r["key"], []).append(r["opportunity_id"])
+    for i, k in borrowed_numbers(rows.values(), holders):
+        holders[k].append(i)
 
     parent = {}
 
