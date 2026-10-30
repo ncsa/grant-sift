@@ -120,6 +120,20 @@ def listed_by(o):
     return {o["source"]} | {a["source"] for a in o.get("also_listed") or []}
 
 
+def listed_dates(o):
+    """Every upcoming deadline any listing of this call gives.
+
+    A date range asks "what is due then", and a call can be due more than
+    once: PAR-27-003 is shown at the Research Board's 17 Nov round but has a
+    26 Jan round too, and belongs in a January view. Passed dates are left
+    out -- a round that has closed is not due in any window worth asking.
+    """
+    today = date.today().isoformat()
+    dates = {o["deadline"], o.get("listed_deadline")}
+    dates |= {a["deadline"] for a in o.get("also_listed") or []}
+    return sorted(d for d in dates if d and d >= today)
+
+
 def is_me(person_email, principal):
     """Is this roster address the signed-in person? Keycloak sometimes puts
     the NetID in the email claim with no @, and staff addresses come as
@@ -436,11 +450,9 @@ def search(conn, rows, principal, *, q="", ids=(), area="", funder="",
                 continue
         # Rolling / unstated deadlines have no date to fall in a range, so they
         # drop out of a bounded view rather than sitting in every window.
-        if (deadline_from or deadline_to) and not o["deadline"]:
-            continue
-        if deadline_from and o["deadline"] < deadline_from:
-            continue
-        if deadline_to and o["deadline"] > deadline_to:
+        if (deadline_from or deadline_to) and not any(
+                (not deadline_from or d >= deadline_from) and (not deadline_to or d <= deadline_to)
+                for d in listed_dates(o)):
             continue
         if not all(p(o, ctx) for p in preds):
             continue

@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from datetime import date, timedelta
 
-from grant_sift import db, pipeline
+from grant_sift import catalogue, db, pipeline
 
 SOON = (date.today() + timedelta(days=40)).isoformat()
 PAST = (date.today() - timedelta(days=40)).isoformat()
@@ -280,6 +280,23 @@ class SoonestDeadline(Base):
         self.conn.execute("UPDATE opportunities SET deadline = ? WHERE id = ?",
                           ((date.today() + timedelta(days=1000)).isoformat(), IRB["id"]))
         self.assertEqual(db.next_due(self.conn), {})
+
+    def test_date_range_matches_any_listings_date(self):
+        later_round = (date.today() + timedelta(days=100)).isoformat()
+        self.add(dict(IRB, id="fnd:irb2", deadline=later_round,
+                      page_url=IRB_PAGE + "-round-2"))
+        self.link()
+        rows = catalogue.load(self.conn, {})
+
+        def hits(lo, hi):
+            return [o["id"] for o in catalogue.search(
+                self.conn, rows, None, deadline_from=lo, deadline_to=hi)]
+        around = lambda d: ((date.fromisoformat(d) - timedelta(days=1)).isoformat(),
+                            (date.fromisoformat(d) + timedelta(days=1)).isoformat())
+        self.assertEqual(hits(*around(self.SOONER)), [GG["id"]])      # the shown date
+        self.assertEqual(hits(*around(later_round)), [GG["id"]])     # the second round
+        self.assertEqual(hits(*around(self.LATER)), [GG["id"]])      # grants.gov's own
+        self.assertEqual(hits(*around((date.today() + timedelta(days=300)).isoformat())), [])
 
     def test_rolling_funder_copy_takes_a_stated_date(self):
         self.conn.execute("UPDATE opportunities SET deadline = NULL WHERE id = ?", (GG["id"],))
