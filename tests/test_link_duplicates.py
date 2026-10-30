@@ -298,6 +298,15 @@ class SoonestDeadline(Base):
         self.assertEqual(hits(*around(self.LATER)), [GG["id"]])      # grants.gov's own
         self.assertEqual(hits(*around((date.today() + timedelta(days=300)).isoformat())), [])
 
+    def test_funder_filter_and_counts_include_folded_copies(self):
+        rows = catalogue.load(self.conn, {})
+        hits = catalogue.search(self.conn, rows, None, funder="Illinois Research Board")
+        self.assertEqual([o["id"] for o in hits], [GG["id"]])
+        self.assertEqual([o["id"] for o in catalogue.search(self.conn, rows, None, funder="NIH")],
+                         [GG["id"]])
+        funders = {f["name"]: f["count"] for f in catalogue.facets(self.conn, rows)["funders"]}
+        self.assertEqual(funders.get("Illinois Research Board"), 1)
+
     def test_rolling_funder_copy_takes_a_stated_date(self):
         self.conn.execute("UPDATE opportunities SET deadline = NULL WHERE id = ?", (GG["id"],))
         self.assertEqual(db.next_due(self.conn)[GG["id"]][0], self.SOONER)
