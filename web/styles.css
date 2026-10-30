@@ -266,6 +266,18 @@ h2.title a { color: var(--il-blue); }
   max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .areatag:hover { color: var(--il-blue); border-color: var(--il-blue); }
+.fit .intro { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+              padding: 12px 14px; margin: 0 -4px -4px; background: var(--tint-blue);
+              border: 1px solid #D3DEEE; border-radius: 8px; }
+.fit .introhint { font-size: 13px; color: var(--text-2); }
+.introbtn {
+  font: inherit; font-size: 13.5px; font-weight: 600; color: #fff; cursor: pointer;
+  background: var(--il-industrial); border: 0; border-radius: 999px; padding: 6px 14px;
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.introbtn:hover { background: var(--il-blue); }
+.introbtn:focus-visible { outline: 2px solid var(--il-orange); outline-offset: 2px; }
+.introbtn:disabled { opacity: 0.5; cursor: default; }
 .reach { display: flex; flex-wrap: wrap; gap: 8px 32px; padding-top: 10px;
          border-top: 1px solid #E3E6EB; font-size: 13.5px; }
 .reach > div { display: flex; gap: 10px; align-items: baseline; }
@@ -349,6 +361,7 @@ h2.title a { color: var(--il-blue); }
 .chat .turn.user .from { color: var(--il-industrial); }
 .chat .turn.assistant { align-self: flex-start; background: #fff; }
 .chat .turn.assistant { white-space: normal; }
+.chat .turn .unverified { margin: 8px 0 0; font-size: 12.5px; color: var(--il-altgeld); }
 .chat .md > :first-child { margin-top: 0; }
 .chat .md > :last-child { margin-bottom: 0; }
 .chat .md p, .chat .md ul, .chat .md ol, .chat .md pre { margin: 0 0 8px; }
