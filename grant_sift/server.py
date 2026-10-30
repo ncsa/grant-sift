@@ -862,10 +862,15 @@ def _opportunity_context(conn, opp_id: str) -> str:
     if row is None:
         raise HTTPException(404, "unknown opportunity_id")
     r = dict(row)
+    deadline = r["deadline"] or "none stated"
+    sooner = db.next_due(conn).get(opp_id)
+    if sooner:
+        deadline = (f"{sooner[0]} (per {sooner[1]}; the funder's own listing "
+                    f"says {r['deadline'] or 'rolling'})")
     lines = [
         f"Title: {r['title']}",
         f"Funder: {r['agency'] or r['source']}",
-        f"Deadline: {r['deadline'] or 'none stated'}",
+        f"Deadline: {deadline}",
         f"Award: {r['award_ceiling'] or 'not stated'}",
         f"Indirect cap: {r['indirect_cap'] or 'not stated'}",
         f"Link: {r['url']}",

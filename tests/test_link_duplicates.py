@@ -202,8 +202,58 @@ class Catalogue(Base):
         rows = pipeline.catalogue_rows(self.conn, {})
         self.assertEqual([r["id"] for r in rows], [GG["id"]])
         self.assertEqual(rows[0]["also_listed"],
-                         [{"source": "Illinois Research Board", "url": NIH_URL}])
+                         [{"source": "Illinois Research Board", "url": NIH_URL,
+                           "deadline": SOON}])
         self.assertEqual(rows[0]["human"]["verdict"], "down")
+
+
+class SoonestDeadline(Base):
+    """PAR-27-003: grants.gov holds the announcement's expiry, the Research
+    Board the next receipt date. The call is as urgent as the sooner one."""
+
+    LATER = (date.today() + timedelta(days=900)).isoformat()
+    SOONER = (date.today() + timedelta(days=20)).isoformat()
+
+    def setUp(self):
+        super().setUp()
+        self.gg = dict(GG, deadline=self.LATER)
+        self.irb = dict(IRB, deadline=self.SOONER)
+        self.add(self.gg, self.irb)
+        self.link()
+        db.save_assessment(self.conn, GG["id"], {"score": 70, "category": "ci_program"}, "m", "h")
+
+    def test_next_due(self):
+        self.assertEqual(db.next_due(self.conn),
+                         {GG["id"]: (self.SOONER, "Illinois Research Board")})
+
+    def test_card_shows_and_sorts_by_the_sooner_date(self):
+        other = {"id": "gg:9", "source": "grants.gov", "title": "Unrelated Call",
+                 "url": "", "deadline": (date.today() + timedelta(days=60)).isoformat()}
+        self.add(other)
+        db.save_assessment(self.conn, "gg:9", {"score": 99, "category": "ci_program"}, "m", "h")
+        rows = pipeline.catalogue_rows(self.conn, {})
+        self.assertEqual([r["id"] for r in rows], [GG["id"], "gg:9"])
+        self.assertEqual(rows[0]["deadline"], self.SOONER)
+        self.assertEqual(rows[0]["deadline_from"], "Illinois Research Board")
+        self.assertEqual(rows[0]["listed_deadline"], self.LATER)
+        self.assertIsNone(rows[1]["deadline_from"])
+
+    def test_closing_soon_digest_sees_it(self):
+        items = pipeline.build_digest(self.conn, "closing-soon", respect_sent_log=False)
+        self.assertEqual([i["id"] for i in items], [GG["id"]])
+        self.assertIn("(per Illinois Research Board)",
+                      pipeline.render_digest("closing-soon", items, []))
+
+    def test_closed_or_later_copies_change_nothing(self):
+        self.conn.execute("UPDATE opportunities SET deadline = ? WHERE id = ?", (PAST, IRB["id"]))
+        self.assertEqual(db.next_due(self.conn), {})
+        self.conn.execute("UPDATE opportunities SET deadline = ? WHERE id = ?",
+                          ((date.today() + timedelta(days=1000)).isoformat(), IRB["id"]))
+        self.assertEqual(db.next_due(self.conn), {})
+
+    def test_rolling_funder_copy_takes_a_stated_date(self):
+        self.conn.execute("UPDATE opportunities SET deadline = NULL WHERE id = ?", (GG["id"],))
+        self.assertEqual(db.next_due(self.conn)[GG["id"]][0], self.SOONER)
 
 
 if __name__ == "__main__":

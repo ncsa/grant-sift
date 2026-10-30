@@ -225,6 +225,7 @@ main.wrap { padding-top: 40px; padding-bottom: 64px; }
               color: var(--text-3); margin-left: 4px; }
 .when .d.word { font-size: 22px; line-height: 1.1; }
 .when .m { font-size: 13px; color: var(--text-3); margin-top: 6px; }
+.when .m.per { margin-top: 2px; font-size: 12px; font-style: italic; }
 .row.soon .when .d, .row.soon .when .d .u { color: var(--il-altgeld); }
 
 .body { flex: 999 1 480px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }

@@ -468,6 +468,27 @@ def canonical_id(conn, opp_id: str) -> str:
     return (row and row["duplicate_of"]) or opp_id
 
 
+def next_due(conn) -> dict:
+    """Shown id -> (date, source), where a folded-in copy names a sooner
+    upcoming deadline than the shown copy does.
+
+    The shown copy is the funder's, but its date is not always the one to act
+    on. For an NIH parent announcement grants.gov stores when the
+    announcement expires (PAR-27-003: 2029-09-26), while the Research Board
+    gives the next receipt date or the campus internal deadline for a limited
+    submission (2026-11-17). A call is as urgent as its soonest open date.
+    """
+    today = datetime.now(timezone.utc).date().isoformat()
+    out = {}
+    for r in conn.execute(
+            """SELECT d.duplicate_of AS id, d.deadline, d.source
+               FROM opportunities d JOIN opportunities o ON o.id = d.duplicate_of
+               WHERE d.deadline >= ? AND (o.deadline IS NULL OR o.deadline > d.deadline)
+               ORDER BY d.deadline, d.source""", (today,)):
+        out.setdefault(r["id"], (r["deadline"], r["source"]))
+    return out
+
+
 def _tier(source, kinds, aggregators) -> int:
     """Which copy is shown: the funder's API, then the funder's own pages,
     then lists and feeds that relist other funders' calls."""

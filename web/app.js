@@ -181,7 +181,14 @@ function whenHTML(o) {
   if (!o.deadline || away > SENTINEL_DAYS) {
     return `<div class="d word">Rolling</div><div class="m">No fixed date</div>`;
   }
-  const due = `<div class="m">Due ${esc(longDate(o.deadline))}</div>`;
+  // A sooner date from another listing of the call (an NIH receipt date or a
+  // campus internal deadline, where grants.gov has the expiry) says where it
+  // came from, and what the funder's own listing says.
+  const from = o.deadline_from
+    ? `<div class="m per" title="${o.listed_deadline
+        ? `The funder's listing says ${esc(longDate(o.listed_deadline))}` : "The funder's listing gives no date"}">per ${esc(o.deadline_from)}</div>`
+    : "";
+  const due = `<div class="m">Due ${esc(longDate(o.deadline))}</div>${from}`;
   if (away < 0) return `<div class="d word">Passed</div>${due}`;
   if (away === 0) return `<div class="d word">Today</div>${due}`;
   return `<div class="d">${away}<span class="u">${away === 1 ? "day" : "days"}</span></div>${due}`;
