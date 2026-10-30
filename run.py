@@ -2,7 +2,7 @@
 """Grant Sift CLI.
 
     python run.py daily                 # nightly: ingest, assess, digest, telemetry
-    python run.py ingest                # fetch, screen and store only
+    python run.py ingest                # fetch and store only
     python run.py assess                # classify and match anything unassessed
     python run.py digest --feed closing-soon [--send]
     python run.py telemetry             # write telemetry_daily for Grafana (/api/stats)
@@ -44,9 +44,9 @@ _SHUTDOWN = threading.Event()
 
 
 def cmd_ingest(conn, args):
-    sources, _, screen_rules = pipeline.load_config(args.config)
+    sources, _ = pipeline.load_config(args.config)
     print("Ingesting:")
-    stats = pipeline.ingest(conn, sources, screen_rules)
+    stats = pipeline.ingest(conn, sources)
     line = f"\n{stats['fetched']} open calls read, {stats['new']} new or changed"
     if stats.get("enriched"):
         line += f", {stats['enriched']} enriched with detail"
@@ -63,7 +63,7 @@ def cmd_ingest(conn, args):
 
 
 def cmd_assess(conn, args):
-    _, roster, _ = pipeline.load_config(args.config)
+    _, roster = pipeline.load_config(args.config)
     if getattr(args, "rematch", False):
         # A roster entry added today cannot retroactively match a record that
         # was scored before it existed. Only records that matched nobody could
@@ -91,7 +91,7 @@ def cmd_assess(conn, args):
 
 def cmd_digest(conn, args):
     stale = db.stale_sources(conn)
-    _, roster, _ = pipeline.load_config()
+    _, roster = pipeline.load_config()
     items = pipeline.build_digest(conn, args.feed, since_days=args.since,
                                   roster=roster)
     body = pipeline.render_digest(args.feed, items, stale)

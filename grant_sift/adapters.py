@@ -134,15 +134,29 @@ def grants_gov_detail(oid):
     return out
 
 
-def grants_gov(keywords, rows=200, agencies=None):
-    records = []
-    for kw in keywords:
-        payload = {"keyword": kw, "rows": rows, "oppStatuses": "forecasted|posted"}
+def grants_gov(agencies=None, rows=250):
+    """Every forecasted and posted opportunity, a page of `rows` at a time.
+
+    No keyword: relevance is the model's call, so the whole open list is read
+    (1,469 calls on 2026-10-30, six requests). A search per keyword capped at
+    200 rows each had missed 399 of them. A pull that stops short of the
+    reported hitCount raises rather than storing a partial list as if it were
+    complete.
+    """
+    records, start, total = [], 0, None
+    while total is None or start < total:
+        payload = {"keyword": "", "rows": rows, "startRecordNum": start,
+                   "oppStatuses": "forecasted|posted"}
         if agencies:
             payload["agencies"] = "|".join(agencies)
         r = requests.post(GRANTS_GOV_URL, json=payload, headers=HEADERS, timeout=TIMEOUT)
         r.raise_for_status()
-        hits = (r.json().get("data") or {}).get("oppHits") or []
+        data = r.json().get("data") or {}
+        total = int(data.get("hitCount") or 0)
+        hits = data.get("oppHits") or []
+        if not hits:
+            break
+        start += len(hits)
         for h in hits:
             oid = str(h.get("id") or h.get("number") or "")
             if not oid:
@@ -160,49 +174,8 @@ def grants_gov(keywords, rows=200, agencies=None):
                 "indirect_cap": None,
                 "raw": h,
             })
-    return _dedupe(records)
-
-
-# --------------------------------------------------------------------------
-# NSF
-# --------------------------------------------------------------------------
-
-NSF_URL = "https://www.nsf.gov/awardsearch/publicationsapi/fundingSearch"
-
-
-def nsf(keywords, rows=100):
-    """NSF's public funding search. Falls back quietly if the endpoint shifts -
-    Grants.gov carries NSF too, so this is enrichment, not a single point of failure."""
-    records = []
-    for kw in keywords:
-        try:
-            r = requests.get(
-                NSF_URL,
-                params={"searchText": kw, "pageSize": rows, "pageNumber": 1},
-                headers=HEADERS, timeout=TIMEOUT,
-            )
-            r.raise_for_status()
-            data = r.json()
-        except Exception:
-            continue
-        items = data if isinstance(data, list) else data.get("response", data).get("results", [])
-        for it in items or []:
-            pid = str(it.get("id") or it.get("fundingId") or it.get("pubNumber") or "")
-            if not pid:
-                continue
-            records.append({
-                "id": f"nsf:{pid}",
-                "source": "nsf",
-                "external_id": pid,
-                "title": it.get("title") or it.get("name") or "",
-                "synopsis": it.get("synopsis") or it.get("abstract") or "",
-                "agency": "NSF",
-                "url": it.get("url") or f"https://www.nsf.gov/funding/opportunities/{pid}",
-                "deadline": _iso(it.get("nextDueDate") or it.get("dueDate")),
-                "award_ceiling": it.get("awardCeiling"),
-                "indirect_cap": None,
-                "raw": it,
-            })
+    if start < total:
+        raise RuntimeError(f"grants.gov returned {start} of {total} opportunities")
     return _dedupe(records)
 
 

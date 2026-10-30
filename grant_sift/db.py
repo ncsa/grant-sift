@@ -221,8 +221,9 @@ def init(path: str = "grant-sift.db") -> None:
             conn.execute("ALTER TABLE sources ADD COLUMN zero_streak INTEGER DEFAULT 0")
             conn.commit()
         ocols = {r["name"] for r in conn.execute("PRAGMA table_info(opportunities)")}
-        if "screen" not in ocols:
-            conn.execute("ALTER TABLE opportunities ADD COLUMN screen TEXT")
+        if "screen" in ocols:
+            # A keyword note nothing read. Ingest no longer writes it.
+            conn.execute("ALTER TABLE opportunities DROP COLUMN screen")
             conn.commit()
         if "page_url" not in ocols:
             # The page a record was read from: a Research Board /rfp/ page, a
@@ -301,6 +302,24 @@ _NIH_SUFFIX = re.compile(
 
 _FILLER = {"the", "and", "of", "a", "an"}
 
+# One name, two spellings: listings abbreviate what grants.gov spells out
+# ('NSF State and Regional Artificial Intelligence Infrastructure Hubs' against
+# 'U.S. National Science Foundation State and Regional ...'), or the reverse.
+# Applied to the lower-cased, punctuation-free title, longest phrase first.
+_SAME_NAME = (
+    (r"\bu s national science foundation\b", "nsf"),
+    (r"\bnational science foundation\b", "nsf"),
+    (r"\bnational institutes of health\b", "nih"),
+    (r"\bartificial intelligence\b", "ai"),
+    (r"\bsuper ?intelligence\b", "si"),
+)
+
+
+def _same_names(t: str) -> str:
+    for pattern, short in _SAME_NAME:
+        t = re.sub(pattern, short, t)
+    return t
+
 
 def title_core(title: str, funder: str = "") -> str:
     """A call's name with an aggregator's house style taken off.
@@ -310,14 +329,16 @@ def title_core(title: str, funder: str = "") -> str:
     Research in Robotics (FRR)', and Simons' own 'Simons Collaborations in
     Mathematics and the Physical Sciences' loses the funder's name. Strip the
     wrapper, NIH's activity-code suffix, the funder's name and the filler
-    words so the two compare.
+    words, and spell abbreviated names one way (_SAME_NAME), so the two
+    compare.
     """
     t = _NIH_SUFFIX.sub("", title or "")
     t = "".join(c if c.isalnum() else " " for c in t.lower())
-    t = _TITLE_PREFIX.sub("", " ".join(t.split()))
+    t = _TITLE_PREFIX.sub("", _same_names(" ".join(t.split())))
     t = re.sub(r"^(supporting|core research in|research in|the) ", "", t)
     words = [w for w in t.split() if w not in _FILLER]
-    lead = (funder or "").lower().split()[:1]
+    funder = "".join(c if c.isalnum() else " " for c in (funder or "").lower())
+    lead = _same_names(" ".join(funder.split())).split()[:1]
     if lead and words[:1] == lead and len(words) > 1:
         words = words[1:]
     return " ".join(words)
@@ -357,6 +378,9 @@ def same_call(a: str, b: str) -> bool:
 #             version'), and those are different calls.
 #   gg:<id>   a grants.gov record, under either of its URL schemes.
 #   url:<u>   the call's own link, normalised.
+#
+# A number some record holds also joins any record whose link or title names
+# it as a whole token, whatever the scheme (see borrowed_numbers).
 #
 # A key one source holds on differently titled records is an umbrella, not an
 # identifier, and joins nothing (see umbrella() in link_duplicates).
@@ -441,14 +465,21 @@ def call_keys(rec) -> set:
             raw = json.loads(raw)
         except ValueError:
             # Stored raw is cut at 20,000 chars, which can break the JSON.
-            m = re.search(r'"number":\s*"([^"]+)"', raw)
-            raw = {"number": m.group(1)} if m else {}
+            raw = {k: m.group(1) for k in ("number", "agencyCode")
+                   if (m := re.search(rf'"{k}":\s*"([^"]+)"', raw))}
     raw = raw if isinstance(raw, dict) else {}
 
     keys = set()
     for ident in (raw.get("number"), raw.get("pubNumber"), raw.get("opportunity_number")):
         if ident:
             keys |= _numbers(ident, whole=True)
+    # grants.gov files NSF solicitations under the bare number ('26-512'),
+    # which every other copy writes as NSF 26-512 or links as /nsf26-512/.
+    # 88 of 132 NSF records carried no number key for it.
+    if str(raw.get("agencyCode") or "").upper().startswith("NSF"):
+        m = re.fullmatch(r"\s*(\d{2})-(\d{3,4})\s*", str(raw.get("number") or ""))
+        if m:
+            keys.add(_number_key(f"NSF{m.group(1)}{m.group(2)}"))
     keys |= _numbers(rec.get("title"))
     keys |= _numbers(rec.get("url"))
     u = _url_key(rec.get("url"))
@@ -528,6 +559,35 @@ def next_due(conn) -> dict:
     return out
 
 
+_TOKEN_SPLIT = re.compile(r"[\s/?&=#()\[\],;:]+")
+
+
+def borrowed_numbers(rows, holders):
+    """(id, key) for each number key another record holds that this one's
+    link or title names, but no pattern recognised.
+
+    _NUMBERS knows a handful of schemes; grants.gov's `number` covers every
+    agency. The Research Board links the grants.gov PDF for a NOAA call
+    (.../NOAA-NOS-NCCOS-2026-32934.pdf) and AFRL's (.../NOFOAFRLAFOSR20260001.pdf),
+    and neither scheme is a pattern. So the numbers already held are the
+    vocabulary: a link or title token that normalises to one of them is it.
+
+    Whole tokens only, never substrings, and only numbers long enough to
+    have passed _numbers' whole-identifier rule, so 'TTHP' or '2301' borrow
+    nothing.
+    """
+    known = {k for k in holders if k.startswith("num:") and len(k) >= 12}
+    out = set()
+    for r in rows:
+        text = f"{r['url'] or ''} {r['title'] or ''}"
+        for tok in _TOKEN_SPLIT.split(text):
+            tok = re.sub(r"\.(pdf|html?|docx?|aspx?)$", "", tok, flags=re.I)
+            k = _number_key(tok)
+            if k in known and r["id"] not in holders[k]:
+                out.add((r["id"], k))
+    return sorted(out)
+
+
 def _tier(source, kinds, aggregators) -> int:
     """Which copy is shown: the funder's API, then the funder's own pages,
     then lists and feeds that relist other funders' calls."""
@@ -550,12 +610,14 @@ def link_duplicates(conn, aggregators=(), apply=True) -> list:
     aggregators = set(aggregators)
     kinds = {r["name"]: r["kind"] for r in conn.execute("SELECT name, kind FROM sources")}
     rows = {r["id"]: r for r in conn.execute(
-        """SELECT id, source, title, agency, deadline, synopsis, award_ceiling,
+        """SELECT id, source, title, agency, url, deadline, synopsis, award_ceiling,
                   first_seen, duplicate_of FROM opportunities""")}
     holders = {}
     for r in conn.execute("SELECT key, opportunity_id FROM call_keys"):
         if r["opportunity_id"] in rows:
             holders.setdefault(r["key"], []).append(r["opportunity_id"])
+    for i, k in borrowed_numbers(rows.values(), holders):
+        holders[k].append(i)
 
     parent = {}
 
@@ -642,16 +704,16 @@ def upsert_opportunity(conn: sqlite3.Connection, rec: dict) -> bool:
         conn.execute(
             """INSERT INTO opportunities
                (id, source, external_id, kind, title, synopsis, agency, url,
-                page_url, deadline, award_ceiling, indirect_cap, screen,
+                page_url, deadline, award_ceiling, indirect_cap,
                 content_hash, first_seen, last_seen, raw)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 rec["id"], rec["source"], rec.get("external_id"),
                 rec.get("kind", "solicitation"), rec["title"], rec.get("synopsis"),
                 rec.get("agency"), rec.get("url"), rec.get("page_url") or rec.get("url"),
                 rec.get("deadline"),
                 rec.get("award_ceiling"), rec.get("indirect_cap"),
-                rec.get("screen"), content_hash,
+                content_hash,
                 ts, ts, json.dumps(rec.get("raw", {}))[:20000],
             ),
         )
@@ -674,13 +736,13 @@ def upsert_opportunity(conn: sqlite3.Connection, rec: dict) -> bool:
     conn.execute(
         """UPDATE opportunities
            SET last_seen=?, title=?, synopsis=?, deadline=?, agency=?, url=?,
-               page_url=?, award_ceiling=?, indirect_cap=?, screen=?, content_hash=?
+               page_url=?, award_ceiling=?, indirect_cap=?, content_hash=?
            WHERE id=?""",
         (
             ts, rec["title"], merged["synopsis"], merged["deadline"],
             rec.get("agency"), rec.get("url"), rec.get("page_url") or rec.get("url"),
             merged["award_ceiling"],
-            merged["indirect_cap"], rec.get("screen"), content_hash, rec["id"],
+            merged["indirect_cap"], content_hash, rec["id"],
         ),
     )
     if changed:

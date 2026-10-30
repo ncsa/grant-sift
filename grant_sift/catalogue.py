@@ -179,7 +179,7 @@ FILTERS = {
     "match": lambda o, ctx: bool(o["match_name"]),
     "embedded": lambda o, ctx: o["category"] in ("embedded_software", "domain_subaward"),
     "ci": lambda o, ctx: o["category"] == "ci_program",
-    "foundation": lambda o, ctx: o["source"] not in ("grants.gov", "nsf"),
+    "foundation": lambda o, ctx: o["source"] != "grants.gov",
     # No deadline: rolling, or none stated. A deadline range drops these, so
     # this is the only way to ask for them.
     "rolling": lambda o, ctx: not o["deadline"],

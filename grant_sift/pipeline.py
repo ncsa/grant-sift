@@ -1,8 +1,8 @@
-"""Ingest -> screen -> store -> classify -> match.
+"""Ingest -> store -> classify -> match.
 
-Every record fetched is stored and reaches the model. The screen is
-deterministic and free, and only annotates: it notes what stood out about a
-record and never decides whether it is kept.
+Every open call each source lists is fetched, stored and reaches the model.
+No keyword decides what is read or what is scored: relevance is judged by the
+model against the roster.
 """
 
 import json
@@ -68,9 +68,7 @@ def load_config(config_dir="config"):
         )
     with open(roster_path) as f:
         roster = normalise(yaml.safe_load(f) or [], d)
-    with open(d / "screen.yaml") as f:
-        screen_rules = yaml.safe_load(f)
-    return sources, roster, screen_rules
+    return sources, roster
 
 
 def normalise(entries, d=Path("config")):
@@ -128,33 +126,6 @@ def load_staff(d=Path("config")):
 
 
 # --------------------------------------------------------------------------
-# Screen, deterministic, no model. Annotates; never excludes.
-# --------------------------------------------------------------------------
-
-def screen(rec, rules):
-    """Describe a record. Never decide its fate.
-
-    Returns a short note, or None when nothing stood out. Nothing fetched is
-    discarded on the strength of it: relevance is Lumen's job, judged against
-    the roster, and a deterministic regex has no business overruling that. The
-    note is stored so you can see what a keyword screen WOULD have thrown away,
-    and query it later if the volume ever needs managing.
-    """
-    blob = f"{rec.get('title','')} {rec.get('synopsis','')}".lower()
-    notes = []
-    for pattern in rules.get("exclude_patterns", []):
-        if re.search(pattern, blob):
-            notes.append(f"matched exclusion {pattern}")
-    hits = [k for k in rules.get("include_keywords", []) if k.lower() in blob]
-    if hits:
-        notes.append("keywords: " + ", ".join(hits[:6]))
-    agency = (rec.get("agency") or "").lower()
-    if any(a.lower() in agency for a in rules.get("agency_allowlist", [])):
-        notes.append("agency allowlist")
-    return "; ".join(notes)[:500] or None
-
-
-# --------------------------------------------------------------------------
 # Ingest
 # --------------------------------------------------------------------------
 
@@ -175,10 +146,8 @@ COMMIT_EVERY = 1
 def _enrich(conn, rec, stats, verbose):
     """Fill in description and award figures from the per-opportunity endpoint.
 
-    Runs BEFORE the screen, so its keyword notes see the description rather
-    than the title alone, and so does the model. grants.gov search2 returns no
-    description, so without this a call whose software requirement sits in the
-    body text is judged on its title.
+    grants.gov search2 returns no description, so without this a call whose
+    software requirement sits in the body text is judged on its title.
 
     Every result is cached by db.save_detail, keyed by id rather than by the
     opportunities table, so a record is fetched once in its life rather than
@@ -293,12 +262,11 @@ def aggregator_names(sources):
             for s in (sources.get(key) or []) if s.get("aggregator")}
 
 
-def ingest(conn, sources, screen_rules, verbose=True):
+def ingest(conn, sources, verbose=True):
     stats = {"fetched": 0, "new": 0, "enriched": 0,
              "detail_cached": 0, "detail_failed": 0, "expired": 0, "archived": 0,
              "pruned": 0, "duplicate": 0}
     sources = merge_sources(sources, conn, verbose)
-    kw = sources.get("keywords", [])
 
     def run(name, kind, url, fn):
         try:
@@ -315,12 +283,10 @@ def ingest(conn, sources, screen_rules, verbose=True):
             stats["fetched"] += len(records)
             for rec in records:
                 _enrich(conn, rec, stats, verbose)
-                # Both of these annotate. Neither drops: a closed call is still
-                # a record of what was open, and a regex is not a relevance
-                # judgement. Ranking is decided by the model and the roster.
+                # Counted, not dropped: a closed call is still a record of
+                # what was open.
                 if adapters.is_expired(rec):
                     stats["expired"] += 1
-                rec["screen"] = screen(rec, screen_rules)
                 if db.upsert_opportunity(conn, rec):
                     stats["new"] += 1
                 db.save_keys(conn, rec["id"], db.call_keys(rec))
@@ -340,11 +306,8 @@ def ingest(conn, sources, screen_rules, verbose=True):
     if sources.get("grants_gov", {}).get("enabled"):
         cfg = sources["grants_gov"]
         run("grants.gov", "api", adapters.GRANTS_GOV_URL,
-            lambda: adapters.grants_gov(kw, agencies=cfg.get("agencies")))
+            lambda: adapters.grants_gov(agencies=cfg.get("agencies")))
         _recheck_undated(conn, stats, verbose)
-
-    if sources.get("nsf", {}).get("enabled"):
-        run("nsf", "api", adapters.NSF_URL, lambda: adapters.nsf(kw))
 
     for feed in sources.get("feeds", []):
         run(feed["name"], "feed", feed["url"],
@@ -815,7 +778,7 @@ def _score(r):
 FEEDS = {
     "ci-programs":  lambda r: r["category"] == "ci_program" and _score(r) >= 60,
     "embedded":     lambda r: r["category"] in ("embedded_software", "domain_subaward") and _score(r) >= 65,
-    "foundations":  lambda r: r["source"] not in ("grants.gov", "nsf") and _score(r) >= 60,
+    "foundations":  lambda r: r["source"] != "grants.gov" and _score(r) >= 60,
     "closing-soon": lambda r: _within(r["deadline"], 30) and _score(r) >= 60,
     "roster-match": lambda r: r["match_name"] and _score(r) >= 60,
 }
