@@ -8,6 +8,63 @@ grants_gov:
   # Leave empty for all agencies. Narrow it once you see the volume.
   agencies: []
 
+# Research contract calls that never reach grants.gov: DARPA, ONR, AFRL and
+# ARPA-H Broad Agency Announcements are posted to SAM.gov only. Without this
+# the Illinois Research Board's copy was the only one we had.
+#
+# Key: GRANT_SIFT_SAM_API_KEY, a personal key from the SAM.gov Account
+# Details page (helm: secrets.GRANT_SIFT_SAM_API_KEY). For a non-federal user
+# with no SAM.gov role it allows 10 requests a DAY, which is the budget this
+# is sized to: one search per query below, then descriptions with whatever
+# of `max_requests` is left. Descriptions not read are read on a later run.
+# A key with a role allows 1,000; raise `max_requests` if yours has one.
+#
+# SAM.gov is mostly procurement, so it is filtered three times: the search
+# is by office (one request each, refused rather than truncated if it holds
+# over `limit` notices), a notice must be a solicitation, combined
+# synopsis/solicitation, presolicitation or special notice and still active,
+# and it must carry an R&D NAICS code (`naics`, prefix match) or a BAA-like
+# title (`title_terms`).
+sam_gov:
+  enabled: true
+  cadence: weekly
+  max_requests: 8
+  lookback_days: 364
+  limit: 1000
+  naics: ["5417"]
+  # Whole words or phrases, any case.
+  title_terms:
+    - BAA
+    - broad agency announcement
+    - research announcement
+    - ARA
+    - research opportunity
+    - research opportunities
+    - innovative solutions opening
+    - ISO
+    - commercial solutions opening
+    - CSO
+    - program solicitation
+    - research and development
+    - office-wide
+  queries:
+    - name: DARPA
+      organizationName: DEFENSE ADVANCED RESEARCH PROJECTS AGENCY
+    - name: ARPA-H
+      organizationName: ADVANCED RESEARCH PROJECTS AGENCY FOR HEALTH
+    # Office codes, since ONR, AFRL and ARO sit two or more levels below the
+    # department and subtier that organizationName reaches.
+    - name: ONR
+      organizationCode: N00014
+    - name: AFOSR
+      agency: AFOSR / AFRL
+      organizationCode: FA9550
+    - name: AFRL Information Directorate
+      agency: AFRL
+      organizationCode: FA8750
+    - name: ARO
+      organizationCode: W911NF
+
 feeds:
   # CURIOSS moved to foundations: below -- it publishes no RSS feed, so the
   # /feed.xml guess 404d. Verified 2026-09-04.

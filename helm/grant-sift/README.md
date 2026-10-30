@@ -14,7 +14,7 @@ SQLite is a file on the PVC (`/data/grant-sift.db`); there is no separate SQLite
 | oauth2-proxy + Ingress | Traefik → Keycloak login → app |
 | Grafana (optional) | OSS charts for `telemetry_daily`; Infinity → `http://grant-sift:8080/api/stats` |
 | PVC (`nfs-taiga`) | `/data`: `grant-sift.db`, written by the Deployment only |
-| Secret | `GRANT_SIFT_LLM_API_KEY` (pipeline) + `grant-sift-oauth2` (OIDC) + `grant-sift-grafana` (admin) |
+| Secret | `GRANT_SIFT_LLM_API_KEY` (pipeline), optional `GRANT_SIFT_SAM_API_KEY` (sam.gov source) + `grant-sift-oauth2` (OIDC) + `grant-sift-grafana` (admin) |
 | ConfigMap | Non-secret env + mounted `roster.yaml` + Grafana dashboards |
 
 Grafana setup details: **[GRAFANA.md](./GRAFANA.md)**.
@@ -124,6 +124,7 @@ kubectl create namespace grant-sift
 # Pipeline LLM key (gitignored)
 cp helm/grant-sift/values-secrets.example.yaml helm/grant-sift/values-secrets.yaml
 # edit: secrets.GRANT_SIFT_LLM_API_KEY: "sk_..."
+#       secrets.GRANT_SIFT_SAM_API_KEY: "..."   (optional, sam.gov source)
 
 # oauth2-proxy ↔ Keycloak
 COOKIE_SECRET="$(python3 -c 'import secrets,base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())')"

@@ -151,6 +151,12 @@ secrets:
   existingSecret: ""
   # Key name inside existingSecret that holds the LLM API key.
   existingSecretKey: GRANT_SIFT_LLM_API_KEY
+  # Optional: SAM.gov public API key (SAM.gov > Account Details), for the
+  # sam.gov source in config/sources.yaml. Without it that source fails
+  # loudly each week and every other source runs as before.
+  GRANT_SIFT_SAM_API_KEY: ""
+  # Key name inside existingSecret that holds it.
+  samApiKeySecretKey: GRANT_SIFT_SAM_API_KEY
 
 # ---------------------------------------------------------------------------
 # oauth2-proxy subchart (official). Points at Keycloak; Grant Sift stays header-only.

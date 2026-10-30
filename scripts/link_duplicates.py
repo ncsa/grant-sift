@@ -46,7 +46,7 @@ def flags(conn, group):
         out.append("BIG")
     if any(k.startswith("title:") for k in keys):
         out.append("TITLE")
-    elif not any(k.startswith(("num:", "gg:")) for k in keys):
+    elif not any(k.startswith(("num:", "gg:", "sam:")) for k in keys):
         out.append("URL-ONLY")
     titles = [r["title"] for r in conn.execute(
         f"SELECT title FROM opportunities WHERE id IN ({','.join('?' * len(group['members']))})",

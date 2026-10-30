@@ -63,6 +63,12 @@ spec:
                 secretKeyRef:
                   name: {{ include "grant-sift.secretName" . }}
                   key: {{ .Values.secrets.existingSecretKey }}
+            - name: GRANT_SIFT_SAM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "grant-sift.secretName" . }}
+                  key: {{ .Values.secrets.samApiKeySecretKey }}
+                  optional: true
             # The realm MCP clients log in against, named in
             # /.well-known/oauth-protected-resource. Optional so a release
             # without Keycloak still starts; /mcp then has no login to offer.
