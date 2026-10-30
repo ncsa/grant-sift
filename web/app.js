@@ -234,6 +234,13 @@ function rowHTML(o, opts = {}) {
     meta.push(`<span class="mininum" aria-label="Fit score ${o.score} of 100"><b>${o.score}</b>/100</span>`);
     meta.push(`<span class="fitpill ${band(o.score)[1]}">${band(o.score)[2]}</span>`);
   }
+  // Other listings of this same call, folded in server-side. Worth a link:
+  // the Research Board's copy is where a campus limited submission shows.
+  if (o.also_listed && o.also_listed.length) {
+    meta.push(`<span class="also">also on ${o.also_listed.map(a => a.url
+      ? `<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.source)}</a>`
+      : esc(a.source)).join(", ")}</span>`);
+  }
   if (kept) meta.push(kept);
   if (verdict) meta.push(verdict);
   if (cap) meta.push(cap);

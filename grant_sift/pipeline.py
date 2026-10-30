@@ -304,6 +304,16 @@ def merge_sources(sources, conn, verbose=True):
     return merged
 
 
+def aggregator_names(sources):
+    """Sources marked `aggregator: true`: lists of other funders' calls.
+
+    Their copy of a call is shown only when no funder's copy is, and theirs
+    are the only titles matched by resemblance (db.link_duplicates).
+    """
+    return {s["name"] for key in ("foundations", "feeds", "sitemaps", "listings")
+            for s in (sources.get(key) or []) if s.get("aggregator")}
+
+
 def ingest(conn, sources, prefilter, verbose=True):
     stats = {"fetched": 0, "kept": 0, "new": 0, "enriched": 0,
              "detail_cached": 0, "detail_failed": 0, "expired": 0, "archived": 0,
@@ -311,7 +321,7 @@ def ingest(conn, sources, prefilter, verbose=True):
     sources = merge_sources(sources, conn, verbose)
     kw = sources.get("keywords", [])
 
-    def run(name, kind, url, fn, aggregator=False):
+    def run(name, kind, url, fn):
         try:
             records = fn()
             # None means "the page had not moved, so we did not read it", which
@@ -324,20 +334,8 @@ def ingest(conn, sources, prefilter, verbose=True):
                 return
             records = adapters.drop_expired(records)
             stats["fetched"] += len(records)
-            kept = dup = 0
-            # An aggregator relists other funders' calls under its own titles.
-            # The funder's own record is the richer one (grants.gov carries the
-            # full synopsis and ceiling), so the aggregator's copy gives way,
-            # and one stored before the funder's appeared is removed now.
-            primary = db.primary_titles(conn, name) if aggregator else []
+            kept = 0
             for rec in records:
-                if aggregator:
-                    core = db.title_core(rec["title"], rec.get("agency"))
-                    if (db.relisted_primary(conn, rec)
-                            or any(db.same_call(core, p) for p in primary)):
-                        db.drop_superseded(conn, rec["id"])
-                        dup += 1
-                        continue
                 _enrich(conn, rec, stats, verbose)
                 # Both of these annotate. Neither drops: a closed call is still
                 # a record of what was open, and a regex is not a relevance
@@ -348,16 +346,15 @@ def ingest(conn, sources, prefilter, verbose=True):
                 kept += 1
                 if db.upsert_opportunity(conn, rec):
                     stats["new"] += 1
+                db.save_keys(conn, rec["id"], db.call_keys(rec))
                 conn.commit()          # same reason: do not hold the writer
 
             stats["kept"] += kept
-            stats["duplicate"] += dup
-            # A duplicate is still evidence the source is reading calls; an
-            # aggregator that only relists grants.gov must not look stale.
-            db.record_source_run(conn, name, kind, url, True, kept + dup)
+            # Duplicates are kept rows too, so an aggregator that only relists
+            # grants.gov still shows a yield and does not look stale.
+            db.record_source_run(conn, name, kind, url, True, kept)
             if verbose:
-                tail = f"  {dup:3d} dup" if dup else ""
-                print(f"  {name:38s} {len(records):4d} fetched  {kept:3d} kept{tail}", flush=True)
+                print(f"  {name:38s} {len(records):4d} fetched  {kept:3d} kept", flush=True)
         except Exception as exc:  # noqa: BLE001
             db.record_source_run(conn, name, kind, url, False, 0, str(exc)[:400])
             if verbose:
@@ -381,8 +378,7 @@ def ingest(conn, sources, prefilter, verbose=True):
             continue
         run(page["name"], "page", page["url"],
             lambda p=page: adapters.foundation_page(
-                conn, p["name"], p["url"], min_text=p.get("min_text")),
-            aggregator=bool(page.get("aggregator")))
+                conn, p["name"], p["url"], min_text=p.get("min_text")))
 
     # One pinned sitemap, expanded into the call pages it lists. Health is
     # recorded per FUNDER, not per page: 45 rows in `sources` for one funder
@@ -401,13 +397,22 @@ def ingest(conn, sources, prefilter, verbose=True):
         if not _due(conn, site):
             continue
         run(site["name"], "listing", site["listing"],
-            lambda c=site: adapters.listing_pages(conn, c),
-            aggregator=bool(site.get("aggregator")))
+            lambda c=site: adapters.listing_pages(conn, c))
 
     # Off unless asked for. Nothing fetched is thrown away by default.
     prune_days = os.environ.get("GRANT_SIFT_PRUNE_DAYS")
     if prune_days:
         stats["pruned"] = db.prune_expired(conn, int(prune_days))
+
+    # After the prune, so a pruned row cannot stay the copy others point at.
+    # Rows stored before call_keys existed, or by a source not read today,
+    # get their keys here; it is a regex per row, not a fetch.
+    db.fill_missing_keys(conn)
+    groups = db.link_duplicates(conn, aggregator_names(sources))
+    stats["duplicate"] = sum(len(g["members"]) - 1 for g in groups)
+    if verbose and groups:
+        print(f"  {stats['duplicate']} duplicate listing(s) folded into "
+              f"{len(groups)} call(s)", flush=True)
     conn.commit()
     return stats
 
@@ -754,6 +759,15 @@ def catalogue_rows(conn, contacts, min_score=0):
     # Shipped with the data so a recorded verdict shows up at once, without
     # waiting for the record to be re-scored.
     verdicts = db.human_verdicts(conn)
+    # The other listings of each call. Shown on the card because they say
+    # something the shown copy does not -- the Research Board listing a call is
+    # how a campus limited submission surfaces -- and a verdict given on a copy
+    # since folded in still stands.
+    also = {}
+    for d in conn.execute(
+            "SELECT id, source, url, duplicate_of FROM opportunities "
+            "WHERE duplicate_of IS NOT NULL ORDER BY source"):
+        also.setdefault(d["duplicate_of"], []).append(d)
     return [
         # The synopsis is not carried. It was 0.96 MB of a 2.56 MB payload,
         # and the generated summary replaces it in the list; the full text is
@@ -764,7 +778,10 @@ def catalogue_rows(conn, contacts, min_score=0):
         # indistinguishable from a real one, and the consumer is the only
         # place that can decide honestly what to do without it.
         | {"axes": _loads(r["axes_json"]), "facts": _loads(r["facts_json"])}
-        | {"human": verdicts.get(r["id"])}
+        | {"human": verdicts.get(r["id"]) or next(
+            (verdicts[d["id"]] for d in also.get(r["id"], []) if d["id"] in verdicts), None)}
+        | {"also_listed": [{"source": d["source"], "url": d["url"]}
+                           for d in also.get(r["id"], []) if d["source"] != r["source"]]}
         | {"contact": contacts.get((r["match_name"] or "").strip().lower())}
         for r in rows
     ]
@@ -826,7 +843,7 @@ def build_digest(conn, feed, since_days=7, respect_sent_log=True, roster=None):
         """SELECT o.*, a.score, a.category, a.rationale, a.match_name, a.match_kind,
                   a.match_domain, a.match_project, a.match_status, a.match_rationale
            FROM opportunities o JOIN assessments a ON a.opportunity_id = o.id
-           WHERE o.first_seen >= date('now', ?)
+           WHERE o.first_seen >= date('now', ?) AND o.duplicate_of IS NULL
            ORDER BY a.score DESC""",
         (f"-{since_days} days",),
     ).fetchall()

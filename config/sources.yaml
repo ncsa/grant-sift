@@ -182,6 +182,7 @@ foundations:
   - name: CURIOSS
     url: https://curioss.org/resources/funding-opportunities/
     cadence: weekly
+    aggregator: true
     notes: >
       community of university open-source programme offices. Human-curated, so
       it stays in always_assess_sources. Was configured as an RSS feed, but the
@@ -422,9 +423,11 @@ sitemaps:
 # or changed calls reach the model after the first run. Bounded the same way:
 # the listing's own domain, one include, one exclude, `max` as a refusal.
 #
-# `aggregator` marks a listing that relists other funders' calls. Its copy is
-# dropped when the funder's own record exists (title match, see db.same_call),
-# and duplicates still count as yield so it does not look stale.
+# `aggregator` marks a list of other funders' calls (any source kind). Every
+# copy of a call is stored; db.link_duplicates folds copies that share an
+# opportunity number or link, and shows the funder's own over an aggregator's.
+# Only an aggregator's titles are also matched by resemblance (db.same_call).
+# The folded copies still count as yield, so the source does not look stale.
 # ---------------------------------------------------------------------------
 listings:
   - name: Illinois Research Board

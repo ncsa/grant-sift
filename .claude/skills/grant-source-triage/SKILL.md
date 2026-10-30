@@ -116,12 +116,17 @@ Check what the "tabs" are first: UIUC's View All / External / Internal / Limited
 Submissions are all one page, and Limited Submissions is NOT a subset of View
 All. Duplicate links across tabs collapse before anything is fetched.
 
-`aggregator: true` marks a listing that relists other funders' calls. Its copy
-is dropped when the funder's own record exists, matched on title in code
-(`db.same_call`) with the "Grants for Research on ..." wrapper, the funder's
-name and filler words stripped. Deadlines do not help: they disagreed on 29 of
-43 true matches. Duplicates still count toward yield, so the source does not
-trip `zero_streak`.
+`aggregator: true` marks any source that relists other funders' calls (a
+listing, a page like CURIOSS, a feed). Copies of one call from any sources are
+folded by `db.link_duplicates`: they are joined by a shared opportunity number
+(RFA-OD-24-011, NSF 24-569, grants.gov's `number`) or call link, and the
+funder's own copy is shown over an aggregator's, with the others listed as
+"also on". An aggregator's copy that shares no key is matched on title
+(`db.same_call`) with the "Grants for Research on ..." wrapper, NIH's
+"(R50 Clinical Trials Not Allowed)" suffix, the funder's name and filler words
+stripped. Deadlines do not help: they disagreed on 29 of 43 true matches.
+Folded copies still count toward yield, so the source does not trip
+`zero_streak`. Check a new source's overlap with `scripts/link_duplicates.py`.
 
 ## 3. Triaging a GrantForward CSV
 

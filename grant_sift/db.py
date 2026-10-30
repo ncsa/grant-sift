@@ -6,6 +6,7 @@ import re
 import sqlite3
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sources (
@@ -54,6 +55,14 @@ CREATE TABLE IF NOT EXISTS opportunities (
 
 CREATE INDEX IF NOT EXISTS idx_opp_deadline ON opportunities(deadline);
 CREATE INDEX IF NOT EXISTS idx_opp_source   ON opportunities(source);
+
+-- Identifiers that name one call wherever it is listed (see call_keys()).
+CREATE TABLE IF NOT EXISTS call_keys (
+    opportunity_id  TEXT NOT NULL,
+    key             TEXT NOT NULL,   -- num:RFAOD24011 | gg:355439 | url:host/path
+    PRIMARY KEY (opportunity_id, key)
+);
+CREATE INDEX IF NOT EXISTS idx_call_keys_key ON call_keys(key);
 
 CREATE TABLE IF NOT EXISTS assessments (
     opportunity_id   TEXT PRIMARY KEY,
@@ -144,7 +153,9 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_metric_day ON telemetry_daily(metric, d
 
 # A closed call stays in the database -- the record of what was once open is
 # the point, and prune_expired is still opt-in -- but it is no longer offered
-# to anything downstream. Expired rows are excluded from the catalogue and
+# to anything downstream. Nor is a second copy of a call already shown under
+# another source (duplicate_of, see link_duplicates): scoring it twice spends
+# twice, and listing it twice is the noise this filter exists to remove. Expired rows are excluded from the catalogue and
 # from every prompt built for the model: a call nobody can apply to cannot be
 # the right answer to "what should I write for", and paying to score or to
 # rank one spends the budget and the context window on a dead record.
@@ -157,7 +168,7 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_metric_day ON telemetry_daily(metric, d
 # already uses. date('now') is UTC, matching adapters.is_expired; no grace day
 # here, because that grace exists to keep a just-closed record out of the
 # database, and these rows are already stored.
-LIVE = "(o.deadline IS NULL OR o.deadline >= date('now'))"
+LIVE = "((o.deadline IS NULL OR o.deadline >= date('now')) AND o.duplicate_of IS NULL)"
 
 
 def now() -> str:
@@ -203,6 +214,10 @@ def init(path: str = "grant-sift.db") -> None:
         ocols = {r["name"] for r in conn.execute("PRAGMA table_info(opportunities)")}
         if "screen" not in ocols:
             conn.execute("ALTER TABLE opportunities ADD COLUMN screen TEXT")
+            conn.commit()
+        if "duplicate_of" not in ocols:
+            # Another copy of the same call is the one shown; see link_duplicates.
+            conn.execute("ALTER TABLE opportunities ADD COLUMN duplicate_of TEXT")
             conn.commit()
         acols = {r["name"] for r in conn.execute("PRAGMA table_info(assessments)")}
         for col in ("match_domain", "match_kind", "summary", "axes_json", "facts_json"):
@@ -256,6 +271,18 @@ _TITLE_PREFIX = re.compile(
     r"(research (on|in) (the )?)?"
 )
 
+# NIH appends the activity code and clinical-trial policy to every title it
+# posts to grants.gov -- 'NIH Research Software Engineer (RSE) Award (R50
+# Clinical Trials Not Allowed)' -- and the lists that relist the call drop it.
+# Left on, it held a true match to 0.56 of the long title, under same_call's
+# floor. Only a trailing parenthetical made of activity codes and/or that
+# policy is taken: '(FRR)' and '(2026)' are left alone.
+_NIH_SUFFIX = re.compile(
+    r"\s*\(\s*(?:[a-z]{1,2}\d{1,2}[a-z]?(?:\s*[/,&-]\s*|\s+)?)*"
+    r"(?:-?\s*(?:clinical trials?|basic experimental studies with humans)[^)]*)?\)\s*$",
+    re.I,
+)
+
 
 _FILLER = {"the", "and", "of", "a", "an"}
 
@@ -267,9 +294,11 @@ def title_core(title: str, funder: str = "") -> str:
     'Foundational Research in Robotics' becomes 'Grants for Foundational
     Research in Robotics (FRR)', and Simons' own 'Simons Collaborations in
     Mathematics and the Physical Sciences' loses the funder's name. Strip the
-    wrapper, the funder's name and the filler words so the two compare.
+    wrapper, NIH's activity-code suffix, the funder's name and the filler
+    words so the two compare.
     """
-    t = "".join(c if c.isalnum() else " " for c in (title or "").lower())
+    t = _NIH_SUFFIX.sub("", title or "")
+    t = "".join(c if c.isalnum() else " " for c in t.lower())
     t = _TITLE_PREFIX.sub("", " ".join(t.split()))
     t = re.sub(r"^(supporting|core research in|research in|the) ", "", t)
     words = [w for w in t.split() if w not in _FILLER]
@@ -297,40 +326,248 @@ def same_call(a: str, b: str) -> bool:
     return len(short) >= 20 and short in long_ and len(short) >= 0.65 * len(long_)
 
 
-def primary_titles(conn, aggregator: str) -> list:
-    """title_core of every call held from a source other than this aggregator."""
-    rows = conn.execute(
-        "SELECT title, agency FROM opportunities WHERE source != ?", (aggregator,)
-    ).fetchall()
-    return [c for c in (title_core(r["title"], r["agency"]) for r in rows) if c]
+# ---------------------------------------------------------------------------
+# One call, many listings
+# ---------------------------------------------------------------------------
+#
+# The same call reaches us from several places at once: grants.gov, the
+# funder's own page, the Illinois Research Board, CURIOSS. Each copy is stored
+# as it came, and every copy but one is marked duplicate_of the one shown.
+# Copies are joined by a KEY both carry -- an identifier, not a resemblance:
+#
+#   num:<ID>  the funder's opportunity number, from the URL, the title,
+#             grants.gov's `number` or the extractor's opportunity_number.
+#             Never from the synopsis: NIH synopses name their companion
+#             NOFOs ('see PAR-25-123 for the clinical trial required
+#             version'), and those are different calls.
+#   gg:<id>   a grants.gov record, under either of its URL schemes.
+#   url:<u>   the call's own link, normalised.
+#
+# A key one source holds on differently titled records is an umbrella, not an
+# identifier, and joins nothing (see umbrella() in link_duplicates).
+#
+# Title similarity (same_call) is the fallback, only for an aggregator's copy
+# that no key joined, and only against a non-aggregator's record.
+#
+# Linked rather than deleted. A wrong merge is undone by clearing one column,
+# feedback on either copy stays on a row that exists, and the aggregator's
+# copy still says where else the call is listed -- for the Research Board,
+# that is how a campus limited submission shows up.
+
+# Patterns run on the upper-cased text. NIH's NOT- notices are left out on
+# purpose: a notice ABOUT a call, which an aggregator may link instead of it.
+_NUMBERS = re.compile(
+    r"\b(?:"
+    r"(?:RFA|PAR|PAS|PA|OTA)(?:-[A-Z]{2})?-\d{2}-\d{3}"    # NIH: RFA-OD-24-011, PAR-25-123
+    r"|NSF[\s_-]?\d{2}-?\d{3,4}"                          # NSF 24-569, /nsf24569/
+    r"|DE-FOA-\d{7}"                                     # DOE
+    r"|HR0011[\s-]?\d{2}[\s-]?[A-Z][\s-]?\d{4}"          # DARPA HR001125S0001
+    r"|NNH\d{2}[A-Z]{3}\d{3}[A-Z]?"                      # NASA NNH24ZDA001N
+    r"|(?:W911NF|N00014|FA\d{4})-\d{2}-[A-Z]-\d{4}"      # ARO, ONR, AFRL
+    r")\b"
+)
+
+_GRANTS_GOV_LINK = re.compile(
+    r"grants\.gov/(?:search-results-detail/|.*[?&]oppid=)(\d+)", re.I)
+
+_TRACKING = re.compile(r"^(utm_|fbclid$|gclid$|mc_[ce]id$|_hs)")
 
 
-_GRANTS_GOV_LINK = re.compile(r"grants\.gov/search-results-detail/(\d+)")
+def _number_key(s: str) -> str:
+    return "num:" + re.sub(r"[^A-Z0-9]", "", s.upper())
 
 
-def relisted_primary(conn, rec) -> bool:
-    """True when an aggregator's record links straight to a call we already hold.
+def _numbers(text, whole=False) -> set:
+    """Opportunity numbers in `text`. With `whole`, `text` IS an identifier
+    (grants.gov's `number`), so a scheme no pattern knows still counts."""
+    text = str(text or "").strip()
+    found = {_number_key(m) for m in _NUMBERS.findall(text.upper())}
+    if whole and not found:
+        k = _number_key(text)
+        # A real identifier is long, with letters and several digits; '2',
+        # 'Cycle 7' and 'N/A' are what a model writes when it has none.
+        body = k[4:]
+        if (8 <= len(body) <= 40 and re.search(r"[A-Z]", body)
+                and len(re.findall(r"\d", body)) >= 2):
+            found.add(k)
+    return found
 
-    Exact, so it runs before the title match: a UIUC /rfp/ page links federal
-    calls to grants.gov/search-results-detail/<id>, which is our gg:<id>.
+
+def _url_key(url: str):
+    """The call's own link, normalised; None for anything that cannot be one.
+
+    Unlike _dedup_key, the query is kept: some funders name the call there
+    (?oppId=). Tracking parameters are not, and a site's front page never
+    identifies one call.
     """
-    m = _GRANTS_GOV_LINK.search(rec.get("url") or "")
-    return bool(m) and conn.execute(
-        "SELECT 1 FROM opportunities WHERE id = ?", (f"gg:{m.group(1)}",)
-    ).fetchone() is not None
+    u = (url or "").strip()
+    m = _GRANTS_GOV_LINK.search(u)
+    if m:
+        return f"gg:{m.group(1)}"
+    if not re.match(r"https?://", u, re.I):
+        return None
+    parts = urlsplit(u)
+    host = parts.netloc.lower().removeprefix("www.")
+    path = parts.path.rstrip("/").lower()
+    if not host or not path:
+        return None
+    query = "&".join(sorted(
+        p for p in parts.query.split("&")
+        if p and not _TRACKING.match(p.split("=")[0].lower())))
+    return f"url:{host}{path}" + (f"?{query}" if query else "")
 
 
-def drop_superseded(conn, opp_id: str) -> None:
-    """Remove an aggregator's copy once the funder's own record exists.
+def call_keys(rec) -> set:
+    """Every key `rec` carries. Takes an ingest record or a stored row."""
+    rec = dict(rec)
+    raw = rec.get("raw")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            # Stored raw is cut at 20,000 chars, which can break the JSON.
+            m = re.search(r'"number":\s*"([^"]+)"', raw)
+            raw = {"number": m.group(1)} if m else {}
+    raw = raw if isinstance(raw, dict) else {}
 
-    Kept if it carries feedback, for the reason prune_expired keeps it: the
-    calibration corpus cannot be re-fetched.
+    keys = set()
+    for ident in (raw.get("number"), raw.get("pubNumber"), raw.get("opportunity_number")):
+        if ident:
+            keys |= _numbers(ident, whole=True)
+    keys |= _numbers(rec.get("title"))
+    keys |= _numbers(rec.get("url"))
+    u = _url_key(rec.get("url"))
+    if u:
+        keys.add(u)
+    return keys
+
+
+def save_keys(conn, opp_id: str, keys) -> None:
+    conn.execute("DELETE FROM call_keys WHERE opportunity_id = ?", (opp_id,))
+    conn.executemany("INSERT INTO call_keys (opportunity_id, key) VALUES (?,?)",
+                     [(opp_id, k) for k in sorted(keys)])
+
+
+def fill_missing_keys(conn, rebuild=False) -> int:
+    """Compute keys for rows that have none (all rows, with `rebuild`)."""
+    where = "" if rebuild else \
+        "WHERE NOT EXISTS (SELECT 1 FROM call_keys k WHERE k.opportunity_id = o.id)"
+    rows = conn.execute(f"SELECT o.id, o.title, o.url, o.raw FROM opportunities o {where}").fetchall()
+    for r in rows:
+        save_keys(conn, r["id"], call_keys(r))
+    return len(rows)
+
+
+def canonical_id(conn, opp_id: str) -> str:
+    """The id shown for this call: itself, or the copy it was folded into.
+
+    A digest sent last week links the id it had then, which may since have
+    become a duplicate."""
+    row = conn.execute("SELECT duplicate_of FROM opportunities WHERE id = ?",
+                       (opp_id,)).fetchone()
+    return (row and row["duplicate_of"]) or opp_id
+
+
+def _tier(source, kinds, aggregators) -> int:
+    """Which copy is shown: the funder's API, then the funder's own pages,
+    then lists and feeds that relist other funders' calls."""
+    if source in aggregators or kinds.get(source) == "feed":
+        return 2
+    return 0 if kinds.get(source) == "api" else 1
+
+
+def link_duplicates(conn, aggregators=(), apply=True) -> list:
+    """Group copies of one call and mark all but one duplicate_of it.
+
+    Recomputed whole every run, so the answer does not depend on which source
+    was read first: a funder's record that arrives after the aggregator's
+    takes over at once instead of waiting for the aggregator's next run.
+
+    The copy shown is live before closed -- an aggregator listing next cycle
+    must not hide behind last cycle's grants.gov record -- then by tier, then
+    the richest. Returns the groups, for the dry run to report.
     """
-    if conn.execute("SELECT 1 FROM feedback WHERE opportunity_id = ?",
-                    (opp_id,)).fetchone():
-        return
-    conn.execute("DELETE FROM assessments WHERE opportunity_id = ?", (opp_id,))
-    conn.execute("DELETE FROM opportunities WHERE id = ?", (opp_id,))
+    aggregators = set(aggregators)
+    kinds = {r["name"]: r["kind"] for r in conn.execute("SELECT name, kind FROM sources")}
+    rows = {r["id"]: r for r in conn.execute(
+        """SELECT id, source, title, agency, deadline, synopsis, award_ceiling,
+                  first_seen, duplicate_of FROM opportunities""")}
+    holders = {}
+    for r in conn.execute("SELECT key, opportunity_id FROM call_keys"):
+        if r["opportunity_id"] in rows:
+            holders.setdefault(r["key"], []).append(r["opportunity_id"])
+
+    parent = {}
+
+    def find(x):
+        while parent.get(x, x) != x:
+            x = parent[x]
+        return x
+
+    cores = {i: title_core(r["title"], r["agency"]) for i, r in rows.items()}
+
+    def umbrella(ids):
+        # One source holding a key on records with different titles: the key
+        # names more than one call. NASA files every ROSES element under one
+        # number (NNH25ZDA001N on eleven grants.gov records), and a funder page
+        # with several calls hands each the page's own URL. Same-titled
+        # records sharing a key -- grants.gov's forecast and its posting --
+        # are one call and stay joined.
+        by_source = {}
+        for i in ids:
+            by_source.setdefault(rows[i]["source"], []).append(i)
+        return any(not same_call(cores[g[0]], cores[j])
+                   for g in by_source.values() for j in g[1:])
+
+    joined = {}                                   # id -> the keys that joined it
+    for key, ids in holders.items():
+        if len(ids) < 2 or (not key.startswith("gg:") and umbrella(ids)):
+            continue
+        for i in ids:
+            joined.setdefault(i, set()).add(key)
+            parent[find(i)] = find(ids[0])
+
+    primaries = [(cores[i], i) for i, r in rows.items()
+                 if r["source"] not in aggregators and cores[i]]
+    for i, r in rows.items():
+        if r["source"] not in aggregators or i in joined:
+            continue
+        for p_core, p in primaries:
+            if same_call(cores[i], p_core):
+                joined.setdefault(i, set()).add(f"title:{p}")
+                joined.setdefault(p, set()).add(f"title:{i}")
+                parent[find(i)] = find(p)
+                break
+
+    groups = {}
+    for i in joined:
+        groups.setdefault(find(i), []).append(i)
+
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    def rank(i):
+        r = rows[i]
+        return (r["deadline"] is not None and r["deadline"] < today,
+                _tier(r["source"], kinds, aggregators),
+                -len(r["synopsis"] or ""), r["deadline"] is None,
+                r["award_ceiling"] is None, r["first_seen"] or "", i)
+
+    out, want = [], {}
+    for members in groups.values():
+        members.sort(key=rank)
+        canon = members[0]
+        for m in members[1:]:
+            want[m] = canon
+        out.append({"canonical": canon, "members": members,
+                    "keys": sorted(set().union(*(joined[m] for m in members)))})
+
+    if apply:
+        stale = [(None, i) for i, r in rows.items()
+                 if r["duplicate_of"] and i not in want]
+        moved = [(c, i) for i, c in want.items() if rows[i]["duplicate_of"] != c]
+        conn.executemany("UPDATE opportunities SET duplicate_of = ? WHERE id = ?",
+                         stale + moved)
+    return out
 
 
 def upsert_opportunity(conn: sqlite3.Connection, rec: dict) -> bool:
@@ -640,7 +877,7 @@ def prune_expired(conn, grace_days: int = 30):
     # the next run re-fetch a grant we just pruned, prune it again, and repeat
     # every morning. The rows are tiny; the requests are not.
     for table, col in (("assessments", "opportunity_id"), ("sent_log", "opportunity_id"),
-                       ("opportunities", "id")):
+                       ("call_keys", "opportunity_id"), ("opportunities", "id")):
         conn.execute(f"DELETE FROM {table} WHERE {col} IN ({marks})", ids)
     return len(ids)
 

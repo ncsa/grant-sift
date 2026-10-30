@@ -1534,6 +1534,7 @@ def get_opportunity(request: Request, opportunity_id: str):
     principal = auth.principal(request)
     conn = _conn()
     try:
+        opportunity_id = db.canonical_id(conn, opportunity_id)
         hits = catalogue.search(conn, catalogue.load(conn, _roster()), principal,
                                 ids=[opportunity_id])
         if not hits:
