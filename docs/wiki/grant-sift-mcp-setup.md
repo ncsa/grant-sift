@@ -31,4 +31,6 @@ Quit Claude Desktop (Cmd+Q) and reopen it. Sign in when the browser opens.
 
 Ask: *"who am I to grant sift?"* It should answer with your NetID.
 
+In Claude chat (desktop or web), a call to look up or search opportunities shows as a Grant Sift card: deadline, fit score, subscores, the closest roster match and how to reach them, and Useful / Not for us buttons that record feedback under your username. Claude Code has no cards and shows the same results as text.
+
 If something fails: don't run both sign-ins at once, because they share port 33418. Otherwise, send the error to the Grant Sift maintainers.
