@@ -5,11 +5,12 @@
 # is capped at `rows` results (200). A term broad enough
 # to exceed that cap is silently truncated, which is the "reports success while
 # going incomplete" failure this tool exists to avoid. So keep these specific and
-# discriminating, and put the loose vocabulary in prefilter.yaml instead, where a
-# false positive costs a fraction of a cent rather than a missed call.
+# discriminating, and put the loose vocabulary in screen.yaml instead, where it
+# only annotates and a false positive costs a fraction of a cent rather than a
+# missed call.
 #
-# This is the recall gate: nothing matching none of these is ever fetched, and no
-# prefilter tuning can recover it. Grouped by the specialty each term serves.
+# This is the recall gate: nothing matching none of these is ever fetched, and
+# nothing downstream can recover it. Grouped by the specialty each term serves.
 keywords:
   # core research software / cyberinfrastructure
   - research software
@@ -184,8 +185,8 @@ foundations:
     cadence: weekly
     aggregator: true
     notes: >
-      community of university open-source programme offices. Human-curated, so
-      it stays in always_assess_sources. Was configured as an RSS feed, but the
+      community of university open-source programme offices. Human-curated.
+      Was configured as an RSS feed, but the
       site publishes none -- fetched as a page instead. Verified 2026-09-04.
 
   # ------------------------------------------------------------------

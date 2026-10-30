@@ -12,7 +12,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY grant_sift grant_sift
-COPY config/sources.yaml config/prefilter.yaml config/roster.example.yaml config/
+COPY config/sources.yaml config/screen.yaml config/roster.example.yaml config/
 COPY web web
 COPY scripts scripts
 COPY run.py .

@@ -1268,7 +1268,9 @@ function renderSources() {
         // Health sits next to the source because a source that quietly stopped
         // yielding is the failure this tool exists to catch.
         const when = s.last_success
-          ? `last success ${s.last_success.slice(0, 10)}` + (s.last_yield != null ? `, ${s.last_yield} kept` : "")
+          // Stored in UTC; en-CA gives YYYY-MM-DD in the viewer's own zone.
+          ? `last success ${new Date(s.last_success).toLocaleDateString("en-CA")}`
+            + (s.last_yield != null ? `, ${s.last_yield} open call${s.last_yield === 1 ? "" : "s"}` : "")
           : "never succeeded";
         return `<div class="rrow">
           <span class="nm">${esc(s.name)}</span>

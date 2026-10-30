@@ -374,7 +374,7 @@ def _config_stamp():
     cheap next to parsing the YAML, and lets an edit - a ConfigMap update in
     Kubernetes - reach the next request without a restart."""
     d = Path("config")
-    paths = (d / "sources.yaml", d / "prefilter.yaml", d / "ncsa_staff.yaml",
+    paths = (d / "sources.yaml", d / "screen.yaml", d / "ncsa_staff.yaml",
              Path(os.environ.get("GRANT_SIFT_ROSTER") or (d / "roster.yaml")))
     out = []
     for p in paths:

@@ -123,7 +123,7 @@ the failure this tool exists to avoid.
 Every record from every source is stored. Relevance is decided by the model
 against the roster, because that is the only judgement here with any context.
 
-`config/prefilter.yaml` therefore annotates rather than filters: its keywords,
+`config/screen.yaml` therefore annotates rather than filters: its keywords,
 allowlist and exclusion patterns write a note into `opportunities.screen` and
 nothing acts on it. That is queryable, so you can ask what a filter would have
 cost you:
@@ -301,7 +301,7 @@ write-only form is one people fill in twice, because without seeing that
 someone is already on the roster the reasonable thing to do is add them again.
 The roster list shows status, unit, research areas, projects with years, the
 collaborator's address and which of your staff already knows them. The sources
-list shows every source with its health inline — last success, records kept,
+list shows every source with its health inline — last success, open calls read,
 and a `stale` flag — because a source that quietly stops yielding is the
 failure this tool exists to catch.
 

@@ -1,7 +1,8 @@
-"""Ingest -> prefilter -> classify -> match -> store.
+"""Ingest -> screen -> store -> classify -> match.
 
-The prefilter is deterministic and free. It exists so the model only ever sees
-the small fraction of records that could plausibly matter.
+Every record fetched is stored and reaches the model. The screen is
+deterministic and free, and only annotates: it notes what stood out about a
+record and never decides whether it is kept.
 """
 
 import json
@@ -67,9 +68,9 @@ def load_config(config_dir="config"):
         )
     with open(roster_path) as f:
         roster = normalise(yaml.safe_load(f) or [], d)
-    with open(d / "prefilter.yaml") as f:
-        prefilter = yaml.safe_load(f)
-    return sources, roster, prefilter
+    with open(d / "screen.yaml") as f:
+        screen_rules = yaml.safe_load(f)
+    return sources, roster, screen_rules
 
 
 def normalise(entries, d=Path("config")):
@@ -127,7 +128,7 @@ def load_staff(d=Path("config")):
 
 
 # --------------------------------------------------------------------------
-# Prefilter, deterministic, no model. Only exclude what you are sure about.
+# Screen, deterministic, no model. Annotates; never excludes.
 # --------------------------------------------------------------------------
 
 def screen(rec, rules):
@@ -153,27 +154,6 @@ def screen(rec, rules):
     return "; ".join(notes)[:500] or None
 
 
-def prefilter_pass(rec, rules):
-    blob = f"{rec.get('title','')} {rec.get('synopsis','')}".lower()
-
-    for pattern in rules.get("exclude_patterns", []):
-        if re.search(pattern, blob):
-            return False, f"excluded: {pattern}"
-
-    agency = (rec.get("agency") or "").lower()
-    if any(a.lower() in agency for a in rules.get("agency_allowlist", [])):
-        return True, "agency allowlist"
-
-    hits = [k for k in rules.get("include_keywords", []) if k.lower() in blob]
-    if len(hits) >= rules.get("min_keyword_hits", 1):
-        return True, f"keywords: {', '.join(hits[:4])}"
-
-    if rec.get("source", "").startswith(tuple(rules.get("always_assess_sources", []))):
-        return True, "trusted source"
-
-    return False, "no signal"
-
-
 # --------------------------------------------------------------------------
 # Ingest
 # --------------------------------------------------------------------------
@@ -195,15 +175,14 @@ COMMIT_EVERY = 1
 def _enrich(conn, rec, stats, verbose):
     """Fill in description and award figures from the per-opportunity endpoint.
 
-    Runs BEFORE the prefilter, so keyword matching sees the description rather
-    than the title alone. grants.gov search2 returns no description, so without
-    this the prefilter was judging roughly a thousand records a day on their
-    titles, and a call whose software requirement sits in the body text was
-    dropped invisibly.
+    Runs BEFORE the screen, so its keyword notes see the description rather
+    than the title alone, and so does the model. grants.gov search2 returns no
+    description, so without this a call whose software requirement sits in the
+    body text is judged on its title.
 
-    Every result is cached by db.save_detail, including for records the
-    prefilter then rejects, because those are never stored as opportunities and
-    would otherwise be re-fetched every morning.
+    Every result is cached by db.save_detail, keyed by id rather than by the
+    opportunities table, so a record is fetched once in its life rather than
+    once every morning.
 
     A failure degrades to the thin record rather than losing it: a missing
     description costs classification quality, dropping the record costs the
@@ -314,8 +293,8 @@ def aggregator_names(sources):
             for s in (sources.get(key) or []) if s.get("aggregator")}
 
 
-def ingest(conn, sources, prefilter, verbose=True):
-    stats = {"fetched": 0, "kept": 0, "new": 0, "enriched": 0,
+def ingest(conn, sources, screen_rules, verbose=True):
+    stats = {"fetched": 0, "new": 0, "enriched": 0,
              "detail_cached": 0, "detail_failed": 0, "expired": 0, "archived": 0,
              "pruned": 0, "duplicate": 0}
     sources = merge_sources(sources, conn, verbose)
@@ -334,7 +313,6 @@ def ingest(conn, sources, prefilter, verbose=True):
                 return
             records = adapters.drop_expired(records)
             stats["fetched"] += len(records)
-            kept = 0
             for rec in records:
                 _enrich(conn, rec, stats, verbose)
                 # Both of these annotate. Neither drops: a closed call is still
@@ -342,19 +320,18 @@ def ingest(conn, sources, prefilter, verbose=True):
                 # judgement. Ranking is decided by the model and the roster.
                 if adapters.is_expired(rec):
                     stats["expired"] += 1
-                rec["screen"] = screen(rec, prefilter)
-                kept += 1
+                rec["screen"] = screen(rec, screen_rules)
                 if db.upsert_opportunity(conn, rec):
                     stats["new"] += 1
                 db.save_keys(conn, rec["id"], db.call_keys(rec))
                 conn.commit()          # same reason: do not hold the writer
 
-            stats["kept"] += kept
-            # Duplicates are kept rows too, so an aggregator that only relists
-            # grants.gov still shows a yield and does not look stale.
-            db.record_source_run(conn, name, kind, url, True, kept)
+            # Every open call read counts, duplicates included, so an aggregator
+            # that only relists grants.gov still shows a yield and does not look
+            # stale.
+            db.record_source_run(conn, name, kind, url, True, len(records))
             if verbose:
-                print(f"  {name:38s} {len(records):4d} fetched  {kept:3d} kept", flush=True)
+                print(f"  {name:38s} {len(records):4d} open calls", flush=True)
         except Exception as exc:  # noqa: BLE001
             db.record_source_run(conn, name, kind, url, False, 0, str(exc)[:400])
             if verbose:
@@ -437,7 +414,7 @@ def _due(conn, page):
         return True
     if row["last_error"]:
         return True
-    last = datetime.fromisoformat(row["last_success"]).date()
+    last = db.local_date(row["last_success"])
     return (date.today() - last).days >= cadence_days
 
 
