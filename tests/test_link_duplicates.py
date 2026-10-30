@@ -71,6 +71,20 @@ class TitleCore(unittest.TestCase):
                          db.title_core("Planning Grants"))
         self.assertEqual(db.title_core("Career Award (K99)"), "career award")
 
+    def test_abbreviations_spelled_one_way(self):
+        # CURIOSS and grants.gov on NSF 26-513, 2026-10-30.
+        a = db.title_core("NSF State and Regional Artificial Intelligence Infrastructure Hubs",
+                          "CURIOSS")
+        b = db.title_core("U.S. National Science Foundation State and Regional "
+                          "Artificial Intelligence Infrastructure Hubs:", "NSF")
+        self.assertTrue(db.same_call(a, b))
+        self.assertEqual(db.title_core("Super Intelligence (SI) Supplements"),
+                         db.title_core("Superintelligence (SI) Supplements"))
+        self.assertEqual(db.title_core("AI for Science"),
+                         db.title_core("Artificial Intelligence for Science"))
+        # A word that merely contains the letters is left alone.
+        self.assertIn("aims", db.title_core("Program Aims"))
+
     def test_other_parentheticals_kept(self):
         self.assertIn("frr", db.title_core("Foundational Research in Robotics (FRR)"))
         self.assertIn("2026", db.title_core("Small Grants (2026)"))

@@ -302,6 +302,24 @@ _NIH_SUFFIX = re.compile(
 
 _FILLER = {"the", "and", "of", "a", "an"}
 
+# One name, two spellings: listings abbreviate what grants.gov spells out
+# ('NSF State and Regional Artificial Intelligence Infrastructure Hubs' against
+# 'U.S. National Science Foundation State and Regional ...'), or the reverse.
+# Applied to the lower-cased, punctuation-free title, longest phrase first.
+_SAME_NAME = (
+    (r"\bu s national science foundation\b", "nsf"),
+    (r"\bnational science foundation\b", "nsf"),
+    (r"\bnational institutes of health\b", "nih"),
+    (r"\bartificial intelligence\b", "ai"),
+    (r"\bsuper ?intelligence\b", "si"),
+)
+
+
+def _same_names(t: str) -> str:
+    for pattern, short in _SAME_NAME:
+        t = re.sub(pattern, short, t)
+    return t
+
 
 def title_core(title: str, funder: str = "") -> str:
     """A call's name with an aggregator's house style taken off.
@@ -311,14 +329,16 @@ def title_core(title: str, funder: str = "") -> str:
     Research in Robotics (FRR)', and Simons' own 'Simons Collaborations in
     Mathematics and the Physical Sciences' loses the funder's name. Strip the
     wrapper, NIH's activity-code suffix, the funder's name and the filler
-    words so the two compare.
+    words, and spell abbreviated names one way (_SAME_NAME), so the two
+    compare.
     """
     t = _NIH_SUFFIX.sub("", title or "")
     t = "".join(c if c.isalnum() else " " for c in t.lower())
-    t = _TITLE_PREFIX.sub("", " ".join(t.split()))
+    t = _TITLE_PREFIX.sub("", _same_names(" ".join(t.split())))
     t = re.sub(r"^(supporting|core research in|research in|the) ", "", t)
     words = [w for w in t.split() if w not in _FILLER]
-    lead = (funder or "").lower().split()[:1]
+    funder = "".join(c if c.isalnum() else " " for c in (funder or "").lower())
+    lead = _same_names(" ".join(funder.split())).split()[:1]
     if lead and words[:1] == lead and len(words) > 1:
         words = words[1:]
     return " ".join(words)
