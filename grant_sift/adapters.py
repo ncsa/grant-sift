@@ -214,7 +214,7 @@ class SamClient:
     whatever is left; the rest are read on later runs.
     """
 
-    def __init__(self, api_key, max_requests=8):
+    def __init__(self, api_key, max_requests=9):
         if not api_key:
             raise RuntimeError("sam.gov: no API key; set GRANT_SIFT_SAM_API_KEY")
         self.key = api_key
@@ -265,19 +265,29 @@ def _sam_keep(n, cfg):
 
     SAM.gov is overwhelmingly procurement, so the search is narrowed by office
     in config and this narrows again: a callable notice type, still active,
-    and either a BAA-like title or an R&D NAICS code (5417).
+    not an announcement about a call (`exclude_terms`: RFIs, proposers'
+    days), and either a BAA-like title or an R&D NAICS code (5417).
     """
     if str(n.get("active") or "").lower() not in ("yes", "true"):
         return False
     kind = str(n.get("baseType") or n.get("type") or "").strip().lower()
     if kind not in SAM_PTYPES.values():
         return False
+    title = n.get("title") or ""
+    if _sam_terms(cfg.get("exclude_terms"), title):
+        return False
     naics = str(n.get("naicsCode") or "")
     if any(naics.startswith(p) for p in cfg.get("naics", ["5417"])):
         return True
-    terms = cfg.get("title_terms") or []
-    pattern = r"\b(?:" + "|".join(re.escape(t) for t in terms) + r")\b"
-    return bool(terms and re.search(pattern, n.get("title") or "", re.I))
+    return _sam_terms(cfg.get("title_terms"), title)
+
+
+def _sam_terms(terms, title):
+    """Whether `title` holds any of `terms` as whole words, any case."""
+    if not terms:
+        return False
+    pattern = r"\b(?:" + "|".join(re.escape(t) for t in terms) + r")(?!\w)"
+    return bool(re.search(pattern, title, re.I))
 
 
 def sam_gov(cfg, client, today=None):

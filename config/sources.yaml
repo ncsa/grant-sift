@@ -15,9 +15,9 @@ grants_gov:
 # Key: GRANT_SIFT_SAM_API_KEY, a personal key from the SAM.gov Account
 # Details page, set on the cluster (helm/grant-sift/README.md, "SAM.gov key").
 # For a non-federal user with no SAM.gov role it allows 10 requests a DAY,
-# which is the budget this is sized to: one search per query below, then
-# descriptions with whatever of `max_requests` is left. Descriptions not read
-# are read on a later run.
+# which is the budget this is sized to: weekly, one search per query below
+# and descriptions with whatever of `max_requests` is left; on the other days
+# all of `max_requests` goes to descriptions not yet read.
 # A key with a role allows 1,000; raise `max_requests` if yours has one.
 #
 # SAM.gov is mostly procurement, so it is filtered three times: the search
@@ -25,11 +25,13 @@ grants_gov:
 # over `limit` notices), a notice must be a solicitation, combined
 # synopsis/solicitation, presolicitation or special notice and still active,
 # and it must carry an R&D NAICS code (`naics`, prefix match) or a BAA-like
-# title (`title_terms`).
+# title (`title_terms`). Titles in `exclude_terms` are dropped whatever else
+# they carry: on 2026-10-30 most of DARPA's 21 special notices were RFIs,
+# proposers' days and industry days, which announce a call but are not one.
 sam_gov:
   enabled: true
   cadence: weekly
-  max_requests: 8
+  max_requests: 9
   lookback_days: 364
   limit: 1000
   naics: ["5417"]
@@ -48,6 +50,18 @@ sam_gov:
     - program solicitation
     - research and development
     - office-wide
+  exclude_terms:
+    - RFI
+    - request for information
+    - proposers day
+    - proposers' day
+    - proposer's day
+    - industry day
+    - webinar
+    - pre-award synopsis
+    - fair opportunity
+    - BAA guide
+    - coming soon
   queries:
     - name: DARPA
       organizationName: DEFENSE ADVANCED RESEARCH PROJECTS AGENCY
@@ -57,9 +71,8 @@ sam_gov:
     # department and subtier that organizationName reaches.
     - name: ONR
       organizationCode: N00014
-    - name: AFOSR
-      agency: AFOSR / AFRL
-      organizationCode: FA9550
+    # Not AFOSR (FA9550): it posts its BAA to grants.gov, and the office
+    # returned no notices here on 2026-10-30.
     - name: AFRL Information Directorate
       agency: AFRL
       organizationCode: FA8750

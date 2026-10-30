@@ -118,6 +118,17 @@ class Adapter(unittest.TestCase):
                                           title="Parachute assemblies")))
         self.assertEqual(recs, [])
 
+    def test_announcements_about_a_call_are_dropped(self):
+        cfg = dict(CFG, exclude_terms=["RFI", "proposers' day", "proposers day", "webinar"])
+        sn = dict(type="Special Notice", baseType="Special Notice")
+        recs, _ = self.read(search(
+            notice(noticeId="1" * 32, title="SURPASS Webinar and Proposers' Day Information", **sn),
+            notice(noticeId="2" * 32, title="Resilient Ultra Short Pulsed Laser Sources - RFI", **sn),
+            notice(noticeId="3" * 32, title="Protein Palace Proposers Day", **sn),
+            notice(noticeId="4" * 32, title="Future Announcement: Quantum Computing Workshops", **sn),
+        ), cfg=cfg)
+        self.assertEqual([r["external_id"] for r in recs], ["4" * 32])
+
     def test_archive_date_stands_in_for_a_missing_deadline(self):
         (rec,), _ = self.read(search(notice(responseDeadLine=None)))
         self.assertEqual(rec["deadline"], "2026-12-09")
@@ -290,6 +301,22 @@ class Ingest(unittest.TestCase):
         src = self.conn.execute("SELECT kind, last_error FROM sources WHERE name = 'sam.gov'").fetchone()
         self.assertEqual(src["kind"], "api")
         self.assertIsNone(src["last_error"])
+
+    def test_days_between_searches_read_the_rest(self):
+        descs = {n["noticeId"]: f"About call {n['title']}." for n in self.three()}
+        self.ingest(fake_sam([search(*self.three())], descs), budget=3)
+        db.save_assessment(self.conn, f"sam:{'3' * 32}", {"score": 10}, "m", "h")
+        self.conn.commit()
+        calls = []
+        stats = self.ingest(fake_sam([], descs, calls), budget=3)   # not due: no search
+        self.assertEqual([p["noticeid"] for _, p in calls], ["3" * 32])
+        self.assertEqual(stats["enriched"], 1)
+        row = self.conn.execute("SELECT synopsis FROM opportunities WHERE id = ?",
+                                (f"sam:{'3' * 32}",)).fetchone()
+        self.assertEqual(row["synopsis"], "About call Office-wide BAA 3.")
+        # Scored on the title alone; the description makes that score stale.
+        self.assertIsNone(self.conn.execute(
+            "SELECT 1 FROM assessments WHERE opportunity_id = ?", (f"sam:{'3' * 32}",)).fetchone())
 
     def test_weekly_cadence_spends_nothing_in_between(self):
         self.ingest(fake_sam([search(*self.three())]), budget=8)

@@ -819,6 +819,25 @@ def stale_undated(conn, source: str, older_than_days: int = 7):
     ).fetchall()
 
 
+def missing_detail(conn, source: str, retry_failed_after_days: int = 7):
+    """Shown, live records of `source` whose detail was never fetched, or
+    whose failed fetch is old enough to retry; soonest deadline first.
+
+    For a source whose detail fetch is rationed (sam.gov), so the requests
+    left on a day without a search go to the calls a reader can still act on.
+    """
+    cutoff = (datetime.now(timezone.utc)
+              - timedelta(days=retry_failed_after_days)).isoformat(timespec="seconds")
+    return conn.execute(
+        f"""SELECT o.* FROM opportunities o
+            LEFT JOIN detail_cache d ON d.id = o.id
+            WHERE o.source = ? AND o.external_id IS NOT NULL AND {LIVE}
+              AND (d.id IS NULL OR (d.ok = 0 AND d.fetched_at < ?))
+            ORDER BY o.deadline IS NULL, o.deadline, o.id""",
+        (source, cutoff),
+    ).fetchall()
+
+
 def set_deadline(conn, opp_id: str, deadline: str):
     """Give a stored record the deadline a re-check found.
 

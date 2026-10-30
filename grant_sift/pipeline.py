@@ -225,6 +225,32 @@ def _recheck_undated(conn, stats, verbose):
         print(f"  grants.gov: {stats['archived']} undated calls found archived", flush=True)
 
 
+def _backfill_sam(conn, client, stats):
+    """Read sam.gov descriptions not yet fetched, as far as today's budget goes.
+
+    Search returns no description, and the weekly search day has only a few
+    requests left after the searches, so without this a new office's notices
+    would be scored on titles like "Firefox" for months.
+    """
+    rows = db.missing_detail(conn, "sam.gov")
+    for i, row in enumerate(rows):
+        try:
+            detail = client.detail(row["external_id"])
+        except adapters.SamBudgetSpent:
+            stats["detail_deferred"] += len(rows) - i
+            return
+        except Exception:  # noqa: BLE001
+            db.save_detail(conn, row["id"], {}, ok=False)
+            stats["detail_failed"] += 1
+            conn.commit()
+            continue
+        db.save_detail(conn, row["id"], detail, ok=True)
+        stats["enriched"] += 1
+        if detail.get("synopsis"):
+            db.upsert_opportunity(conn, {**dict(row), "synopsis": detail["synopsis"]})
+        conn.commit()
+
+
 def merge_sources(sources, conn, verbose=True):
     """config/sources.yaml plus anything added through the dashboard.
 
@@ -316,19 +342,24 @@ def ingest(conn, sources, verbose=True):
             lambda: adapters.grants_gov(agencies=cfg.get("agencies")))
         _recheck_undated(conn, stats, verbose)
 
-    # Weekly by default: a personal key for a non-federal user with no SAM.gov
-    # role allows 10 requests a day, and research BAAs stay open for months.
+    # Searched weekly, since research BAAs stay open for months. A personal
+    # key for a non-federal user with no SAM.gov role allows 10 requests a
+    # day, so the other days spend theirs on descriptions not yet read.
     sam = sources.get("sam_gov") or {}
-    if sam.get("enabled") and _due(conn, {"name": "sam.gov", **sam}):
-        def read_sam():
-            client = adapters.SamClient(os.environ.get("GRANT_SIFT_SAM_API_KEY"),
-                                        sam.get("max_requests", 8))
-            fetchers["sam.gov"] = client.detail
-            return adapters.sam_gov(sam, client)
-        run("sam.gov", "api", adapters.SAM_URL, read_sam)
+    if sam.get("enabled"):
+        key = os.environ.get("GRANT_SIFT_SAM_API_KEY")
+        budget = sam.get("max_requests", 9)
+        if _due(conn, {"name": "sam.gov", **sam}):
+            def read_sam():
+                client = adapters.SamClient(key, budget)
+                fetchers["sam.gov"] = client.detail
+                return adapters.sam_gov(sam, client)
+            run("sam.gov", "api", adapters.SAM_URL, read_sam)
+        elif key:
+            _backfill_sam(conn, adapters.SamClient(key, budget), stats)
         if verbose and stats["detail_deferred"]:
-            print(f"  sam.gov: {stats['detail_deferred']} descriptions left for the "
-                  "next run (request budget)", flush=True)
+            print(f"  sam.gov: {stats['detail_deferred']} descriptions left for "
+                  "later runs (request budget)", flush=True)
 
     for feed in sources.get("feeds", []):
         run(feed["name"], "feed", feed["url"],
