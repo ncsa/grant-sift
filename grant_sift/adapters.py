@@ -10,6 +10,7 @@ foundation-page one, which needs it to read.
 import re
 from datetime import datetime, timedelta
 from html import unescape
+from urllib.parse import urljoin, urlsplit
 from xml.etree import ElementTree
 
 import requests
@@ -294,7 +295,9 @@ def foundation_page(conn, name, url, force=False, min_text=None):
             "external_id": None,
             "title": program,
             "synopsis": c.get("synopsis") or "",
-            "agency": name,
+            # An aggregator lists other funders' calls; the page owner is only
+            # the fallback.
+            "agency": (c.get("funder") or "").strip() or name,
             "url": c.get("url") or url,
             "deadline": _iso(c.get("deadline")),
             "award_ceiling": c.get("award_ceiling"),
@@ -393,6 +396,108 @@ def sitemap_pages(conn, cfg, force=False):
     # A closed scheme 404s (Wellcome moves it to a -closed slug), so a handful
     # of failures is the normal state of a healthy source, not an outage. All
     # of them failing is not.
+    if failed and len(failed) == len(urls):
+        raise RuntimeError(f"{name}: all {len(urls)} pages failed; first: {failed[0]}")
+    if read == 0:
+        return None
+    return _dedupe(records)
+
+
+# --------------------------------------------------------------------------
+# Listing-expanded sources
+# --------------------------------------------------------------------------
+
+# Same reasoning as SITEMAP_MAX: a ceiling that refuses, never one that trims.
+LISTING_PAGES_MAX = 20
+
+
+def _listing_html(cfg):
+    """The pinned listing and every ?<param>=N page after it, as raw HTML.
+
+    The pager is read from the HTML's own next-page link, not counted in
+    config: a fixed count silently misses page 8 the week the list grows.
+    """
+    url, name = cfg["listing"], cfg["name"]
+    pg = cfg.get("paginate")
+    pg = pg if isinstance(pg, dict) else ({} if pg else None)
+    r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+    r.raise_for_status()
+    out = [r.text]
+    if pg is None:
+        return out
+    param = pg.get("param", "page")
+    n = int(pg.get("start", 0)) + 1
+    cap = int(pg.get("max") or LISTING_PAGES_MAX)
+    sep = "&" if "?" in url else "?"
+    while re.search(rf"[?&;]{re.escape(param)}={n}(?![0-9])", out[-1]):
+        if len(out) >= cap:
+            raise RuntimeError(
+                f"{name}: pager goes past {cap} pages. Raise `paginate.max` "
+                f"deliberately -- reading the first {cap} would be a quietly "
+                "incomplete list"
+            )
+        r = requests.get(f"{url}{sep}{param}={n}", headers=HEADERS, timeout=TIMEOUT)
+        r.raise_for_status()
+        out.append(r.text)
+        n += 1
+    return out
+
+
+def listing_pages(conn, cfg, force=False):
+    """Expand ONE pinned listing into the call pages it links to, and read each.
+
+    The sitemap rule with the listing as the index. The Illinois Research Board
+    lists 200+ calls, 30 to a page, each linking to its own /rfp/ page; the
+    sitemap lists none of them. Reading the listing text instead meant one
+    model call per page returning 30-46 calls, and the first such call timed
+    out at 120s. A detail page is ~2k chars holding ONE call with the amount,
+    funder and the funder's own link, which the listing row does not carry.
+
+    Bounded like a sitemap rule: links on the listing's own domain only, one
+    `include`, one `exclude`, and `max` as a refusal. Links are taken from
+    href attributes by pattern, not by CSS selector, so a redesign that keeps
+    the URL scheme keeps working. Duplicate links (UIUC shows each call under
+    both View All and External) collapse here, before anything is fetched.
+    """
+    name = cfg["name"]
+    base = urlsplit(cfg["listing"])
+    inc, exc = cfg.get("include"), cfg.get("exclude")
+    urls = set()
+    for html in _listing_html(cfg):
+        for href in re.findall(r"""href\s*=\s*["']([^"'#]+)""", html):
+            u = urljoin(cfg["listing"], unescape(href))
+            if urlsplit(u).netloc != base.netloc:
+                continue
+            path = urlsplit(u).path
+            if inc and not re.search(inc, path):
+                continue
+            if exc and re.search(exc, path):
+                continue
+            urls.add(f"{base.scheme}://{base.netloc}{path}")
+    urls = sorted(urls)
+    cap = int(cfg.get("max") or SITEMAP_MAX)
+    if len(urls) > cap:
+        raise RuntimeError(
+            f"{name}: listing linked {len(urls)} urls, over the cap of {cap}. "
+            "Tighten `include`/`exclude` or raise `max` deliberately"
+        )
+    if not urls:
+        raise RuntimeError(
+            f"{name}: listing linked no urls for include={inc!r}. The site was "
+            "reachable, so the pattern is stale, not the source"
+        )
+
+    records, read, failed = [], 0, []
+    for u in urls:
+        try:
+            got = foundation_page(conn, name, u, force=force, min_text=cfg.get("min_text"))
+        except Exception as exc:  # noqa: BLE001
+            failed.append(f"{u.rsplit('/', 1)[-1]}: {str(exc)[:60]}")
+            continue
+        if got is None:
+            continue                       # unchanged since last run
+        read += 1
+        records += got
     if failed and len(failed) == len(urls):
         raise RuntimeError(f"{name}: all {len(urls)} pages failed; first: {failed[0]}")
     if read == 0:

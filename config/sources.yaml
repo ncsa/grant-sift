@@ -161,12 +161,23 @@ foundations:
     url: https://www.packard.org/what-we-fund/
     cadence: monthly
 
-  - name: Illinois Research Board
-    url: https://research.illinois.edu/find-funding/featured-funding-opportunities
+  - name: "National Pork Board - Research RFPs"
+    url: https://porkcheckoff.org/research-request-for-proposals/
     cadence: weekly
     notes: >
-      internal campus money; never appears in any national database. The page
-      has a "view all" tab. Verified 2026-09-04.
+      server-rendered "Active Requests for Proposals" index with title, amount
+      and deadline per call (2,093 chars; Human Nutrition 2027 $650k LOI
+      2027-01-15, National Swine Health Strategy rolling). The probe's
+      PAST-grants flag is a false positive from the post dates. Pinned the
+      index, NOT the per-call URL (research-rfp-human-nutrition-2027/), which
+      is year-stamped and will 404 once the call closes. Verified 2026-10-29.
+
+  # REJECTED 2026-10-29: Pfizer. pfizer.com/about/programs-policies/grants and
+  # /competitive-grants are behind a Cloudflare challenge (58 chars, "Just a
+  # moment..."). The RFPs themselves are PDFs on cdn.pfizer.com with a
+  # VersionId query; the fetcher has no PDF parsing, so one would "PASS" at
+  # 200k chars of binary and yield nothing. Pfizer calls reach us through the
+  # Illinois Research Board listing (listings: below) instead.
 
   - name: CURIOSS
     url: https://curioss.org/resources/funding-opportunities/
@@ -400,3 +411,39 @@ sitemaps:
       GrantForward export gives you are useless; only these slug URLs render.
       Partial coverage: the sitemap lists 4 of the 13 RFPs GrantForward knows
       about. Research gifts, not grants. Verified 2026-09-23.
+
+# ---------------------------------------------------------------------------
+# Listing-expanded sources.
+#
+# The sitemap rule with a funder's own listing as the index, for a listing
+# whose calls each have a page the sitemap does not list. The listing (and its
+# ?page=N pages, followed from the pager link) is read for LINKS only; each
+# linked page is read on its own, one call per page, hashed so that only new
+# or changed calls reach the model after the first run. Bounded the same way:
+# the listing's own domain, one include, one exclude, `max` as a refusal.
+#
+# `aggregator` marks a listing that relists other funders' calls. Its copy is
+# dropped when the funder's own record exists (title match, see db.same_call),
+# and duplicates still count as yield so it does not look stale.
+# ---------------------------------------------------------------------------
+listings:
+  - name: Illinois Research Board
+    listing: https://research.illinois.edu/find-funding/featured-funding-opportunities
+    paginate: {param: page, max: 15}
+    include: '^/rfp/'
+    cadence: weekly
+    max: 300
+    aggregator: true
+    notes: >
+      internal campus money and limited submissions, which never appear in any
+      national database, plus ~200 relisted external calls. The four tabs (View
+      All, External, Internal, Limited Submissions) are ONE server-rendered page;
+      External and Internal are subsets of View All, Limited Submissions is not,
+      and all of them link the same /rfp/ pages, so the overlap collapses to one
+      URL per call. View All pages at 30 rows (7 pages on 2026-10-29); this was
+      a plain page entry that read only page 1, ~15% of the list. items_per_page
+      is ignored and sitemap.xml lists none of the /rfp/ pages. Reading the
+      listing TEXT instead was tried and rejected: one model call per 30-46 calls
+      timed out at 120s. A /rfp/ page is ~2k chars with amount, funder and the
+      funder's own link (e.g. the Pfizer IME PDF). 38 of 219 matched grants.gov
+      by title. Verified 2026-10-29.

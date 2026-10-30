@@ -251,6 +251,88 @@ def synthetic_id(source_url: str, program_name: str) -> str:
     return hash_text(source_url, name)[:20]
 
 
+_TITLE_PREFIX = re.compile(
+    r"^(grants?|funding|awards?|fellowships?|support) (for|to|on) "
+    r"(research (on|in) (the )?)?"
+)
+
+
+_FILLER = {"the", "and", "of", "a", "an"}
+
+
+def title_core(title: str, funder: str = "") -> str:
+    """A call's name with an aggregator's house style taken off.
+
+    The Illinois Research Board retitles every call it relists: grants.gov's
+    'Foundational Research in Robotics' becomes 'Grants for Foundational
+    Research in Robotics (FRR)', and Simons' own 'Simons Collaborations in
+    Mathematics and the Physical Sciences' loses the funder's name. Strip the
+    wrapper, the funder's name and the filler words so the two compare.
+    """
+    t = "".join(c if c.isalnum() else " " for c in (title or "").lower())
+    t = _TITLE_PREFIX.sub("", " ".join(t.split()))
+    t = re.sub(r"^(supporting|core research in|research in|the) ", "", t)
+    words = [w for w in t.split() if w not in _FILLER]
+    lead = (funder or "").lower().split()[:1]
+    if lead and words[:1] == lead and len(words) > 1:
+        words = words[1:]
+    return " ".join(words)
+
+
+def same_call(a: str, b: str) -> bool:
+    """Two title_core()s naming one call.
+
+    Titles only. Deadlines cannot confirm a match: grants.gov stores the
+    current close date and the aggregator the next cycle, and they disagreed
+    on 29 of 43 true matches. Containment is bounded both ways so a short,
+    generic title ('Collaborative Research', 'Security and Preparedness')
+    cannot swallow a long specific one. 0.65 is measured, not round: true
+    matches bottomed out at 0.66 (NSF Geosciences Core Research) and the
+    nearest false one, Simons' broad MPS grants against its Collaborations
+    in MPS call, sat at 0.62. Revisit with data before moving it.
+    """
+    if a == b:
+        return bool(a)
+    short, long_ = sorted((a, b), key=len)
+    return len(short) >= 20 and short in long_ and len(short) >= 0.65 * len(long_)
+
+
+def primary_titles(conn, aggregator: str) -> list:
+    """title_core of every call held from a source other than this aggregator."""
+    rows = conn.execute(
+        "SELECT title, agency FROM opportunities WHERE source != ?", (aggregator,)
+    ).fetchall()
+    return [c for c in (title_core(r["title"], r["agency"]) for r in rows) if c]
+
+
+_GRANTS_GOV_LINK = re.compile(r"grants\.gov/search-results-detail/(\d+)")
+
+
+def relisted_primary(conn, rec) -> bool:
+    """True when an aggregator's record links straight to a call we already hold.
+
+    Exact, so it runs before the title match: a UIUC /rfp/ page links federal
+    calls to grants.gov/search-results-detail/<id>, which is our gg:<id>.
+    """
+    m = _GRANTS_GOV_LINK.search(rec.get("url") or "")
+    return bool(m) and conn.execute(
+        "SELECT 1 FROM opportunities WHERE id = ?", (f"gg:{m.group(1)}",)
+    ).fetchone() is not None
+
+
+def drop_superseded(conn, opp_id: str) -> None:
+    """Remove an aggregator's copy once the funder's own record exists.
+
+    Kept if it carries feedback, for the reason prune_expired keeps it: the
+    calibration corpus cannot be re-fetched.
+    """
+    if conn.execute("SELECT 1 FROM feedback WHERE opportunity_id = ?",
+                    (opp_id,)).fetchone():
+        return
+    conn.execute("DELETE FROM assessments WHERE opportunity_id = ?", (opp_id,))
+    conn.execute("DELETE FROM opportunities WHERE id = ?", (opp_id,))
+
+
 def upsert_opportunity(conn: sqlite3.Connection, rec: dict) -> bool:
     """Insert or refresh one opportunity. Returns True if new or materially changed."""
     ts = now()

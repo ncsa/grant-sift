@@ -284,8 +284,8 @@ def merge_sources(sources, conn, verbose=True):
     would independently report itself healthy.
     """
     merged = dict(sources)
-    have = {db._dedup_key(p.get("url", "") or p.get("sitemap", ""))
-            for key in ("foundations", "feeds", "sitemaps")
+    have = {db._dedup_key(p.get("url") or p.get("sitemap") or p.get("listing") or "")
+            for key in ("foundations", "feeds", "sitemaps", "listings")
             for p in (sources.get(key) or [])}
     added = {"foundations": [], "feeds": []}
     for entry in db.source_additions(conn):
@@ -307,11 +307,11 @@ def merge_sources(sources, conn, verbose=True):
 def ingest(conn, sources, prefilter, verbose=True):
     stats = {"fetched": 0, "kept": 0, "new": 0, "enriched": 0,
              "detail_cached": 0, "detail_failed": 0, "expired": 0, "archived": 0,
-             "pruned": 0}
+             "pruned": 0, "duplicate": 0}
     sources = merge_sources(sources, conn, verbose)
     kw = sources.get("keywords", [])
 
-    def run(name, kind, url, fn):
+    def run(name, kind, url, fn, aggregator=False):
         try:
             records = fn()
             # None means "the page had not moved, so we did not read it", which
@@ -324,8 +324,20 @@ def ingest(conn, sources, prefilter, verbose=True):
                 return
             records = adapters.drop_expired(records)
             stats["fetched"] += len(records)
-            kept = 0
+            kept = dup = 0
+            # An aggregator relists other funders' calls under its own titles.
+            # The funder's own record is the richer one (grants.gov carries the
+            # full synopsis and ceiling), so the aggregator's copy gives way,
+            # and one stored before the funder's appeared is removed now.
+            primary = db.primary_titles(conn, name) if aggregator else []
             for rec in records:
+                if aggregator:
+                    core = db.title_core(rec["title"], rec.get("agency"))
+                    if (db.relisted_primary(conn, rec)
+                            or any(db.same_call(core, p) for p in primary)):
+                        db.drop_superseded(conn, rec["id"])
+                        dup += 1
+                        continue
                 _enrich(conn, rec, stats, verbose)
                 # Both of these annotate. Neither drops: a closed call is still
                 # a record of what was open, and a regex is not a relevance
@@ -339,9 +351,13 @@ def ingest(conn, sources, prefilter, verbose=True):
                 conn.commit()          # same reason: do not hold the writer
 
             stats["kept"] += kept
-            db.record_source_run(conn, name, kind, url, True, kept)
+            stats["duplicate"] += dup
+            # A duplicate is still evidence the source is reading calls; an
+            # aggregator that only relists grants.gov must not look stale.
+            db.record_source_run(conn, name, kind, url, True, kept + dup)
             if verbose:
-                print(f"  {name:38s} {len(records):4d} fetched  {kept:3d} kept", flush=True)
+                tail = f"  {dup:3d} dup" if dup else ""
+                print(f"  {name:38s} {len(records):4d} fetched  {kept:3d} kept{tail}", flush=True)
         except Exception as exc:  # noqa: BLE001
             db.record_source_run(conn, name, kind, url, False, 0, str(exc)[:400])
             if verbose:
@@ -365,7 +381,8 @@ def ingest(conn, sources, prefilter, verbose=True):
             continue
         run(page["name"], "page", page["url"],
             lambda p=page: adapters.foundation_page(
-                conn, p["name"], p["url"], min_text=p.get("min_text")))
+                conn, p["name"], p["url"], min_text=p.get("min_text")),
+            aggregator=bool(page.get("aggregator")))
 
     # One pinned sitemap, expanded into the call pages it lists. Health is
     # recorded per FUNDER, not per page: 45 rows in `sources` for one funder
@@ -376,6 +393,16 @@ def ingest(conn, sources, prefilter, verbose=True):
             continue
         run(site["name"], "sitemap", site["sitemap"],
             lambda c=site: adapters.sitemap_pages(conn, c))
+
+    # The sitemap rule with a funder's own listing as the index: the listing
+    # pages are read for links only, and each linked call page is read on its
+    # own. Health per funder, as above.
+    for site in sources.get("listings", []):
+        if not _due(conn, site):
+            continue
+        run(site["name"], "listing", site["listing"],
+            lambda c=site: adapters.listing_pages(conn, c),
+            aggregator=bool(site.get("aggregator")))
 
     # Off unless asked for. Nothing fetched is thrown away by default.
     prune_days = os.environ.get("GRANT_SIFT_PRUNE_DAYS")

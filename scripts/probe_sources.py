@@ -119,10 +119,11 @@ def main():
     urls, labels = list(args.urls), {}
     if args.config:
         cfg = yaml.safe_load(open(Path(__file__).parent.parent / "config/sources.yaml"))
-        for bucket in ("foundations", "feeds"):
+        for bucket in ("foundations", "feeds", "listings"):
             for entry in cfg.get(bucket) or []:
-                urls.append(entry["url"])
-                labels[entry["url"]] = entry["name"]
+                url = entry.get("url") or entry["listing"]
+                urls.append(url)
+                labels[url] = entry["name"]
     if args.sitemap:
         found = sitemap_urls(args.sitemap, args.grep)
         print(f"# sitemap listed {len(found)} matching urls", file=sys.stderr)
