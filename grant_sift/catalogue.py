@@ -113,6 +113,13 @@ def days_away(deadline):
 # Who "me" is
 # ---------------------------------------------------------------------------
 
+def listed_by(o):
+    """Every source carrying this call: the one shown and the copies folded
+    into it (db.link_duplicates). A source filter asks "is it on X", and a
+    call grants.gov also carries is still on X."""
+    return {o["source"]} | {a["source"] for a in o.get("also_listed") or []}
+
+
 def is_me(person_email, principal):
     """Is this roster address the signed-in person? Keycloak sometimes puts
     the NetID in the email claim with no @, and staff addresses come as
@@ -169,7 +176,7 @@ FILTERS = {
     # Calls matched to a collaborator the signed-in person is the NCSA contact for.
     "via-me": lambda o, ctx: _via_me(o, ctx["principal"]),
     # Calls from funder pages or feeds the signed-in person added.
-    "my-sources": lambda o, ctx: o["source"] in ctx["my_sources"],
+    "my-sources": lambda o, ctx: bool(listed_by(o) & ctx["my_sources"]),
     # Calls in a digest feed the signed-in person subscribes to, less the ones
     # somebody has marked not for us, as the digest itself would.
     "my-digests": lambda o, ctx: (
@@ -399,7 +406,7 @@ def search(conn, rows, principal, *, q="", ids=(), area="", funder="",
             continue
         if categories and (o["category"] or "").lower() not in categories:
             continue
-        if sources and (o["source"] or "").lower() not in sources:
+        if sources and not {s.lower() for s in listed_by(o)} & sources:
             continue
         if kinds and (o["match_kind"] or "").lower() not in kinds:
             continue

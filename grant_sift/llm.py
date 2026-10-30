@@ -147,6 +147,8 @@ Each element:
   "award_ceiling": "as written, e.g. '$250,000 over 2 years', or null",
   "indirect_cap":  "as written, e.g. '10% of direct costs', or null",
   "url":           "application or details URL if one appears on the page, else null",
+  "opportunity_number": "the funder's identifier for this call as written on the page,
+                    e.g. 'RFA-OD-24-011', 'NSF 24-569', 'DE-FOA-0003200', else null",
   "funder":        "the organisation funding this call if it is not the page owner
                     (e.g. an aggregator listing NIH or Pfizer calls), else null"
 }
@@ -156,6 +158,8 @@ Rules:
   of past awardees, skip general programme descriptions with no application route.
 - Do not infer a deadline that is not stated. null is correct and useful.
 - indirect_cap matters and is often buried in the fine print. Look for it.
+- opportunity_number only when the page or the link states it. Never invent one,
+  and never give a related call's number (a companion or superseded notice).
 - If the same call appears twice on the page, return it once."""
 
 
