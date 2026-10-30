@@ -431,7 +431,7 @@ async function render() {
     : `<li class="empty"><b>Nothing matches those filters.</b>
          Clear a filter, or widen the search.</li>`;
 
-  renderPager(data.pages, data.total);
+  paintPager("pager", PAGE, data.total, PAGE_SIZE);
 
   // Restore open chat panels that were on this page before re-render.
   for (const id of Object.keys(CHATS)) {
@@ -449,27 +449,29 @@ async function render() {
   }
 }
 
-function renderPager(pages, total) {
-  const nav = document.getElementById("pager");
-  if (total <= PAGE_SIZE) {
+// The calls list, the roster and the sources all page through this.
+function paintPager(id, page, total, size) {
+  const nav = document.getElementById(id);
+  if (total <= size) {
     nav.hidden = true;
     nav.innerHTML = "";
     return;
   }
   nav.hidden = false;
+  const pages = Math.ceil(total / size);
   const btns = [];
-  btns.push(`<button type="button" data-page="${PAGE - 1}" ${PAGE <= 1 ? "disabled" : ""}>Previous</button>`);
+  btns.push(`<button type="button" data-page="${page - 1}" ${page <= 1 ? "disabled" : ""}>Previous</button>`);
   btns.push(`<span class="pages">`);
   const window = 2;
   for (let p = 1; p <= pages; p++) {
-    if (p === 1 || p === pages || (p >= PAGE - window && p <= PAGE + window)) {
-      btns.push(`<button type="button" data-page="${p}" ${p === PAGE ? 'aria-current="page"' : ""}>${p}</button>`);
-    } else if (p === PAGE - window - 1 || p === PAGE + window + 1) {
+    if (p === 1 || p === pages || (p >= page - window && p <= page + window)) {
+      btns.push(`<button type="button" data-page="${p}" ${p === page ? 'aria-current="page"' : ""}>${p}</button>`);
+    } else if (p === page - window - 1 || p === page + window + 1) {
       btns.push(`<span>…</span>`);
     }
   }
   btns.push(`</span>`);
-  btns.push(`<button type="button" data-page="${PAGE + 1}" ${PAGE >= pages ? "disabled" : ""}>Next</button>`);
+  btns.push(`<button type="button" data-page="${page + 1}" ${page >= pages ? "disabled" : ""}>Next</button>`);
   nav.innerHTML = btns.join("");
 }
 
@@ -895,10 +897,51 @@ document.getElementById("shelf-modal").addEventListener("click", e => {
   if (e.target === e.currentTarget) closeShelf();
 });
 
+// Enough Markdown for a model's answer: paragraphs, headings, lists, code,
+// bold, italic and links. Escapes first and only ever adds tags, so nothing
+// the model writes can become markup of its own.
+function mdInline(s) {
+  return s
+    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+    .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+    .replace(/(^|[^*\w])\*(?!\s)(.+?)\*(?!\w)/g, "$1<i>$2</i>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+             '<a href="$2" target="_blank" rel="noopener">$1</a>');
+}
+function mdHTML(text) {
+  const out = [];
+  let list = null, para = [];
+  const flushPara = () => { if (para.length) out.push(`<p>${mdInline(para.join("<br>"))}</p>`); para = []; };
+  const closeList = () => { if (list) out.push(`</${list}>`); list = null; };
+  const blocks = esc(text).split(/^```[^\n]*\n?/m);
+  blocks.forEach((block, i) => {
+    if (i % 2) {                       // inside a fence
+      flushPara(); closeList();
+      out.push(`<pre><code>${block.replace(/\n$/, "")}</code></pre>`);
+      return;
+    }
+    for (const line of block.split("\n")) {
+      const h = line.match(/^#{1,6}\s+(.*)/);
+      const li = line.match(/^\s*(?:([-*+])|\d+[.)])\s+(.*)/);
+      if (h) { flushPara(); closeList(); out.push(`<p class="h">${mdInline(h[1])}</p>`); }
+      else if (li) {
+        flushPara();
+        const kind = li[1] ? "ul" : "ol";
+        if (list !== kind) { closeList(); out.push(`<${kind}>`); list = kind; }
+        out.push(`<li>${mdInline(li[2])}</li>`);
+      } else if (!line.trim()) { flushPara(); closeList(); }
+      else { closeList(); para.push(line); }
+    }
+    flushPara(); closeList();
+  });
+  return out.join("");
+}
+
 function turnHTML(t) {
   const role = t.role === "user" ? "user" : "assistant";
   const label = role === "user" ? "You" : (t.model || keyBar().model || "Model");
-  return `<div class="turn ${role}"><span class="from">${esc(label)}</span>${esc(t.content)}</div>`;
+  const body = role === "user" ? esc(t.content) : `<div class="md">${mdHTML(t.content || "")}</div>`;
+  return `<div class="turn ${role}"><span class="from">${esc(label)}</span>${body}</div>`;
 }
 
 function paintChatModel(id, root) {
@@ -1158,44 +1201,31 @@ function paintFeedback() {
 // cannot read back is one people fill in twice: without seeing that Sarita
 // Adve is already on the roster, the reasonable thing to do is add her again.
 let ROSTER = [], SOURCES = [];
-// Both lists open short and grow on demand. Rendering 285 collaborators at
-// once buries the search box and makes the panel feel like a data dump rather
-// than something you look things up in. "Show all" is always one click away
-// for the times you do want the whole thing.
-const PAGE_STEP = 5;
-let R_SHOWN = PAGE_STEP, S_SHOWN = PAGE_STEP;
+const WARN_ICON = `<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>`;
+// Paged like the calls list. Both are filtered in the browser, so a page is
+// just a slice of the matches.
+const LIST_PAGE_SIZE = 25;
+let R_PAGE = 1, S_PAGE = 1;
+const clampPage = (page, total) =>
+  Math.min(Math.max(1, page), Math.max(1, Math.ceil(total / LIST_PAGE_SIZE)));
+const pageOf = (items, page) =>
+  items.slice((page - 1) * LIST_PAGE_SIZE, page * LIST_PAGE_SIZE);
 
-function moreBar(total, shown, id, noun) {
-  if (total <= shown) {
-    return total > PAGE_STEP
-      ? `<div class="morebar"><span>all ${total} ${noun} shown</span>
-           <button class="vote" data-collapse="${id}">Show fewer</button></div>`
-      : "";
-  }
-  const next = Math.min(PAGE_STEP, total - shown);
-  return `<div class="morebar">
-      <span>showing ${shown} of ${total} ${noun}</span>
-      <span><button class="vote" data-more="${id}">Show ${next} more</button>
-      <button class="vote" data-all="${id}">Show all ${total}</button></span>
-    </div>`;
+// A search should start from the first page of its results.
+function resetRosterPage() { R_PAGE = 1; renderRoster(); }
+function resetSourcePage() { S_PAGE = 1; renderSources(); }
+
+for (const [nav, list, turn] of [
+  ["r-pager", "rlist", p => { R_PAGE = p; renderRoster(); }],
+  ["s-pager", "slist", p => { S_PAGE = p; renderSources(); }],
+]) {
+  document.getElementById(nav).addEventListener("click", e => {
+    const b = e.target.closest("[data-page]");
+    if (!b || b.disabled || b.getAttribute("aria-current")) return;
+    turn(Number(b.dataset.page));
+    document.getElementById(list).scrollIntoView({ block: "start" });
+  });
 }
-
-// A search should start from the top of the results, not from wherever the
-// previous query had been expanded to.
-function resetRosterPage() { R_SHOWN = PAGE_STEP; renderRoster(); }
-function resetSourcePage() { S_SHOWN = PAGE_STEP; renderSources(); }
-
-document.addEventListener("click", e => {
-  const b = e.target.closest("[data-more],[data-all],[data-collapse]");
-  if (!b) return;
-  const which = b.dataset.more || b.dataset.all || b.dataset.collapse;
-  const isRoster = which === "r-more";
-  const total = isRoster ? ROSTER.length : SOURCES.length;
-  if (b.dataset.all) { if (isRoster) R_SHOWN = total; else S_SHOWN = total; }
-  else if (b.dataset.collapse) { if (isRoster) R_SHOWN = PAGE_STEP; else S_SHOWN = PAGE_STEP; }
-  else { if (isRoster) R_SHOWN += PAGE_STEP; else S_SHOWN += PAGE_STEP; }
-  if (isRoster) renderRoster(); else renderSources();
-});
 
 function statusPill(st) {
   return `<span class="pill ${esc(st)}">${esc(st)}</span>`;
@@ -1212,8 +1242,8 @@ function renderRoster() {
   document.getElementById("r-count").textContent =
     q ? `${hit.length} of ${ROSTER.length}` : `${ROSTER.length} on the roster`;
 
-  R_SHOWN = Math.min(R_SHOWN, Math.max(PAGE_STEP, hit.length));
-  const page = hit.slice(0, R_SHOWN);
+  R_PAGE = clampPage(R_PAGE, hit.length);
+  const page = pageOf(hit, R_PAGE);
   document.getElementById("rlist").innerHTML = hit.length
     ? page.map(e => {
         const areas = (e.areas || []).slice(0, 4).join(", ");
@@ -1231,8 +1261,9 @@ function renderRoster() {
           <span class="sub">${esc(e.unit || "")}${areas ? (e.unit ? " · " : "") + esc(areas) : ""}${
             projects ? "<br>" + projects : ""}${via ? "<br>via us: " + via : ""}</span>
         </div>`;
-      }).join("") + moreBar(hit.length, R_SHOWN, "r-more", "collaborators")
+      }).join("")
     : "<i>nothing matches that search</i>";
+  paintPager("r-pager", R_PAGE, hit.length, LIST_PAGE_SIZE);
 }
 
 async function loadRoster() {
@@ -1262,9 +1293,17 @@ function renderSources() {
   document.getElementById("s-count").textContent =
     q ? `${hit.length} of ${SOURCES.length}` : `${SOURCES.length} sources`;
 
-  S_SHOWN = Math.min(S_SHOWN, Math.max(PAGE_STEP, hit.length));
+  const stale = SOURCES.filter(s => s.stale).length;
+  document.getElementById("s-alarm").innerHTML = stale
+    ? `<div class="alarm" role="note">${WARN_ICON}
+         <span><b>Coverage may be incomplete.</b> ${stale} ${stale === 1 ? "source looks" : "sources look"}
+         stale: never succeeded, no success in 30 days, or empty three runs running.
+         Listed first.</span></div>`
+    : "";
+
+  S_PAGE = clampPage(S_PAGE, hit.length);
   document.getElementById("slist").innerHTML = hit.length
-    ? hit.slice(0, S_SHOWN).map(s => {
+    ? pageOf(hit, S_PAGE).map(s => {
         // Health sits next to the source because a source that quietly stopped
         // yielding is the failure this tool exists to catch.
         const when = s.last_success
@@ -1283,8 +1322,9 @@ function renderSources() {
             <br>${esc(when)}${s.cadence ? " · " + esc(s.cadence) : ""}${
               s.last_error ? ' · <span style="color:var(--ember)">' + esc(s.last_error.slice(0, 90)) + "</span>" : ""}</span>
         </div>`;
-      }).join("") + moreBar(hit.length, S_SHOWN, "s-more", "sources")
+      }).join("")
     : "<i>nothing matches that search</i>";
+  paintPager("s-pager", S_PAGE, hit.length, LIST_PAGE_SIZE);
 }
 
 async function loadSources() {
@@ -1297,7 +1337,8 @@ async function loadSources() {
       return;
     }
     const d = await r.json();
-    SOURCES = d.sources || [];
+    // Stale first: they are the reason to open this panel.
+    SOURCES = (d.sources || []).sort((a, b) => b.stale - a.stale);
     renderSources();
   } catch (e) {
     document.getElementById("slist").innerHTML = "<i>could not reach the server</i>";
@@ -1659,17 +1700,15 @@ function boot(cat) {
     syncDateBounds();
   }
 
-  const stale = cat.stale_sources || [];
-  if (stale.length) {
-    const names = stale.map(s => esc(s.name));
-    const list = names.length > 1
-      ? names.slice(0, -1).join(", ") + " and " + names[names.length - 1] : names[0];
-    document.getElementById("alarm").innerHTML =
-      `<div class="alarm" role="note">
-         <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
-         <span><b>Coverage may be incomplete.</b> ${list}
-         ${stale.length > 1 ? "have" : "has"} not updated in over 30 days.
-         <button type="button" class="linkbtn" data-open-sources>Manage sources</button></span></div>`;
+  // Stale sources matter to whoever looks after coverage, not to everyone
+  // reading the list, so they get a flag on the Data menu rather than a banner.
+  // The detail is in the Sources panel, stale ones first.
+  const stale = (cat.stale_sources || []).length;
+  document.getElementById("stale-n").hidden = !stale;
+  document.getElementById("stale-n").textContent = `${stale} stale`;
+  document.getElementById("data-flag").hidden = !stale;
+  if (stale) {
+    document.getElementById("databtn").setAttribute("aria-label", `Data: ${stale} stale sources`);
   }
   let scored = "unknown";
   if (cat.updated_at) {

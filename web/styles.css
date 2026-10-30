@@ -70,6 +70,7 @@ a:hover { color: var(--il-blue); text-decoration: underline; }
 .tbtn.solid:hover { background: var(--tint-blue); }
 .tbtn .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--il-orange); }
 .tbtn:not(.solid) .dot { display: none; }
+#databtn .flag { width: 8px; height: 8px; border-radius: 999px; background: var(--il-orange); }
 #shelfbtn .n {
   font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
   color: var(--il-blue); background: #fff; border-radius: 999px;
@@ -137,7 +138,6 @@ main.wrap { padding-top: 40px; padding-bottom: 64px; }
 .stat.warn dd { color: var(--il-altgeld); }
 
 /* Coverage notice: a standing caveat, so it stays one quiet line. */
-#alarm:not(:empty) { margin-bottom: 4px; }
 .alarm {
   display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px;
   background: var(--notice-bg); color: var(--notice-fg);
@@ -353,6 +353,15 @@ h2.title a { color: var(--il-blue); }
 .chat .turn.user { align-self: flex-end; background: var(--tint-blue); border-color: #D3DEEE; }
 .chat .turn.user .from { color: var(--il-industrial); }
 .chat .turn.assistant { align-self: flex-start; background: #fff; }
+.chat .turn.assistant { white-space: normal; }
+.chat .md > :first-child { margin-top: 0; }
+.chat .md > :last-child { margin-bottom: 0; }
+.chat .md p, .chat .md ul, .chat .md ol, .chat .md pre { margin: 0 0 8px; }
+.chat .md ul, .chat .md ol { padding-left: 20px; }
+.chat .md .h { font-weight: 600; }
+.chat .md code { font-size: 12.5px; background: var(--surface-2); padding: 1px 4px; border-radius: 4px; }
+.chat .md pre { background: var(--surface-2); padding: 8px 10px; border-radius: 6px; overflow-x: auto; }
+.chat .md pre code { background: none; padding: 0; }
 .chat form { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
 .chat input[type=text] { flex: 1 1 240px; font: inherit; font-size: 14px; height: 36px; padding: 0 10px;
                          border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--il-blue); }
@@ -462,8 +471,8 @@ h2.title a { color: var(--il-blue); }
 .lede { margin: 2px 0 12px; font-size: 13.5px; color: var(--text-3); max-width: 68ch; }
 .browsebar { display: flex; align-items: center; gap: 10px; margin: 4px 0 6px; }
 .browsebar input { flex: 1 1 auto; height: 40px; }
-.morebar { display: flex; align-items: center; justify-content: space-between; gap: 12px;
-           padding: 10px 0 2px; font-size: 12.5px; color: var(--text-3); }
+.modal .pager { margin-top: 16px; }
+#s-alarm .alarm { margin: 4px 0 10px; }
 .addbox { margin: 2px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
 .addbox summary { cursor: pointer; color: var(--il-industrial); font-size: 14px; font-weight: 500; }
 .addbox form { margin-top: 10px; }
