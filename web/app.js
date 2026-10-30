@@ -127,7 +127,7 @@ function reach(o) {
   // rather than a person is just a line of grey text.
   const anyInternal = (c.ncsa_contact || []).some(p => p.name);
   if (!c.email && !anyInternal && !c.review) {
-    return `<div class="reach">${ROSTER_LINK}</div>${introRow(o)}`;
+    return `<div class="reach">${ROSTER_LINK}</div>`;
   }
   const where = [c.unit, c.org && c.org !== "UIUC" ? c.org : null]
     .filter(Boolean).join(", ");
@@ -149,19 +149,18 @@ function reach(o) {
     lines.push(`<div><span class="who">Check</span><span class="flag">${
       esc(c.review)}</span></div>`);
   }
-  return `<div class="reach">${lines.join("")}${ROSTER_LINK}</div>${introRow(o)}`;
+  return `<div class="reach">${lines.join("")}${ROSTER_LINK}</div>`;
 }
 
-// The next step after finding who to write to, so it sits under their address.
-function introRow(o) {
+// The next step after finding who to write to. One button, so the action row
+// stays one line; what the draft will claim is its tooltip.
+function introBtn(o) {
   if (!canIntro(o)) return "";
-  return `<div class="intro">
-    <button class="introbtn" data-intro="${esc(o.id)}" data-name="${esc(o.match_name)}">${
-      ICON_MAIL}Draft intro to ${esc(o.match_name)}</button>
-    <span class="introhint">${o.match_kind === "contact"
-      ? "Written as a first contact: it never claims we have worked together."
-      : "Cites the project we did together and quotes why this call needs us."}</span>
-  </div>`;
+  const how = o.match_kind === "contact"
+    ? "Written as a first contact: it never claims we have worked together."
+    : "Cites the project we did together and quotes why this call needs us.";
+  return `<button class="introbtn" data-intro="${esc(o.id)}" data-name="${esc(o.match_name)}"
+      title="${esc(how)}">${ICON_MAIL}<span>Draft intro to ${esc(o.match_name)}</span></button>`;
 }
 const ROSTER_LINK = `<button type="button" class="linkbtn rosterlink" data-open-roster>Who we know →</button>`;
 
@@ -184,8 +183,17 @@ function scoreSignal(score) {
 
 const ICON_MAIL = `<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>`;
 const ICON_CHAT = `<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>`;
-const ICON_UP = `<svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>`;
-const ICON_DOWN = `<svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`;
+const ICON_UP = `<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10v11H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3zM7 10l4-8a3 3 0 0 1 3 3v4h5.5a2 2 0 0 1 2 2.3l-1.3 8a2 2 0 0 1-2 1.7H7"/></svg>`;
+const ICON_DOWN = `<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 14V3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3zM17 14l-4 8a3 3 0 0 1-3-3v-4H4.5a2 2 0 0 1-2-2.3l1.3-8a2 2 0 0 1 2-1.7H17"/></svg>`;
+const ICON_LOCK = `<svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
+const ICON_TRASH = `<svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg>`;
+const trashBtn = id => `<button class="vote thumb trash" data-shrm="${esc(id)}"
+    aria-label="Remove from shortlist" title="Remove from shortlist">${ICON_TRASH}</button>`;
+const ICON_COPY = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>`;
+const ICON_DOWNLOAD = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>`;
+const ICON_RESET = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>`;
+const ICON_SEND = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`;
+const ICON_X = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>`;
 
 // Countdown first, date second: "13 days / Due Nov 4, 2026". The old layout
 // put the day of the month in the big figure, which read as a count.
@@ -294,19 +302,27 @@ function rowHTML(o, opts = {}) {
       ${reach(o)}
     </div>` : "";
 
+  // Fit leads the row, since it is what the list is ranked by; the deadline
+  // and award sit together on the right.
+  const lead = compact
+    ? `<div class="when">${whenHTML(o)}</div>`
+    : `<div class="lead">${scoreSignal(o.score)}</div>`;
   const side = compact ? "" : `
     <aside class="side">
+      <div>
+        <div class="eyebrow">Deadline</div>
+        <div class="when">${whenHTML(o)}</div>
+      </div>
       <div>
         <div class="eyebrow">Award</div>
         ${award
           ? `<div class="amt">${esc(award.head)}</div>${award.note ? `<div class="amtnote">${esc(award.note)}</div>` : ""}`
           : `<div class="noamt">Not stated</div>`}
       </div>
-      ${scoreSignal(o.score)}
     </aside>`;
 
   return `<li class="row${soon ? " soon" : ""}" id="${opts.shelf ? "sh-" : "c-"}${esc(o.id)}">
-    <div class="when">${whenHTML(o)}</div>
+    ${lead}
     <div class="body">
       <div class="meta">${meta.join("")}</div>
       <h2 class="title">${o.url
@@ -316,14 +332,15 @@ function rowHTML(o, opts = {}) {
       ${o.summary ? `<p class="sumry">${esc(o.summary)}</p>` : ""}
       ${fit}
       <div class="acts">
-        <button class="act" data-chat="${esc(o.id)}" aria-expanded="false">${ICON_CHAT}Ask about this call</button>
-        ${opts.shelf ? `<button class="act" data-shrm="${esc(o.id)}">Remove</button>` : ""}
+        ${introBtn(o)}
+        <button class="askbtn" data-chat="${esc(o.id)}" aria-expanded="false">${ICON_CHAT}<span class="asklbl">Ask about this call</span></button>
         <span class="spacer"></span>
-        <span class="votes">
-          <button class="vote" data-vote="up"   data-id="${esc(o.id)}" aria-pressed="false" title="Good find: score it higher next time">${ICON_UP}Useful</button>
-          <button class="vote" data-vote="down" data-id="${esc(o.id)}" aria-pressed="false" title="Not for us: score it lower next time">${ICON_DOWN}Not for us</button>
-        </span>
         <span class="votenote" data-fb="${esc(o.id)}"></span>
+        <span class="votes">
+          ${opts.shelf ? trashBtn(o.id) : ""}
+          <button class="vote thumb" data-vote="up"   data-id="${esc(o.id)}" aria-pressed="false" aria-label="Useful" title="Useful: score calls like this higher">${ICON_UP}</button>
+          <button class="vote thumb" data-vote="down" data-id="${esc(o.id)}" aria-pressed="false" aria-label="Not for us" title="Not for us: score calls like this lower">${ICON_DOWN}</button>
+        </span>
       </div>
       <div class="fbbox" data-fbbox="${esc(o.id)}">
         <select data-fbaspect="${esc(o.id)}" aria-label="what was wrong">
@@ -336,22 +353,20 @@ function rowHTML(o, opts = {}) {
       </div>
       <div class="chat" data-chatbox="${esc(o.id)}">
         <div class="chathead">
-          <b>Ask about this call</b>
-          <span class="meta">${aiMetaHTML()}</span>
+          <div class="aibar" data-aibar="chat">${aiBarHTML(false)}</div>
+          <span class="hint" data-chathint="${esc(o.id)}" aria-live="polite"></span>
+          <span class="chattools">
+            <button type="button" class="chatx" data-copy="${esc(o.id)}" aria-label="Copy chat" title="Copy chat">${ICON_COPY}</button>
+            <button type="button" class="chatx" data-export="${esc(o.id)}" aria-label="Export chat as Markdown" title="Export as Markdown">${ICON_DOWNLOAD}</button>
+            <button type="button" class="chatx" data-clear="${esc(o.id)}" aria-label="Clear chat" title="Clear chat">${ICON_RESET}</button>
+            <button type="button" class="chatx" data-chatclose="${esc(o.id)}" aria-label="Hide chat" title="Hide chat">${ICON_X}</button>
+          </span>
         </div>
-        <div class="privacy">${esc(privacyText())}</div>
-        ${MCP_NOTE}
         <div class="log" data-chatlog="${esc(o.id)}"></div>
-        <form data-chatform="${esc(o.id)}">
-          <input type="text" placeholder="e.g. what would we need a domain PI for here?" data-chatinput="${esc(o.id)}" aria-label="Your question">
-          <button class="vote" type="submit">Ask</button>
+        <form class="askfield" data-chatform="${esc(o.id)}">
+          <input type="text" placeholder="Ask about this call, e.g. what would we need a domain PI for here?" data-chatinput="${esc(o.id)}" aria-label="Your question">
+          <button class="sendbtn" type="submit" aria-label="Send" title="Send (Enter)">${ICON_SEND}</button>
         </form>
-        <div class="chatfoot">
-          <button class="vote" data-copy="${esc(o.id)}" type="button">Copy</button>
-          <button class="vote" data-export="${esc(o.id)}" type="button">Export .md</button>
-          <button class="vote" data-clear="${esc(o.id)}" type="button">Clear</button>
-          <span class="hint" data-chathint="${esc(o.id)}"></span>
-        </div>
       </div>
     </div>
     ${side}
@@ -430,11 +445,11 @@ async function render() {
   paintPager("pager", PAGE, data.total, PAGE_SIZE);
 
   // Restore open chat panels that were on this page before re-render.
+  const list = document.getElementById("list");
   for (const id of Object.keys(CHATS)) {
-    const box = document.querySelector(`[data-chatbox="${CSS.escape(id)}"]`);
-    const log = document.querySelector(`[data-chatlog="${CSS.escape(id)}"]`);
-    if (!box || !log || !(CHATS[id] || []).length) continue;
-    box.classList.add("on");
+    const log = list.querySelector(`[data-chatlog="${CSS.escape(id)}"]`);
+    if (!log || !(CHATS[id] || []).length) continue;
+    setChat(list, id, true);
     log.innerHTML = CHATS[id].map(turnHTML).join("");
   }
 
@@ -500,25 +515,26 @@ let OWN = null;                                          // { key, model, base }
 const keyBar = () => OWN ? { ...OWN } : { key: "", model: AI.model, base: "" };
 const aiReady = () => !!OWN || AI.shared;
 
-// One line where the AI features are: the other way to use them, and its cost.
-const MCP_NOTE = `<p class="mcpnote">For a stronger model with your own files and history,
-  use <a href="https://github.com/ncsa/grant-sift/wiki/Grant-Sift-in-Claude:-setup" target="_blank"
-  rel="noopener">Grant Sift’s MCP server in Claude or ChatGPT</a>. Your text and roster data then
-  go to that provider.</p>`;
+const MCP_GUIDE = "https://github.com/ncsa/grant-sift/wiki/Grant-Sift-in-Claude:-setup";
 
 function hostOf(url) {
   try { return new URL(url).hostname; } catch (e) { return ""; }
 }
 
-// "gemma-4-31b-it" and where it runs, for the quiet line next to each feature.
-function aiMetaHTML() {
+// One quiet line wherever an AI feature sits (each call's chat, Idea match):
+// the privacy promise as a hover, and the two power-user ways to run it.
+function aiBarHTML(withLock = true) {
   const { model, base } = keyBar();
-  if (!aiReady()) {
-    return `No model yet · <button type="button" class="linkbtn" data-aimodel>Add your key</button>`;
-  }
-  const where = OWN ? `your key, ${hostOf(base)}` : "NCSA Lumen";
-  return `<span class="model">${esc(model || "—")}</span> · ${esc(where)}`
-    + ` · <button type="button" class="linkbtn" data-aimodel>${OWN ? "change" : "use your own"}</button>`;
+  const priv = `<span class="aipriv" tabindex="0" role="img" aria-label="${esc(privacyText())}"
+      title="${esc(privacyText())}">${ICON_LOCK}</span>`;
+  const own = !aiReady()
+    ? `<button type="button" class="linkbtn" data-aimodel>Add your key</button>`
+    : `<button type="button" class="linkbtn" data-aimodel title="Now: ${
+        esc(model || "—")} on ${esc(OWN ? hostOf(base) : "NCSA Lumen")}">${
+        OWN ? "Change your model" : "Use your own model"}</button>`;
+  const mcp = `<a href="${MCP_GUIDE}" target="_blank" rel="noopener"
+      title="Grant Sift's MCP server: a stronger model with your own files and history. Your text and roster data then go to that provider.">Use in Claude or ChatGPT ↗</a>`;
+  return `<span class="aipower"><span class="aplbl">Advanced options</span>${own}<span aria-hidden="true">·</span>${mcp}</span>${withLock ? priv : ""}`;
 }
 
 function privacyText() {
@@ -526,9 +542,9 @@ function privacyText() {
     ? " Your sign-in is known to the proxy in front of this app, so it is private rather than anonymous."
     : "";
   const via = OWN ? `goes to ${hostOf(keyBar().base)} on your own key` : "goes to NCSA Lumen";
-  return `Not stored. This conversation lives only in this browser tab, ${via}`
-    + ` through a proxy that keeps nothing, and is gone when you reload.${signed}`
-    + " Copy or export it to keep it.";
+  return `Not stored. What you type here stays in this browser tab, ${via}`
+    + ` through a proxy that keeps nothing.${signed}`
+    + " A chat is gone when you reload: copy or export it to keep it.";
 }
 
 function saveChatSettings() {
@@ -575,12 +591,11 @@ function paintAI() {
     el.classList.toggle("ready", aiReady());
     el.textContent = own ? "Your key" : AI.shared ? "NCSA" : "Not set up";
   });
-  document.querySelectorAll(".chathead .meta, [data-ailine]").forEach(el => {
-    el.innerHTML = aiMetaHTML();
+  document.querySelectorAll("[data-aibar]").forEach(el => {
+    el.innerHTML = aiBarHTML(el.dataset.aibar !== "chat");
   });
-  document.querySelectorAll(".chat .privacy").forEach(el => {
-    el.textContent = privacyText();
-  });
+  document.getElementById("aibtn-lbl").textContent = aiReady() ? "AI chat" : "Set up AI chat";
+  document.getElementById("aibtn-dot").hidden = aiReady();
   paintAIPanel();
 }
 
@@ -738,7 +753,8 @@ function shelfCardHTML(it) {
         <h2 class="title">${esc(it.id)}</h2>
         <p class="mute">No longer in the open catalogue.</p>
         <div class="acts">
-          <button class="act" data-shrm="${esc(it.id)}">Remove</button>
+          <span class="spacer"></span>
+          <span class="votes">${trashBtn(it.id)}</span>
         </div>
       </div>
     </li>`;
@@ -768,26 +784,42 @@ function renderShelf() {
        <ol id="shelf-list">${SHELF.items.map(shelfCardHTML).join("")}</ol>`
     : "";
   body.innerHTML = `
-    <div class="ideaf">
-      <label class="eyebrow" for="sh-idea">Your idea</label>
-      <textarea id="sh-idea" rows="6" maxlength="4000"
-        placeholder="What are you working on? Describe the idea in your own words.">${esc(SHELF.idea || "")}</textarea>
-      <div class="shelfacts">
-        <button type="button" class="primary" id="sh-search"
-          title="Describe the work, then match. Rematches the catalogue and ranks what it finds (~1 min). Editing the idea and leaving the field also re-ranks kept calls.">Match with all open calls</button>
-        <span class="hint" id="sh-hint" aria-live="polite"></span>
+    <div class="ideagrid">
+      <div class="ideaf">
+        <label class="eyebrow" for="sh-idea">Your idea</label>
+        <textarea id="sh-idea" rows="11" maxlength="4000"
+          placeholder="What are you working on? Describe the idea in your own words.">${esc(SHELF.idea || "")}</textarea>
+        <div class="shelfacts">
+          <button type="button" class="primary" id="sh-search"
+            title="Rematches the catalogue and ranks what it finds (~1 min). Editing the idea and leaving the field also re-ranks kept calls.">Match with all open calls</button>
+          <span class="hint" id="sh-hint" aria-live="polite"></span>
+        </div>
+        <div class="aibar" data-aibar>${aiBarHTML()}</div>
       </div>
-      <p class="ailine" data-ailine>${aiMetaHTML()}</p>
-      ${MCP_NOTE}
+      ${recommendationHTML(SHELF.recommendation)}
     </div>
-    ${SHELF.recommendation ? recommendationHTML(SHELF.recommendation) : ""}
     ${cards}`;
+}
+
+// Until there is a pick, the panel says what will land there, so the space
+// beside the idea is not a mystery.
+const REC_IDLE = "Describe your idea and match it: the call to go for, and the runner-up, land here.";
+const REC_BUSY = "Working on it\u2026 the call to go for lands here.";
+function paintRecPending(text) {
+  const p = document.querySelector("#sh-rec .placeholder");
+  if (p) p.textContent = text;
 }
 
 // The model names calls by id ("gg:363852"). Swap each id it mentions for
 // the call's title, linked to its row below; the first sentence is the pick,
 // the rest (usually the runner-up) reads smaller.
 function recommendationHTML(text) {
+  if (!text) {
+    return `<section class="bkout pending" id="sh-rec" aria-label="Recommendation">
+        <span class="tag">Recommendation</span>
+        <p class="placeholder">${_searchBusy || _scoreBusy ? REC_BUSY : REC_IDLE}</p>
+      </section>`;
+  }
   const ids = SHELF.items.map(i => i.id).filter(Boolean)
     .sort((a, b) => b.length - a.length);
   const link = chunk => {
@@ -803,7 +835,7 @@ function recommendationHTML(text) {
   };
   const m = text.match(/^(.+?[.!?])(\s+[\s\S]+)?$/);
   const pick = m ? m[1] : text, rest = m && m[2] ? m[2].trim() : "";
-  return `<section class="bkout" aria-label="Recommendation">
+  return `<section class="bkout" id="sh-rec" aria-label="Recommendation">
       <span class="tag">Recommendation</span>
       <p class="pick">${link(pick)}</p>
       ${rest ? `<p class="rest">${link(rest)}</p>` : ""}
@@ -842,6 +874,7 @@ async function runShelfSearch() {
     hint.textContent = `${sec}s \u00b7 ${matchStages[matchStage]}`;
   };
   setShelfHint("", true);
+  paintRecPending(REC_BUSY);
   paintMatchProgress();
   const matchTimer = setInterval(() => {
     if (matchStage < matchStages.length - 1) matchStage++;
@@ -888,6 +921,7 @@ async function runShelfSearch() {
     clearInterval(matchTimer);
     clearInterval(matchClock);
     setShelfHint(String(e.message || e).slice(0, 160));
+    paintRecPending(REC_IDLE);
   } finally {
     clearInterval(matchTimer);
     clearInterval(matchClock);
@@ -922,6 +956,7 @@ async function scoreShelf() {
   }
   _scoreBusy = true;
   if (hint) hint.textContent = "Generating recommendation\u2026";
+  paintRecPending(REC_BUSY);
   try {
     const r = await fetch("/api/rescore", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -945,6 +980,7 @@ async function scoreShelf() {
   } catch (e) {
     const err = document.getElementById("sh-hint");
     if (err) err.textContent = String(e.message || e).slice(0, 140);
+    paintRecPending(REC_IDLE);
   } finally {
     _scoreBusy = false;
   }
@@ -1066,7 +1102,6 @@ function mdHTML(text) {
 
 function turnHTML(t) {
   const role = t.role === "user" ? "user" : "assistant";
-  const label = role === "user" ? "You" : (t.model || keyBar().model || "Model");
   const body = role === "user" ? esc(t.content) : `<div class="md">${mdHTML(t.content || "")}</div>`;
   // Checked on the server against the stored synopsis. Shown, not stripped:
   // the quote may be from the full solicitation, which we do not hold.
@@ -1074,8 +1109,9 @@ function turnHTML(t) {
     ? `<p class="unverified">Not found in the captured synopsis, so check against the solicitation before sending: ${
         t.unverified.map(q => `“${esc(q)}”`).join(", ")}</p>`
     : "";
-  return `<div class="turn ${role}"><span class="from">${esc(label)}</span>${body}${unver}</div>`;
+  return `<div class="turn ${role}">${body}${unver}</div>`;
 }
+const PENDING_TURN = `<div class="turn assistant pending" role="status" aria-label="Waiting for the answer"><i></i><i></i><i></i></div>`;
 
 function cardRoot(el) {
   return el.closest(".row") || document;
@@ -1143,6 +1179,21 @@ function openChatPanel(from) {
 }
 function closeChatPanel() { hideModal(document.getElementById("chat-modal")); }
 document.getElementById("m-chat").addEventListener("click", e => openChatPanel(e.currentTarget));
+document.getElementById("aibtn").addEventListener("click", e => openChatPanel(e.currentTarget));
+
+const NEWS_KEY = "gs.news.mcp";
+try { document.getElementById("newsbar").hidden = localStorage.getItem(NEWS_KEY) === "dismissed"; }
+catch (e) { document.getElementById("newsbar").hidden = false; }
+document.getElementById("newsbar-close").addEventListener("click", () => {
+  document.getElementById("newsbar").hidden = true;
+  try { localStorage.setItem(NEWS_KEY, "dismissed"); } catch (e) {}
+});
+
+document.getElementById("advbtn").addEventListener("click", e => {
+  const open = e.currentTarget.getAttribute("aria-expanded") !== "true";
+  e.currentTarget.setAttribute("aria-expanded", String(open));
+  document.getElementById("advbody").hidden = !open;
+});
 document.getElementById("chat-close").addEventListener("click", closeChatPanel);
 document.getElementById("chat-modal").addEventListener("click", e => {
   if (e.target === e.currentTarget) closeChatPanel();
@@ -1318,9 +1369,8 @@ async function loadFeedback() {
 function paintFeedback() {
   document.querySelectorAll("[data-fb]").forEach(node => {
     const f = FB[node.dataset.fb];
-    node.textContent = f
-      ? `recorded: ${f.up} useful, ${f.down} not for us` + (f.note ? ` (latest: ${f.note})` : "")
-      : "";
+    node.textContent = f ? `${f.up} useful · ${f.down} not for us` : "";
+    node.title = f && f.note ? `Latest comment: ${f.note}` : "";
   });
 }
 
@@ -1586,6 +1636,15 @@ function onCardClick(e) {
     return;
   }
 
+  const hide = e.target.closest("[data-chatclose]");
+  if (hide) {
+    const id = hide.dataset.chatclose;
+    const root = cardRoot(hide);
+    setChat(root, id, false);
+    root.querySelector(`[data-chat="${CSS.escape(id)}"]`)?.focus();
+    return;
+  }
+
   const chat = e.target.closest("[data-chat]");
   if (chat) {
     const id = chat.dataset.chat;
@@ -1595,15 +1654,25 @@ function onCardClick(e) {
   }
 }
 
+// Show or hide a row's chat box, and keep its Ask button saying which.
+function setChat(root, id, open) {
+  const box = root.querySelector(`[data-chatbox="${CSS.escape(id)}"]`);
+  const btn = root.querySelector(`[data-chat="${CSS.escape(id)}"]`);
+  if (!box) return;
+  box.classList.toggle("on", open);
+  if (btn) {
+    btn.setAttribute("aria-expanded", String(open));
+    btn.querySelector(".asklbl").textContent = open ? "Hide chat" : "Ask about this call";
+  }
+}
+
 // Open (or with toggle, flip) a row's chat box.
 function openChat(root, id, toggle) {
   const box = root.querySelector(`[data-chatbox="${CSS.escape(id)}"]`);
-  const btn = root.querySelector(`[data-chat="${CSS.escape(id)}"]`);
-  if (toggle) box.classList.toggle("on"); else box.classList.add("on");
-  if (btn) btn.setAttribute("aria-expanded", String(box.classList.contains("on")));
-  if (!box.classList.contains("on")) return;
-  box.querySelector(".chathead .meta").innerHTML = aiMetaHTML();
-  box.querySelector(".privacy").textContent = privacyText();
+  const open = toggle ? !box.classList.contains("on") : true;
+  setChat(root, id, open);
+  if (!open) return;
+  box.querySelector("[data-aibar]").innerHTML = aiBarHTML(false);
   box.querySelector("input").focus();
 }
 document.getElementById("list").addEventListener("click", onCardClick);
@@ -1649,11 +1718,11 @@ async function sendFeedback(id, root) {
     FB[id] = f;
     // Say what actually happens, on all three timescales. The old message
     // claimed a calibration example even when the rule discarded the click.
-    label.textContent = verdict === "down"
-      ? "Recorded. Excluded from digests now; re-scored in tonight's run; "
+    label.textContent = "Thanks, recorded";
+    label.title = verdict === "down"
+      ? "Excluded from digests now; re-scored in tonight's run; "
         + "and it will inform how similar calls are scored."
-      : "Recorded as confirmation. Re-scored in tonight's run, and kept as an "
-        + "anchor for future scoring.";
+      : "Re-scored in tonight's run, and kept as an anchor for future scoring.";
     box.classList.remove("on");
     box.querySelector("input").value = "";
   } catch (err) {
@@ -1701,7 +1770,7 @@ async function onChatTools(e) {
       hint.textContent = "copied to clipboard";
     } catch (err) {
       // Clipboard needs a secure context, so plain http on a LAN address fails.
-      hint.textContent = "clipboard blocked here; use Export .md";
+      hint.textContent = "clipboard blocked here; use Export instead";
     }
     return;
   }
@@ -1736,7 +1805,11 @@ async function onChatSubmit(e) {
   CHATS[id].push({ role: "user", content: q });
   log.insertAdjacentHTML("beforeend", turnHTML({ role: "user", content: q }));
   input.value = "";
-  hint.textContent = "thinking...";
+  hint.textContent = "";
+  log.insertAdjacentHTML("beforeend", PENDING_TURN);
+  const pending = log.lastElementChild;
+  const askBtn = form.querySelector("button[type=submit]");
+  askBtn.disabled = true;
   log.scrollTop = log.scrollHeight;
 
   try {
@@ -1749,18 +1822,17 @@ async function onChatSubmit(e) {
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { hint.textContent = d.detail || `failed (${r.status})`; return; }
-    const used = d.model || model;
-    const turn = { role: "assistant", content: d.content, model: used,
+    const turn = { role: "assistant", content: d.content, model: d.model || model,
                    unverified: d.unverified_quotes || [] };
     CHATS[id].push(turn);
+    pending.remove();
     log.insertAdjacentHTML("beforeend", turnHTML(turn));
-    const u = d.usage || {};
-    hint.textContent = u.prompt_tokens
-      ? `${u.prompt_tokens} in / ${u.completion_tokens} out tokens · ${used}`
-      : used;
     log.scrollTop = log.scrollHeight;
   } catch (err) {
     hint.textContent = "could not reach the server";
+  } finally {
+    pending.remove();
+    askBtn.disabled = false;
   }
 }
 document.getElementById("list").addEventListener("submit", onChatSubmit);
@@ -1770,9 +1842,9 @@ function boot(cat) {
   document.getElementById("n-open").textContent  = cat.open;
   document.getElementById("n-soon").textContent  = cat.soon;
   document.getElementById("n-match").textContent = cat.matched;
+  const upd = cat.updated_at && new Date(cat.updated_at);
   document.getElementById("asof").textContent =
-    cat.updated_at ? "Updated " + longDate(cat.updated_at) : "Not yet updated";
-
+    upd && !isNaN(upd) ? `Updated ${MONTHS[upd.getMonth()]} ${upd.getDate()}` : "";
   // Built from the data, not from a hardcoded list, so it always reflects the
   // roster as it actually matched. Commonest first, counted by the server.
   const sel = document.getElementById("area");
@@ -1924,7 +1996,6 @@ fetch("api/catalogue")
       `<div class="empty"><b>Could not reach the catalogue.</b>
        Start the server with <code>python run.py serve</code>; if it is running,
        run <code>python run.py daily</code> to fill it.</div>`;
-    document.getElementById("asof").textContent = "no data";
   });
 
 // Optional Grafana link: the Ops & signal item in the Data menu.

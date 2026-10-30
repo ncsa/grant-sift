@@ -448,8 +448,8 @@ claude mcp add --transport http grant-sift https://grant-sift.software-dev.ncsa.
 Each ask is a proxied `/chat/completions` call. With no setup it runs on the
 server’s own Lumen key and model (`GRANT_SIFT_LLM_API_KEY`,
 `GRANT_SIFT_LLM_MODEL`, default `gemma-4-31b-it`), so the viewer’s text stays
-at NCSA. **AI model** in the account menu (or “use your own” next to the model
-name) switches both chat and Idea match to the viewer’s own key and model on
+at NCSA. **AI model** in the account menu (or “Use your own model” on the line under
+each AI feature) switches both chat and Idea match to the viewer’s own key and model on
 any OpenAI-compatible router; that key lives in the tab’s memory only. The
 server never stores a key or the transcript; the browser holds the
 conversation for that tab only (copy/export to keep it). Lumen has no CORS, so
