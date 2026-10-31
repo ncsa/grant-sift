@@ -43,6 +43,10 @@ a:hover { color: var(--il-blue); text-decoration: underline; }
   text-transform: uppercase; color: var(--text-3);
 }
 .ico { flex: none; }
+/* Sprite icons (icons.svg): line art drawn in the current text colour. */
+.ic { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ic-blue { color: var(--il-industrial); }
+.ic-muted { color: var(--text-3); }
 
 /* ---- top bar: title plus tools, no tab nav ---- */
 .strip { background: var(--il-blue); border-top: 4px solid var(--il-orange); }

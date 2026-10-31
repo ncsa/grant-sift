@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=8">
+<link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body>
 <header class="strip">
@@ -20,36 +20,36 @@
     <div class="tools" id="whoami" hidden>
       <button type="button" class="tbtn" id="shelfbtn" aria-haspopup="dialog" aria-label="Idea match"
               title="Describe an idea, find matching calls, and keep a shortlist — private to this browser">
-        <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z"/></svg>
+        <svg class="ico ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#bulb"/></svg>
         <span class="lbl">Idea match</span>
         <span class="n" id="shelf-n" hidden></span>
       </button>
       <div class="menuwrap">
         <button type="button" class="tbtn" id="databtn" aria-haspopup="menu" aria-expanded="false"
                 aria-controls="datamenu" aria-label="Data">
-          <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+          <svg class="ico ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#database"/></svg>
           <span class="lbl">Data</span>
           <span class="flag" id="data-flag" aria-hidden="true" hidden></span>
-          <svg class="ico chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          <svg class="ico chev ic" width="14" height="14" aria-hidden="true"><use href="icons.svg#chevron"/></svg>
         </button>
         <div class="menu" id="datamenu" role="menu" aria-labelledby="databtn" hidden>
           <div class="mhead">What scoring is based on</div>
           <div class="mgrp">
             <button type="button" class="mitem" role="menuitem" id="open-roster">
-              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></svg>
+              <svg class="ico ic ic-blue" width="18" height="18" aria-hidden="true"><use href="icons.svg#users"/></svg>
               <span class="mtxt"><b>Who we know</b><small>Collaborator roster</small></span>
             </button>
             <button type="button" class="mitem" role="menuitem" id="open-sources">
-              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+              <svg class="ico ic ic-blue" width="18" height="18" aria-hidden="true"><use href="icons.svg#rss"/></svg>
               <span class="mtxt"><b>Sources</b><small>Funder pages and feeds we read</small></span>
               <span class="status" id="stale-n" hidden></span>
             </button>
           </div>
           <div class="mgrp" id="grafana-grp" hidden>
             <a class="mitem" role="menuitem" id="grafana-link" href="#" target="_blank" rel="noopener">
-              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg>
+              <svg class="ico ic ic-blue" width="18" height="18" aria-hidden="true"><use href="icons.svg#chart"/></svg>
               <span class="mtxt"><b>Ops &amp; signal</b><small>Pipeline dashboard</small></span>
-              <svg class="ico ext" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#556070" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+              <svg class="ico ext ic ic-muted" width="14" height="14" aria-hidden="true"><use href="icons.svg#external"/></svg>
             </a>
           </div>
         </div>
@@ -61,27 +61,27 @@
       <div class="menuwrap">
         <button type="button" class="acct" id="acctbtn" aria-haspopup="menu" aria-expanded="false"
                 aria-controls="acctmenu" aria-label="Account">
-          <span class="av" id="acct-av" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
-          <svg class="ico chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          <span class="av" id="acct-av" aria-hidden="true"><svg class="ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#user"/></svg></span>
+          <svg class="ico chev ic" width="14" height="14" aria-hidden="true"><use href="icons.svg#chevron"/></svg>
         </button>
         <div class="menu" id="acctmenu" role="menu" aria-labelledby="acctbtn" hidden>
           <div class="msigned" id="acct-who" hidden><small>Signed in as</small><b id="acct-name"></b></div>
           <div class="mgrp">
             <button type="button" class="mitem" role="menuitem" id="m-chat">
-              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
+              <svg class="ico ic ic-blue" width="18" height="18" aria-hidden="true"><use href="icons.svg#chat"/></svg>
               <span class="mtxt"><b>AI model</b><small>For Ask and Idea match</small></span>
               <span class="status" data-chatstatus></span>
             </button>
             <button type="button" class="mitem" role="menuitem" id="m-digests">
-              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+              <svg class="ico ic ic-blue" width="18" height="18" aria-hidden="true"><use href="icons.svg#mail"/></svg>
               <span class="mtxt"><b>Email digests</b><small>Nightly emails of new calls</small></span>
             </button>
           </div>
           <div class="mgrp">
             <a class="mitem" role="menuitem" href="https://github.com/ncsa/grant-sift/wiki/Grant-Sift-in-Claude:-setup" target="_blank" rel="noopener">
-              <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7V3M15 7V3"/><path d="M6 7h12v4a6 6 0 0 1-12 0z"/><path d="M12 17v4"/></svg>
+              <svg class="ico ic ic-blue" width="18" height="18" aria-hidden="true"><use href="icons.svg#plug"/></svg>
               <span class="mtxt"><b>Use in Claude, ChatGPT…</b><small>MCP setup guide</small></span>
-              <svg class="ico ext" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#556070" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+              <svg class="ico ext ic ic-muted" width="14" height="14" aria-hidden="true"><use href="icons.svg#external"/></svg>
             </a>
           </div>
         </div>
@@ -92,10 +92,10 @@
 
 <div class="newsbar" id="newsbar" hidden>
   <div class="wrap">
-    <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1D58A7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7V3M15 7V3"/><path d="M6 7h12v4a6 6 0 0 1-12 0z"/><path d="M12 17v4"/></svg>
+    <svg class="ico ic ic-blue" width="16" height="16" aria-hidden="true"><use href="icons.svg#plug"/></svg>
     <p><b>New:</b> use Grant Sift from Claude, ChatGPT or any MCP tool.
       <a href="https://github.com/ncsa/grant-sift/wiki/Grant-Sift-in-Claude:-setup" target="_blank" rel="noopener">Setup guide →</a></p>
-    <button type="button" class="x" id="newsbar-close" aria-label="Dismiss"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    <button type="button" class="x" id="newsbar-close" aria-label="Dismiss"><svg class="ic" width="14" height="14" aria-hidden="true"><use href="icons.svg#x"/></svg></button>
   </div>
 </div>
 
@@ -116,7 +116,7 @@
       <label class="field search-f">
         <span class="sr">Search</span>
         <span class="searchbox">
-          <svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#556070" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <svg class="ico ic ic-muted" width="18" height="18" aria-hidden="true"><use href="icons.svg#search"/></svg>
           <input id="q" class="search" type="search" placeholder="Search titles, funders, people">
         </span>
       </label>
@@ -153,7 +153,7 @@
       </div>
       <button type="button" class="advtoggle" id="advbtn" aria-expanded="false" aria-controls="advbody">
         Advanced search <span class="advcount" id="adv-count" hidden></span>
-        <svg class="ico chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        <svg class="ico chev ic" width="14" height="14" aria-hidden="true"><use href="icons.svg#chevron"/></svg>
       </button>
     </div>
       <div class="advbody" id="advbody" hidden>
@@ -260,7 +260,7 @@
   <div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="digest-title">
     <header>
       <h2 id="digest-title">Email digests</h2>
-      <button type="button" class="x" id="digest-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <button type="button" class="x" id="digest-close" aria-label="Close"><svg class="ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#x"/></svg></button>
     </header>
     <div class="digestf">
       <p class="help">New high-relevance calls, emailed nightly after the overnight run.</p>
@@ -285,8 +285,8 @@
     <header>
       <h2 id="sources-title">Where calls come from
         <span class="infotip" tabindex="0" role="note" aria-label="About this list"
-              title="Every funder page, feed and API this tool reads. Each shows when it last worked, so a source that has quietly stopped yielding is visible rather than silent."><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></span></h2>
-      <button type="button" class="x" id="sources-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+              title="Every funder page, feed and API this tool reads. Each shows when it last worked, so a source that has quietly stopped yielding is visible rather than silent."><svg class="ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#info"/></svg></span></h2>
+      <button type="button" class="x" id="sources-close" aria-label="Close"><svg class="ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#x"/></svg></button>
     </header>
     <details class="addbox">
       <summary>Add a source the tool does not read yet</summary>
@@ -329,7 +329,7 @@
         <p title="Nothing is stored on the server: your idea and shortlist stay in this browser only.">
           Describe an idea; get the open calls that fit it and the one to go for.</p>
       </div>
-      <button type="button" class="x" id="shelf-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <button type="button" class="x" id="shelf-close" aria-label="Close"><svg class="ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#x"/></svg></button>
     </header>
     <div id="shelf-body"></div>
   </div>
@@ -340,8 +340,8 @@
     <header>
       <h2 id="roster-title">Who we know
         <span class="infotip" tabindex="0" role="note" aria-label="About this list"
-              title="Everyone the matcher can suggest: people we have worked with, and people we have only emailed. Search before adding — most names are already here."><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></span></h2>
-      <button type="button" class="x" id="roster-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+              title="Everyone the matcher can suggest: people we have worked with, and people we have only emailed. Search before adding — most names are already here."><svg class="ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#info"/></svg></span></h2>
+      <button type="button" class="x" id="roster-close" aria-label="Close"><svg class="ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#x"/></svg></button>
     </header>
     <details class="addbox">
       <summary>Add a collaborator who is not listed above</summary>
@@ -376,7 +376,7 @@
   <div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="chat-title">
     <header>
       <h2 id="chat-title">AI model</h2>
-      <button type="button" class="x" id="chat-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <button type="button" class="x" id="chat-close" aria-label="Close"><svg class="ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#x"/></svg></button>
     </header>
     <div class="aipanel">
       <p class="help">What <b>Ask about this call</b> and <b>Idea match</b> run on.</p>
@@ -425,6 +425,17 @@
   </div>
 </div>
 
-<script src="app.js?v=8"></script>
+<!-- Plain scripts, not modules: they share top-level state, so order matters. -->
+<script src="js/format.js?v=9"></script>
+<script src="js/icons.js?v=9"></script>
+<script src="js/rows.js?v=9"></script>
+<script src="js/list.js?v=9"></script>
+<script src="js/ai.js?v=9"></script>
+<script src="js/ui.js?v=9"></script>
+<script src="js/shelf.js?v=9"></script>
+<script src="js/panels.js?v=9"></script>
+<script src="js/account.js?v=9"></script>
+<script src="js/cards.js?v=9"></script>
+<script src="js/main.js?v=9"></script>
 </body>
 </html>
