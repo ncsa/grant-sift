@@ -225,7 +225,11 @@ function verdictHTML(o) {
 function cardHTML(o) {
   const away = daysAway(o.deadline);
   const soon = away !== null && away >= 0 && away <= 30;
-  const meta = [`<span class="funder">${esc(o.funder || o.agency || o.source)}</span>`];
+  const funder = o.funder || o.agency || "";
+  const meta = [];
+  if (funder) meta.push(`<span class="funder">${esc(funder)}</span>`);
+  if (o.source && o.source !== funder) meta.push(`<span class="via">${esc(o.source)}</span>`);
+  if (!meta.length) meta.push(`<span class="funder">Unknown</span>`);
   if (o.category) meta.push(`<span>${esc(category(o.category))}</span>`);
   if (o.indirect_cap) meta.push(`<span class="cap">Indirect capped at ${esc(o.indirect_cap)}</span>`);
   const v = verdictHTML(o);

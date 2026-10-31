@@ -262,6 +262,36 @@ class Catalogue(Base):
                            "deadline": SOON}])
         self.assertEqual(rows[0]["human"]["verdict"], "down")
 
+    def test_funders_are_alphabetical(self):
+        # NIH is commonest; the picker is still A-Z, not count order.
+        rows = [
+            {"match_domain": "", "_funders": {"NIH"}, "source": "grants.gov",
+             "deadline": None, "match_name": None, "_days": None},
+            {"match_domain": "", "_funders": {"NIH"}, "source": "grants.gov",
+             "deadline": None, "match_name": None, "_days": None},
+            {"match_domain": "", "_funders": {"Defense"}, "source": "grants.gov",
+             "deadline": None, "match_name": None, "_days": None},
+            {"match_domain": "", "_funders": {"NSF"}, "source": "grants.gov",
+             "deadline": None, "match_name": None, "_days": None},
+        ]
+        names = [f["name"] for f in catalogue.facets(self.conn, rows)["funders"]]
+        self.assertEqual(names, ["Defense", "NIH", "NSF"])
+
+    def test_sources_are_alphabetical(self):
+        rows = [
+            {"match_domain": "", "_funders": set(),
+             "source": "sam.gov", "also_listed": [],
+             "deadline": None, "match_name": None, "_days": None},
+            {"match_domain": "", "_funders": set(),
+             "source": "grants.gov", "also_listed": [],
+             "deadline": None, "match_name": None, "_days": None},
+            {"match_domain": "", "_funders": set(),
+             "source": "Wellcome", "also_listed": [],
+             "deadline": None, "match_name": None, "_days": None},
+        ]
+        names = [s["name"] for s in catalogue.facets(self.conn, rows)["sources"]]
+        self.assertEqual(names, ["grants.gov", "sam.gov", "Wellcome"])
+
 
 class ListingPages(Base):
     def test_also_listed_falls_back_to_the_source_url(self):
@@ -353,14 +383,20 @@ class SoonestDeadline(Base):
         self.assertEqual(hits(*around(self.LATER)), [GG["id"]])      # grants.gov's own
         self.assertEqual(hits(*around((date.today() + timedelta(days=300)).isoformat())), [])
 
-    def test_funder_filter_and_counts_include_folded_copies(self):
+    def test_funder_is_agency_source_is_listing(self):
         rows = catalogue.load(self.conn, {})
-        hits = catalogue.search(self.conn, rows, None, funder="Illinois Research Board")
-        self.assertEqual([o["id"] for o in hits], [GG["id"]])
-        self.assertEqual([o["id"] for o in catalogue.search(self.conn, rows, None, funder="NIH")],
-                         [GG["id"]])
-        funders = {f["name"]: f["count"] for f in catalogue.facets(self.conn, rows)["funders"]}
-        self.assertEqual(funders.get("Illinois Research Board"), 1)
+        self.assertEqual([o["id"] for o in catalogue.search(
+            self.conn, rows, None, funder="NIH")], [GG["id"]])
+        self.assertEqual(catalogue.search(
+            self.conn, rows, None, funder="Illinois Research Board"), [])
+        self.assertEqual([o["id"] for o in catalogue.search(
+            self.conn, rows, None, source="Illinois Research Board")], [GG["id"]])
+        funders = {f["name"] for f in catalogue.facets(self.conn, rows)["funders"]}
+        sources = {s["name"] for s in catalogue.facets(self.conn, rows)["sources"]}
+        self.assertIn("NIH", funders)
+        self.assertNotIn("Illinois Research Board", funders)
+        self.assertIn("Illinois Research Board", sources)
+        self.assertIn("grants.gov", sources)
 
     def test_rolling_funder_copy_takes_a_stated_date(self):
         self.conn.execute("UPDATE opportunities SET deadline = NULL WHERE id = ?", (GG["id"],))

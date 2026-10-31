@@ -426,11 +426,38 @@ _BLOCKED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1",
                   "169.254.169.254", "metadata.google.internal"}
 
 
+def _file_sources(cfg):
+    """Every source config/sources.yaml names, in the shape the panel lists.
+
+    grants.gov and sam.gov are top-level blocks, not items in `foundations` or
+    `feeds`; sitemaps and listings are their own lists. Leaving any of those
+    out is how sam.gov (and Wellcome, the Research Board) vanished from the
+    Sources panel while still being read.
+    """
+    out = []
+    if (cfg.get("grants_gov") or {}).get("enabled"):
+        out.append({"name": "grants.gov", "kind": "api", "url": adapters.GRANTS_GOV_URL})
+    sam = cfg.get("sam_gov") or {}
+    if sam.get("enabled"):
+        out.append({"name": "sam.gov", "kind": "api", "url": adapters.SAM_URL,
+                    "cadence": sam.get("cadence")})
+    for f in cfg.get("feeds") or []:
+        out.append({"name": f["name"], "kind": "feed", "url": f["url"]})
+    for f in cfg.get("foundations") or []:
+        out.append({"name": f["name"], "kind": "page", "url": f["url"],
+                    "cadence": f.get("cadence"), "notes": f.get("notes")})
+    for f in cfg.get("sitemaps") or []:
+        out.append({"name": f["name"], "kind": "sitemap", "url": f["sitemap"],
+                    "cadence": f.get("cadence"), "notes": f.get("notes")})
+    for f in cfg.get("listings") or []:
+        out.append({"name": f["name"], "kind": "listing", "url": f["listing"],
+                    "cadence": f.get("cadence"), "notes": f.get("notes")})
+    return out
+
+
 def _all_source_names(cfg, conn):
     """Every source name currently in play, file and dashboard alike."""
-    out = []
-    for bucket in ("foundations", "feeds"):
-        out += [{"name": e["name"]} for e in (cfg.get(bucket) or []) if e.get("name")]
+    out = [{"name": s["name"]} for s in _file_sources(cfg)]
     out += [{"name": a["name"]} for a in db.source_additions(conn)]
     return out
 
@@ -496,12 +523,9 @@ def sources_list(request: Request):
                 "stale": name in stale,
             })
 
-        if (cfg.get("grants_gov") or {}).get("enabled"):
-            add("grants.gov", "api", adapters.GRANTS_GOV_URL, "file")
-        for f in cfg.get("feeds") or []:
-            add(f["name"], "feed", f["url"], "file")
-        for f in cfg.get("foundations") or []:
-            add(f["name"], "page", f["url"], "file", f.get("cadence"), f.get("notes"))
+        for s in _file_sources(cfg):
+            add(s["name"], s["kind"], s["url"], "file",
+                s.get("cadence"), s.get("notes"))
         for a in db.source_additions(conn):
             add(a["name"], a["kind"], a["url"], "dashboard",
                 a["cadence"], a["notes"], a["id"], a.get("created_by"))
@@ -545,12 +569,11 @@ def sources_add(request: Request, payload: dict = Body(...)):
 
     key = db._dedup_key(url)
     cfg = _sources_file()
-    for bucket in ("foundations", "feeds"):
-        for existing in cfg.get(bucket) or []:
-            if db._dedup_key(existing.get("url", "")) == key:
-                raise HTTPException(
-                    409, f"already covered by '{existing['name']}' in "
-                         "config/sources.yaml")
+    for existing in _file_sources(cfg):
+        if db._dedup_key(existing.get("url") or "") == key:
+            raise HTTPException(
+                409, f"already covered by '{existing['name']}' in "
+                     "config/sources.yaml")
     conn = _conn()
     try:
         dup = db.source_exists(conn, url)

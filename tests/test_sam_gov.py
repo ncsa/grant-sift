@@ -11,7 +11,7 @@ from unittest import mock
 
 import requests
 
-from grant_sift import adapters, db, pipeline
+from grant_sift import adapters, catalogue, db, pipeline, server
 
 SOON = (date.today() + timedelta(days=40)).isoformat()
 KEY = "SAMKEY-not-a-real-one"
@@ -257,6 +257,55 @@ class Folding(unittest.TestCase):
         other = dict(IRB, title="Something retitled entirely")
         self.add(sam, other)
         self.assertEqual(len(db.link_duplicates(self.conn, {"Illinois Research Board"})), 1)
+
+    def test_office_is_the_funder_not_sam_gov(self):
+        rec = {"id": f"sam:{FIREFOX_ID}", "source": "sam.gov", "agency": "ARPA-H",
+               "title": "Optical Rastering", "url": f"https://sam.gov/opp/{FIREFOX_ID}/view",
+               "deadline": SOON, "synopsis": "x"}
+        self.add(rec)
+        db.save_assessment(self.conn, rec["id"], {"score": 70, "category": "ci_program"}, "m", "h")
+        rows = catalogue.load(self.conn, {})
+        self.assertEqual([o["_funder"] for o in rows], ["ARPA-H"])
+        funders = [f["name"] for f in catalogue.facets(self.conn, rows)["funders"]]
+        self.assertEqual(funders, ["ARPA-H"])
+        self.assertEqual([o["id"] for o in catalogue.search(
+            self.conn, rows, None, funder="ARPA-H")], [rec["id"]])
+        self.assertEqual(catalogue.search(self.conn, rows, None, funder="sam.gov"), [])
+
+
+class FileSources(unittest.TestCase):
+    def test_sam_gov_and_expanded_rules_are_listed(self):
+        names = [s["name"] for s in server._file_sources({
+            "grants_gov": {"enabled": True},
+            "sam_gov": {"enabled": True, "cadence": "weekly"},
+            "feeds": [{"name": "ReSA", "url": "https://example.org/feed.xml"}],
+            "foundations": [{"name": "Sloan", "url": "https://sloan.org/grants"}],
+            "sitemaps": [{"name": "Wellcome", "sitemap": "https://wellcome.org/sitemap.xml"}],
+            "listings": [{"name": "Illinois Research Board",
+                          "listing": "https://research.illinois.edu/find-funding"}],
+        })]
+        self.assertEqual(names, ["grants.gov", "sam.gov", "ReSA", "Sloan",
+                                 "Wellcome", "Illinois Research Board"])
+        sam = next(s for s in server._file_sources({
+            "sam_gov": {"enabled": True, "cadence": "weekly"}}) if s["name"] == "sam.gov")
+        self.assertEqual(sam["kind"], "api")
+        self.assertEqual(sam["url"], adapters.SAM_URL)
+
+    def test_disabled_sam_gov_is_omitted(self):
+        names = [s["name"] for s in server._file_sources({"sam_gov": {"enabled": False}})]
+        self.assertNotIn("sam.gov", names)
+
+
+class FunderFamily(unittest.TestCase):
+    def test_sam_gov_uses_the_office(self):
+        self.assertEqual(catalogue.funder_family(
+            {"source": "sam.gov", "agency": "ARPA-H"}), "ARPA-H")
+        self.assertEqual(catalogue.funder_family(
+            {"source": "grants.gov", "agency": "HHS-NIH11"}), "NIH")
+        self.assertEqual(catalogue.funder_family(
+            {"source": "Wellcome", "agency": "Wellcome Trust"}), "Wellcome Trust")
+        self.assertEqual(catalogue.funder_family(
+            {"source": "sam.gov", "agency": ""}), "")
 
 
 class Ingest(unittest.TestCase):

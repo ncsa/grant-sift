@@ -8,7 +8,7 @@ function boot(cat) {
   document.getElementById("asof").textContent =
     upd && !isNaN(upd) ? `Updated ${MONTHS[upd.getMonth()]} ${upd.getDate()}` : "";
   // Built from the data, not from a hardcoded list, so it always reflects the
-  // roster as it actually matched. Commonest first, counted by the server.
+  // roster as it actually matched. Areas commonest first, funders (agency) A-Z.
   const sel = document.getElementById("area");
   cat.areas.forEach(({ name, count }) => {
     const opt = document.createElement("option");

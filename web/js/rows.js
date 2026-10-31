@@ -141,7 +141,11 @@ function rowHTML(o, opts = {}) {
     : "";
   const kept = !opts.shelf && shelfHas(o.id) ? `<span class="kept">In Idea match</span>` : "";
 
-  const meta = [`<span class="funder">${esc(o.agency || o.source)}</span>`];
+  const funder = o.funder || o.agency || "";
+  const meta = [];
+  if (funder) meta.push(`<span class="funder">${esc(funder)}</span>`);
+  if (o.source && o.source !== funder) meta.push(`<span class="via">${esc(o.source)}</span>`);
+  if (!meta.length) meta.push(`<span class="funder">Unknown</span>`);
   if (compact) {
     meta.push(award ? `<span>${esc(award.head)}</span>` : `<span>Award not stated</span>`);
     meta.push(`<span class="mininum" aria-label="Fit score ${o.score} of 100"><b>${o.score}</b>/100</span>`);

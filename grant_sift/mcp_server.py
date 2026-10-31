@@ -147,7 +147,7 @@ def _rest(ctx: Context, handler: str, *args, **kwargs):
 # A list row carries its subscores, extracted facts and contact block, which
 # is a lot of tokens times 25. A model choosing between calls needs these;
 # get_opportunity has the rest.
-_BRIEF = ("id", "title", "funder", "deadline", "award_ceiling", "award_usd", "first_seen", "score",
+_BRIEF = ("id", "title", "funder", "source", "deadline", "award_ceiling", "award_usd", "first_seen", "score",
           "category", "summary", "match_name", "match_kind", "human",
           "relevance", "url")
 
@@ -201,9 +201,10 @@ def search_opportunities(
     deadline), voted-up, voted-down, subaward-ok (stated as allowed), and the
     personal ones via-me, my-sources, my-digests; prefix any with - to
     exclude it ("-voted-down"). category e.g. ci_program, embedded_software,
-    domain_subaward. funder is the family name shown on results (NIH, NSF,
-    Defense, ...); funder, category and source take a comma list matching any
-    ("NSF,NIH"). area is a roster research area.
+    domain_subaward. funder is the paying organisation from the agency field
+    (NIH, NSF, ARPA-H, ...); source is the listing (grants.gov, sam.gov, a
+    foundation page). funder, category and source take a comma list matching
+    any ("NSF,NIH"). area is a roster research area.
 
     min_award/max_award: USD, 0 for no bound; compared against award_usd,
     and calls with no known award are left out. posted_since/posted_before:
@@ -239,8 +240,8 @@ def search_opportunities(
 @mcp.tool(annotations=_READ)
 def get_catalogue(ctx: Context) -> dict:
     """The catalogue at a glance: open, closing-soon and matched counts, every
-    funder family and research area with its count, the deadline range, and
-    sources that have stopped updating (the list may be incomplete)."""
+    funder (agency), listing source and research area with its count, the
+    deadline range, and sources that have stopped updating."""
     return _rest(ctx, "catalogue_facets")
 
 

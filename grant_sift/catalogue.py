@@ -88,16 +88,23 @@ _FUNDER_FAMILIES = [(re.compile(p), label) for p, label in (
 
 
 def funder_family(o):
-    # Foundations and feeds already carry a readable name; only grants.gov
-    # needs decoding. An unrecognised code falls through to itself rather than
-    # into an "Other" bucket, so nothing becomes unfindable.
-    if o["source"] != "grants.gov":
-        return o["source"] or o["agency"] or ""
-    code = (o["agency"] or "").upper()
-    for rx, label in _FUNDER_FAMILIES:
-        if rx.search(code):
-            return label
-    return o["agency"] or o["source"] or ""
+    """The organisation paying, from `agency`. `source` is the listing.
+
+    grants.gov stores an agency CODE ("HHS-NIH11") that has to be folded
+    into a name a person would pick. Everyone else already has a readable
+    agency (ARPA-H, Wellcome, ...). An empty agency stays empty rather than
+    borrowing the listing name, so a missing agency is visible instead of
+    looking like a funder called "sam.gov".
+    """
+    agency = (o.get("agency") or "").strip()
+    if not agency:
+        return ""
+    if o.get("source") == "grants.gov":
+        code = agency.upper()
+        for rx, label in _FUNDER_FAMILIES:
+            if rx.search(code):
+                return label
+    return agency
 
 
 def days_away(deadline):
@@ -354,11 +361,7 @@ def load(conn, contacts):
         o["_days"] = days_away(o["deadline"])
         o["_award"] = _award(o)
         o["_funder"] = funder_family(o)
-        # Plus the funder of every copy folded into it, so picking "Illinois
-        # Research Board" still finds the calls the Board lists that grants.gov
-        # carries too. A folded grants.gov copy has the shown copy's agency.
-        o["_funders"] = {o["_funder"]} | {
-            a["source"] for a in o.get("also_listed") or [] if a["source"] != "grants.gov"}
+        o["_funders"] = {o["_funder"]} if o["_funder"] else set()
         o["_short"] = _short_text(o)
         o["_words"] = sorted(set(_WORD.findall(o["_short"] + " " + (o["summary"] or "").lower())))
     return rows
@@ -476,19 +479,24 @@ def facets(conn, rows):
     """The page header and the pickers: counts over the whole open
     catalogue, not the current filter, so the pickers do not shrink as you
     narrow."""
-    areas, funders = {}, {}
+    areas, funders, sources = {}, {}, {}
     for o in rows:
         if o["match_domain"]:
             areas[o["match_domain"]] = areas.get(o["match_domain"], 0) + 1
         for f in o["_funders"]:
             if f:
                 funders[f] = funders.get(f, 0) + 1
+        for s in listed_by(o):
+            if s:
+                sources[s] = sources.get(s, 0) + 1
 
-    def ranked(d):
-        # Commonest first: the list is long and the head is where nearly
-        # every record is.
-        return [{"name": k, "count": n}
-                for k, n in sorted(d.items(), key=lambda kv: (-kv[1], kv[0]))]
+    def ranked(d, *, alpha=False):
+        # Areas stay commonest first: the list is long and the head is where
+        # nearly every record is. Funders and sources are A-Z -- people look
+        # for a name.
+        key = ((lambda kv: kv[0].lower()) if alpha
+               else (lambda kv: (-kv[1], kv[0])))
+        return [{"name": k, "count": n} for k, n in sorted(d.items(), key=key)]
 
     deadlines = sorted(o["deadline"] for o in rows if o["deadline"])
     updated = conn.execute("SELECT MAX(assessed_at) m FROM assessments").fetchone()["m"]
@@ -498,7 +506,8 @@ def facets(conn, rows):
         "soon": sum(1 for o in rows if o["_days"] is not None and 0 <= o["_days"] <= 30),
         "matched": sum(1 for o in rows if o["match_name"]),
         "areas": ranked(areas),
-        "funders": ranked(funders),
+        "funders": ranked(funders, alpha=True),
+        "sources": ranked(sources, alpha=True),
         "deadline_min": deadlines[0] if deadlines else None,
         "deadline_max": deadlines[-1] if deadlines else None,
         "filters": list(FILTERS),
