@@ -60,21 +60,41 @@ function boot(cat) {
   probeAPI();
 }
 
-fetch("api/catalogue")
-  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-  .then(boot)
-  .catch(() => {
-    document.getElementById("list").innerHTML =
-      `<div class="empty"><b>Could not reach the catalogue.</b>
-       Start the server with <code>python run.py serve</code>; if it is running,
-       run <code>python run.py daily</code> to fill it.</div>`;
+// Wording and Call type chips from config/profile.yaml.
+function paintProfile(p) {
+  const g = p.group || {};
+  if (g.tagline) document.getElementById("tagline").textContent = g.tagline;
+  if (g.match_phrase) document.getElementById("match-phrase").textContent = g.match_phrase;
+  if (p.score_label) {
+    SCORE_LABEL = p.score_label;
+    document.querySelectorAll(".score-lbl").forEach(el => {
+      el.textContent = SCORE_LABEL;
+      el.title = `${SCORE_LABEL}, 0 to 100. Not the Idea fit.`;
+    });
+    const opt = document.querySelector('#sort option[value="score"]');
+    if (!opt.textContent.includes("idea")) opt.textContent = `Highest ${SCORE_LABEL}`;
+  }
+  const grp = document.getElementById("grp-type");
+  (p.call_types || []).forEach(c => {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.dataset.filter = c.id;
+    b.setAttribute("aria-pressed", ACTIVE.has(c.id));
+    b.textContent = c.label;
+    if (c.title) b.title = c.title;
+    grp.appendChild(b);
   });
+  grp.hidden = !(p.call_types || []).length;
+}
 
-// Optional Grafana link: the Ops & signal item in the Data menu.
-fetch("/api/config")
+// Config first: the rows are labelled with what the score measures, so the
+// list waits for it. A failure only costs the labels, never the list.
+const CONFIG = fetch("/api/config")
   .then(r => r.ok ? r.json() : null)
   .then(cfg => {
     if (cfg && cfg.ai) { AI = cfg.ai; paintAI(); }
+    if (cfg && cfg.profile) paintProfile(cfg.profile);
+    // Optional Grafana link: the Ops & signal item in the Data menu.
     const url = cfg && (cfg.grafana_url || cfg.grafana_embed_url);
     if (!url) return;
     const link = document.getElementById("grafana-link");
@@ -83,3 +103,14 @@ fetch("/api/config")
     document.getElementById("grafana-grp").hidden = false;
   })
   .catch(() => {});
+
+fetch("api/catalogue")
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(cat => CONFIG.then(() => boot(cat)))
+  .catch(() => {
+    document.getElementById("list").innerHTML =
+      `<div class="empty"><b>Could not reach the catalogue.</b>
+       Start the server with <code>python run.py serve</code>; if it is running,
+       run <code>python run.py daily</code> to fill it.</div>`;
+  });
+

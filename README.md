@@ -36,6 +36,32 @@ as ConfigMaps). If this repo was ever public or shared with the real files
 committed, scrub history before relying on “gitignored now” — old commits still
 contain them.
 
+### Profile: who this deployment is for
+
+`config/profile.yaml` holds what is written for one group: the header tagline,
+the overview wording, the group description in the Ask prompt, the email
+digests, and the "Call type" chips. Digests and chips are rules over columns
+every scored call already has (`category`, `score`, `source`, `deadline`,
+`match_name`), so editing them needs no re-scoring and no database change:
+
+```yaml
+digests:
+  - id: ci-programs                 # subscriptions are stored under this id
+    label: CI / research-software programs
+    category: [ci_program]
+    min_score: 60
+```
+
+Rule keys: `category`, `source`, `exclude_source`, `min_score`,
+`deadline_within_days`, `has_match`. An unknown key stops the app at start-up
+rather than becoming a rule that matches everything. Set `GRANT_SIFT_PROFILE`
+to use another file; restart to pick up an edit.
+
+Not in the profile: the scoring prompt (`ASSESS_SYSTEM` in `grant_sift/llm.py`),
+which sets the categories and what the 0–100 score measures. The score is
+stored per call, so changing it means re-scoring; until that moves to config
+the dashboard labels the score for what it is, **RSE relevance**.
+
 ## Commands
 
 ```bash
@@ -491,11 +517,11 @@ open calls fit it?” The Idea box sits under Search with an on/off switch. On,
 the main list becomes the calls that fit the idea, best fit first, each with
 why it fits; the recommendation (the call to go for, and the runner-up) sits
 above the list. Funder, deadline, award and the other filters narrow the
-matched set, and the sort “Best overall fit” becomes “Best idea fit”. Off, the
+matched set, and the sort “Highest RSE relevance” becomes “Best idea fit”. Off, the
 dashboard is as it was, with its filters and sort.
 
 Each row leads with one of two scores, labelled so they are never confused:
-**Overall fit** (the group’s 0–100 relevance score, the same for everyone) or,
+**RSE relevance** (the 0–100 relevance score, the same for everyone) or,
 in Idea match, **Idea fit** (fit to this idea, from `/api/focus` and
 `/api/rescore`). Hovering either label explains it. The two are never averaged.
 

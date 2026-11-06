@@ -1,0 +1,64 @@
+# Who this deployment is for: wording, email digests and call-type chips.
+#
+# Everything here is a rule over columns every scored call already has
+# (category, score, source, deadline, match_*), so editing this file changes
+# what is shown and sent without re-scoring anything and without a database
+# change. The scoring prompt itself is not here: it is in grant_sift/llm.py,
+# and changing it means re-scoring (see issue #58).
+#
+# Point GRANT_SIFT_PROFILE at another file to use a different profile. The
+# app reads it at start-up; restart to pick up an edit.
+#
+# Rule keys, all optional; every key given must hold:
+#   category: [..]             the call's category is one of these
+#   source: [..]               the call was listed by one of these sources
+#   exclude_source: [..]       ...and by none of these
+#   min_score: N               score >= N (an unscored call counts as 0)
+#   deadline_within_days: N    deadline on or before today + N days
+#   has_match: true|false      the call matched someone on the roster
+
+group:
+  # The line under "Grant Sift" in the page header.
+  tagline: Open funding calls, ranked for NCSA’s Research Software Engineering group
+  # Completes "You are helping ... decide whether to pursue one specific
+  # funding call" in the Ask chat prompt.
+  description: a research software engineering group at a supercomputing centre
+  # The overview count: "<n> match a past collaborator".
+  match_phrase: match a past collaborator
+
+# Email digests, sent nightly in this order. The id is what subscriptions are
+# stored under: renaming one drops its subscribers.
+digests:
+  - id: ci-programs
+    label: CI / research-software programs
+    category: [ci_program]
+    min_score: 60
+  - id: embedded
+    label: Domain / embedded calls
+    category: [embedded_software, domain_subaward]
+    min_score: 65
+  - id: foundations
+    label: Foundations (non-NSF / non-grants.gov)
+    exclude_source: [grants.gov]
+    min_score: 60
+  - id: closing-soon
+    label: Closing within 30 days
+    deadline_within_days: 30
+    min_score: 60
+  - id: roster-match
+    label: Matches a past collaborator
+    has_match: true
+    min_score: 60
+
+# The dashboard's "Call type" chips. The id is the filter name in URLs, the
+# API (filters=ci) and the MCP search tool.
+call_types:
+  - id: embedded
+    label: Domain calls
+    category: [embedded_software, domain_subaward]
+  - id: ci
+    label: CI programs
+    category: [ci_program]
+  - id: foundation
+    label: Foundations
+    exclude_source: [grants.gov]

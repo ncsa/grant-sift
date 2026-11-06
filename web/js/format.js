@@ -1,5 +1,9 @@
 // Formatting: dates, money, escaping, and the Markdown for model answers.
 
+// What the 0-100 score measures, from /api/config (it follows the scoring
+// prompt). Neutral until that answers.
+let SCORE_LABEL = "Score";
+
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 const daysAway = d => d ? Math.ceil((new Date(d + "T00:00:00") - new Date().setHours(0,0,0,0)) / 864e5) : null;

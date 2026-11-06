@@ -14,7 +14,7 @@
   <div class="wrap">
     <a class="brand-block" href="./">
       <span class="brand">Grant Sift</span>
-      <span class="tagline">Open funding calls, ranked for NCSA’s Research Software Engineering group</span>
+      <span class="tagline" id="tagline"></span>
     </a>
     <!-- One page, so no tab nav: everything here opens a panel or a menu. -->
     <div class="tools" id="whoami" hidden>
@@ -96,7 +96,7 @@
     <p class="statline">
       <span><b id="n-open">..</b> open</span>
       <span><b class="warn" id="n-soon">..</b> close within 30 days</span>
-      <span><b id="n-match">..</b> match a past collaborator</span>
+      <span><b id="n-match">..</b> <span id="match-phrase">roster matches</span></span>
       <span id="asof"></span>
     </p>
   </section>
@@ -180,11 +180,9 @@
                 title="Calls in the email digests you subscribe to">My digests</button>
         <button type="button" class="linkbtn" id="manage-digests">Manage digests</button>
       </div>
-      <div class="chipgroup" role="group" aria-labelledby="g-type">
+      <div class="chipgroup" role="group" aria-labelledby="g-type" id="grp-type" hidden>
         <span class="glbl" id="g-type">Call type</span>
-        <button class="chip" data-filter="embedded" aria-pressed="false">Domain calls</button>
-        <button class="chip" data-filter="ci" aria-pressed="false">CI programs</button>
-        <button class="chip" data-filter="foundation" aria-pressed="false">Foundations</button>
+        <!-- Chips from config/profile.yaml (call_types), painted by main.js. -->
       </div>
       <button type="button" class="advtoggle" id="advbtn" aria-expanded="false" aria-controls="advbody">
         Advanced search <span class="advcount" id="adv-count" hidden></span>
@@ -194,7 +192,7 @@
       <div class="advbody" id="advbody" hidden>
         <div class="find">
           <label class="field pick-f">
-            <span class="flbl" title="The group's Overall fit score, 0 to 100. Not the Idea fit.">Overall fit</span>
+            <span class="flbl score-lbl" title="The call's score, 0 to 100. Not the Idea fit.">Score</span>
             <select id="fit" class="sortsel">
               <option value="">Any fit</option>
               <option value="80">Strong fit (80+)</option>
@@ -285,7 +283,7 @@
     </div>
     <label class="sortlbl">Sort by
       <select id="sort" class="sortsel">
-        <option value="score" selected>Best overall fit</option>
+        <option value="score" selected>Highest score</option>
         <option value="deadline">Soonest deadline</option>
         <option value="award-desc">Largest award</option>
         <option value="award-asc">Smallest award</option>
@@ -457,17 +455,17 @@
 </div>
 
 <!-- Plain scripts, not modules: they share top-level state, so order matters. -->
-<script src="js/format.js?v=11"></script>
+<script src="js/format.js?v=12"></script>
 <script src="js/icons.js?v=11"></script>
-<script src="js/rows.js?v=12"></script>
-<script src="js/list.js?v=11"></script>
+<script src="js/rows.js?v=13"></script>
+<script src="js/list.js?v=12"></script>
 <script src="js/ai.js?v=11"></script>
 <script src="js/ui.js?v=11"></script>
 <script src="js/ideafile.js?v=14"></script>
-<script src="js/idea.js?v=14"></script>
+<script src="js/idea.js?v=15"></script>
 <script src="js/panels.js?v=11"></script>
 <script src="js/account.js?v=11"></script>
 <script src="js/cards.js?v=11"></script>
-<script src="js/main.js?v=11"></script>
+<script src="js/main.js?v=12"></script>
 </body>
 </html>

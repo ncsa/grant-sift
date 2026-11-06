@@ -48,7 +48,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import adapters, auth, catalogue, db, llm, mcp_server, pipeline, telemetry
+from . import adapters, auth, catalogue, db, llm, mcp_server, pipeline, profile, telemetry
 
 DB_PATH = os.environ.get("GRANT_SIFT_DB", "grant-sift.db")
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -235,7 +235,10 @@ def public_config():
     return {"grafana_url": url or None,
             # What Ask and Idea match run on when the viewer brings no key.
             "ai": {"shared": bool(llm.API_KEY), "model": llm.MODEL,
-                   "gateway": urlparse(llm.BASE_URL).hostname}}
+                   "gateway": urlparse(llm.BASE_URL).hostname},
+            # Wording and call-type chips from config/profile.yaml, and the
+            # name of what the score measures, which follows the scoring prompt.
+            "profile": profile.public() | {"score_label": llm.SCORE_LABEL}}
 
 
 @app.get("/api/whoami")
@@ -942,9 +945,9 @@ def _complete(gw: dict, messages: list, max_tokens: int, temperature: float = 0)
     return content, (data.get("usage") or {})
 
 
-CHAT_SYSTEM = """You are helping a research software engineering group at a
-supercomputing centre decide whether to pursue one specific funding call, and
-how to approach it.
+# Who the group is comes from config/profile.yaml; the rest is how to answer.
+CHAT_SYSTEM = f"""You are helping {profile.PROFILE["group"]["description"]} decide
+whether to pursue one specific funding call, and how to approach it.
 
 You are given what the pipeline holds about that call: its title, funder,
 deadline, award figures, the relevance score and rationale, and the closest

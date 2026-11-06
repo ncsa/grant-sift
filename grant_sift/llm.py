@@ -184,6 +184,11 @@ def extract_calls(page_text: str, source_name: str) -> list:
 # 2. Relevance classification + 3. Collaborator matching (one call, one pass)
 # --------------------------------------------------------------------------
 
+# What the 0-100 score measures, as the dashboard names it. It follows this
+# prompt, not config/profile.yaml: the score is stored per call, so a
+# different group's label only becomes true after re-scoring (issue #58).
+SCORE_LABEL = "RSE relevance"
+
 ASSESS_SYSTEM = """You screen funding opportunities for a university research software
 engineering (RSE) group at a supercomputing centre. The group builds and sustains
 research software: data pipelines, scientific workflows, HPC and GPU computing,

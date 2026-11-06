@@ -70,13 +70,13 @@ const band = score => SCORE_BANDS.find(([min]) => score >= min) || SCORE_BANDS[3
 // the same 0-100 scale, so it gets its own label and is never mixed with the
 // group's score.
 function scoreSignal(score, idea = false) {
-  const label = idea ? "Idea fit" : "Overall fit";
+  const label = idea ? "Idea fit" : SCORE_LABEL;
   const what = idea
     ? "Idea fit: how well this call fits the idea you described (your file and notes), "
-      + "scored 0 to 100 by the model. It changes when the idea does. Separate from Overall fit; "
+      + `scored 0 to 100 by the model. It changes when the idea does. Separate from ${SCORE_LABEL}; `
       + "the two are never averaged."
-    : "Overall fit: how well this call fits the group's research software work, scored 0 to 100 "
-      + "by the model from the call's text. The same for everyone, and not about any one idea.";
+    : `${SCORE_LABEL}: scored 0 to 100 by the model from the call's text. `
+      + "The same for everyone, and not about any one idea.";
   return `<div class="score ${band(score)[1]}" title="${what}">
       <div class="eyebrow">${label}</div>
       <div class="num" aria-label="${label} ${score} of 100"><b>${score}</b><span>/100</span></div>

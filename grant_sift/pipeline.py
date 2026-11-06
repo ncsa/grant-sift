@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from . import adapters, db, llm
+from . import adapters, db, llm, profile
 
 
 WARM_WINDOW_YEARS = 4
@@ -819,39 +819,10 @@ def _suppressed(r, verdicts):
     return bool(v and v["verdict"] == "down")
 
 
-def _score(r):
-    """Rows assessed before the NULL-score fix, or by a model that returned no
-    parseable score, still sit in the database. Treat a missing score as 0 so a
-    digest degrades to omitting the row instead of raising TypeError."""
-    s = r["score"]
-    return s if isinstance(s, (int, float)) else 0
-
-
-FEEDS = {
-    "ci-programs":  lambda r: r["category"] == "ci_program" and _score(r) >= 60,
-    "embedded":     lambda r: r["category"] in ("embedded_software", "domain_subaward") and _score(r) >= 65,
-    "foundations":  lambda r: r["source"] != "grants.gov" and _score(r) >= 60,
-    "closing-soon": lambda r: _within(r["deadline"], 30) and _score(r) >= 60,
-    "roster-match": lambda r: r["match_name"] and _score(r) >= 60,
-}
-
-# Human labels for the subscribe UI (keys must match FEEDS).
-FEED_LABELS = {
-    "closing-soon": "Closing within 30 days",
-    "roster-match": "Matches a past collaborator",
-    "ci-programs": "CI / research-software programs",
-    "embedded": "Domain / embedded calls",
-    "foundations": "Foundations (non-NSF / non-grants.gov)",
-}
-
-
-def _within(deadline, days):
-    if not deadline:
-        return False
-    try:
-        return date.fromisoformat(deadline) <= date.today() + timedelta(days=days)
-    except ValueError:
-        return False
+# The digests are rules in config/profile.yaml; see grant_sift/profile.py.
+# Ordered as in the file, which is the order they are listed and sent.
+FEEDS = {d["id"]: d["test"] for d in profile.PROFILE["digests"]}
+FEED_LABELS = {d["id"]: d["label"] for d in profile.PROFILE["digests"]}
 
 
 def build_digest(conn, feed, since_days=7, respect_sent_log=True, roster=None):
