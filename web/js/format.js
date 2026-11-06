@@ -3,6 +3,8 @@
 // What the 0-100 score measures, from /api/config (it follows the scoring
 // prompt). Neutral until that answers.
 let SCORE_LABEL = "Score";
+// Our own institution as the roster writes it (profile org.home): not shown.
+let HOME_ORG = "";
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 

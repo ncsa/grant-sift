@@ -22,7 +22,7 @@ function reach(o) {
   if (!c.email && !anyInternal && !c.review) {
     return `<div class="reach">${ROSTER_LINK}</div>`;
   }
-  const where = [c.unit, c.org && c.org !== "UIUC" ? c.org : null]
+  const where = [c.unit, c.org && c.org !== HOME_ORG ? c.org : null]
     .filter(Boolean).join(", ");
   // A program is something we run, so there is no "them" to write to. Showing
   // one anyway produced "reach out to Luigi Marini, via us: Luigi Marini".

@@ -16,7 +16,7 @@ will need a partner and does not yet know it.
 pip install -r requirements.txt
 cp .env.example .env          # then add your Lumen project key
 cp config/roster.example.yaml config/roster.yaml            # collaborators and leads (gitignored)
-cp config/ncsa_staff.example.yaml config/ncsa_staff.yaml   # optional: your staff's addresses
+cp config/staff.example.yaml config/staff.yaml   # optional: your staff's addresses
 set -a; source .env; set +a
 
 python run.py daily           # ingest, assess, digest
@@ -27,7 +27,7 @@ The gateway defaults to NCSA Lumen with `gemma-4-31b-it`, so the key is the
 only required secret. Override `GRANT_SIFT_LLM_BASE_URL` for any other
 OpenAI-compatible gateway.
 
-`config/roster.yaml` and `config/ncsa_staff.yaml` are **not in git** — between
+`config/roster.yaml` and `config/staff.yaml` are **not in git** — between
 them they name real collaborators, their relationship status, and colleagues'
 email addresses. `Projects/` is ignored too: it holds real proposal text and
 must never reach a commit or a container image. Only the `.example.yaml` files
@@ -144,7 +144,7 @@ flowchart TD
     S --> AS["ASSESS<br/>one call per record:<br/>score, category, roster match"]
     R1["config/roster.yaml<br/>parties, projects optional"] --> AS
     R2["roster_entries<br/>added in the dashboard"] --> AS
-    R3["config/ncsa_staff.yaml<br/>our addresses"] --> R1
+    R3["config/staff.yaml<br/>our addresses"] --> R1
     P["Projects/<br/>proposals, gitignored"] -.->|"build_roster.py"| R1
     AS --> S
     S --> J["/api/opportunities<br/>search, filters, paging<br/>(catalogue.py)"] --> D["dashboard"]
@@ -323,7 +323,7 @@ are not parties — needed enforcing in code, not just in a comment.
 Neither is stored. `assessments` holds no address of any kind — only
 `match_name` and the other `match_*` fields. Contact details are joined on at
 **read time**: `pipeline.contact_index()` builds a lookup from the roster plus
-`ncsa_staff.yaml`, and `pipeline.catalogue_rows` attaches the matching record
+`staff.yaml`, and `pipeline.catalogue_rows` attaches the matching record
 to each opportunity as `contact`, which is what the dashboard, MCP and the
 digests render.
 
@@ -341,7 +341,7 @@ a match and no way to act on it. `contact_index` therefore also registers
 aliases for each party's leading personal name and each of its project titles,
 added only where the key is free so a real party name always wins.
 
-**`config/ncsa_staff.yaml`** stays separate on purpose. It is *us*, not
+**`config/staff.yaml`** stays separate on purpose. It is *us*, not
 *them*: it maps the names in `our_contact` to real addresses so the dashboard
 shows both ends of an introduction. Put your own staff in the roster and the
 matcher starts matching you to yourself. Take these addresses from your

@@ -65,6 +65,10 @@ function paintProfile(p) {
   const g = p.group || {};
   if (g.tagline) document.getElementById("tagline").textContent = g.tagline;
   if (g.match_phrase) document.getElementById("match-phrase").textContent = g.match_phrase;
+  HOME_ORG = (p.org || {}).home || "";
+  for (const [v, colour] of Object.entries(p.theme || {})) {
+    document.documentElement.style.setProperty(v, colour);
+  }
   const org = (p.org || {}).name;
   if (org) {
     document.querySelector('.chip[data-filter="via-me"]').title =

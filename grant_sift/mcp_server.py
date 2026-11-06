@@ -83,8 +83,9 @@ def _card_html() -> str:
     here = Path(__file__).resolve().parent
     css = (here.parent / "web" / "styles.css").read_text(encoding="utf-8")
     return ((here / "mcp_card.html").read_text(encoding="utf-8")
-            .replace("/*DASHBOARD_CSS*/", css)
-            .replace('/*DASHBOARD_URL*/""', json.dumps(PUBLIC_URL + "/" if PUBLIC_URL else "")))
+            .replace("/*DASHBOARD_CSS*/", css + profile.theme_css())
+            .replace('/*DASHBOARD_URL*/""', json.dumps(PUBLIC_URL + "/" if PUBLIC_URL else ""))
+            .replace('/*HOME_ORG*/""', json.dumps(profile.PROFILE["org"]["home"])))
 
 
 _apps = Apps()

@@ -141,10 +141,10 @@ roster:
   existingConfigMap: ""
   key: roster.yaml
   mountPath: /app/config/roster.yaml
-  # Optional second key in the same ConfigMap (ncsa_staff.yaml). Resolves
+  # Optional second key in the same ConfigMap (staff.yaml). Resolves
   # "via us" names on the dashboard.
   staffKey: ""
-  staffMountPath: /app/config/ncsa_staff.yaml
+  staffMountPath: /app/config/staff.yaml
 
 # Who this instance is for: org, scoring prompt, wording, digests, chips.
 # Empty uses config/profile.yaml baked into the image (the NCSA RSE group).
@@ -157,6 +157,14 @@ roster:
 profile:
   existingConfigMap: ""
   key: profile.yaml
+
+# Which funder pages, feeds and APIs to read. Empty uses config/sources.yaml
+# baked into the image. A sibling that wants other funders mounts its own:
+#   kubectl -n grant-sift-x create configmap grant-sift-sources \
+#     --from-file=sources.yaml=my-sources.yaml
+sources:
+  existingConfigMap: ""
+  key: sources.yaml
 
 # Secret env. Leave empty in git; supply via --set, --set-file, or values-secrets.yaml.
 secrets:

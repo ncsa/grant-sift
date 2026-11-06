@@ -31,6 +31,16 @@ org:
   email_domain: illinois.edu
   # Sent in the crawler's User-Agent so a funder's site can reach a person.
   contact_email: rse@ncsa.illinois.edu
+  # The `org` roster entries carry when they are at our own institution. Not
+  # shown on cards or to the scorer: it says nothing about the person.
+  home: UIUC
+
+# Page colours, as CSS hex. Optional; the Illinois palette when left out.
+theme:
+  primary: "#13294B"       # header, headings, body text
+  accent: "#FF5F05"        # marks only, never text
+  accent_text: "#C84113"   # the accent where it is text
+  link: "#1D58A7"
 
 group:
   # The line under "Grant Sift" in the page header.

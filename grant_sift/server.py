@@ -395,7 +395,7 @@ def _config_stamp():
     cheap next to parsing the YAML, and lets an edit - a ConfigMap update in
     Kubernetes - reach the next request without a restart."""
     d = Path("config")
-    paths = (d / "sources.yaml", d / "ncsa_staff.yaml",
+    paths = (d / "sources.yaml", d / "staff.yaml", d / "ncsa_staff.yaml",
              Path(os.environ.get("GRANT_SIFT_ROSTER") or (d / "roster.yaml")))
     out = []
     for p in paths:
@@ -924,8 +924,10 @@ def _complete(gw: dict, messages: list, max_tokens: int, temperature: float = 0)
             "temperature": temperature, "messages": messages}
     # Lumen / some vLLM stacks bill reasoning as output; OpenAI-compatible
     # cloud APIs reject this unknown field, so only send it there.
+    # Only to the configured gateway (GRANT_SIFT_LLM_BASE_URL), and only when
+    # GRANT_SIFT_LLM_THINKING is off, as for scoring.
     host = (urlparse(gw["base_url"]).hostname or "").lower()
-    if host == "lumen.ncsa.illinois.edu" or host.endswith(".ncsa.illinois.edu"):
+    if host == (urlparse(llm.BASE_URL).hostname or "").lower() and not llm.THINKING:
         body["chat_template_kwargs"] = {"enable_thinking": False}
     try:
         r = requests.post(f"{gw['base_url']}/chat/completions",

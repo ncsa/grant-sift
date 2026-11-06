@@ -29,6 +29,8 @@ helm/**/charts/
 config/roster.yaml
 # Our own staff and their addresses. Same rule as the roster: the example is
 # tracked, the real file is not.
+config/staff.yaml
+# Its name before the rename to staff.yaml, still read:
 config/ncsa_staff.yaml
 # Transient import artefact from scripts/build_contacts.py, merged by
 # scripts/build_roster.py and then deletable.

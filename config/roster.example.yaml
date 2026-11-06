@@ -33,7 +33,7 @@
 # WHO GOES HERE
 #
 # Domain partners: the people who need an RSE and may not know it. YOUR OWN
-# STAFF DO NOT GO HERE. They live in config/ncsa_staff.yaml and are named in
+# STAFF DO NOT GO HERE. They live in config/staff.yaml and are named in
 # `our_contact`; put them in this file and the matcher matches you to
 # yourself.
 #
@@ -45,7 +45,7 @@
 #   areas         research areas. Worth filling: a department alone makes
 #                 everyone in it look identical to the matcher.
 #   our_contact  names of YOUR staff who already know this party. Joined
-#                 against ncsa_staff.yaml, so spelling must match its
+#                 against staff.yaml, so spelling must match its
 #                 `as_written`.
 #   kind          omit for a normal partner. `program` marks something YOU run
 #                 - a platform, a community, a service - where there is no

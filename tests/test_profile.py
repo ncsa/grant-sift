@@ -100,7 +100,7 @@ class Defaults(unittest.TestCase):
 
 class Validation(unittest.TestCase):
     BASE = {
-        "org": {"name": "O", "email_domain": "o.edu", "contact_email": "a@o.edu"},
+        "org": {"name": "O", "email_domain": "o.edu", "contact_email": "a@o.edu", "home": "O"},
         "group": {"tagline": "t", "description": "d", "match_phrase": "m"},
         "scoring": {"label": "L", "prompt": "P", "guide": "80-100  good",
                     "categories": [{"id": "a", "description": "A"},
@@ -118,6 +118,12 @@ class Validation(unittest.TestCase):
         for key in ("org", "scoring"):
             with self.assertRaisesRegex(profile.ProfileError, key):
                 profile.parse({k: v for k, v in self.BASE.items() if k != key})
+
+    def test_theme_must_be_hex(self):
+        with self.assertRaisesRegex(profile.ProfileError, "theme.primary"):
+            self.parse(theme={"primary": "navy"})
+        with self.assertRaisesRegex(profile.ProfileError, "unknown"):
+            self.parse(theme={"background": "#ffffff"})
 
     def test_no_axes_leaves_them_out_of_the_prompt(self):
         text = llm.build_assess_system(self.parse()["scoring"])
@@ -160,6 +166,15 @@ class RosterContactKey(unittest.TestCase):
             self.assertEqual([p["name"] for p in out[0]["our_contact"]], ["Bo"])
             self.assertNotIn("ncsa_contact", out[0])
 
+    def test_staff_file_old_name_still_read(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "ncsa_staff.yaml").write_text("- {as_written: Bo, name: Bo B, email: bo@x.edu}\n")
+            self.assertEqual(pipeline.load_staff(d)["Bo"]["email"], "bo@x.edu")
+            (d / "staff.yaml").write_text("- {as_written: Bo, name: Bo B, email: new@x.edu}\n")
+            self.assertEqual(pipeline.load_staff(d)["Bo"]["email"], "new@x.edu")
+
     def test_new_key_wins(self):
         e = pipeline.upgrade_entry({"ncsa_contact": ["Old"], "our_contact": ["New"]})
         self.assertEqual(e["our_contact"], ["New"])
@@ -178,7 +193,7 @@ class ShippedProfiles(unittest.TestCase):
         text = (ROOT / "config/profile.general.yaml").read_text()
         body = "\n".join(ln for ln in text.splitlines()
                          if not ln.lstrip().startswith("#")
-                         and not ln.lstrip().startswith(("contact_email", "name:", "email_domain")))
+                         and not ln.lstrip().startswith(("contact_email", "name:", "email_domain", "home:")))
         for word in ("RSE", "research software", "cyberinfrastructure", "HPC"):
             self.assertNotIn(word, body)
 

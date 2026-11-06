@@ -136,7 +136,7 @@ kubectl -n grant-sift create secret generic grant-sift-oauth2 \
 # Collaborator roster (gitignored — not in the image)
 kubectl -n grant-sift create configmap grant-sift-roster \
   --from-file=roster.yaml=config/roster.yaml \
-  --from-file=ncsa_staff.yaml=config/ncsa_staff.yaml
+  --from-file=staff.yaml=config/staff.yaml
 
 # Grafana admin (when grafana.enabled — software-dev turns it on)
 GRAFANA_PW="$(openssl rand -base64 24)"
@@ -148,12 +148,19 @@ echo "Grafana break-glass admin password: $GRAFANA_PW"
 # Keycloak client grant-sift-grafana: see GRAFANA.md (same realm as the app)
 ```
 
+> **Upgrading from a ConfigMap with key `ncsa_staff.yaml`** (the staff file's
+> name before it became `staff.yaml`): the values now mount key `staff.yaml`.
+> Recreate the ConfigMap with the command below before the next
+> `helm upgrade`, or a missing key leaves the "via us" contacts empty. A plain
+> `rollout restart` on the old values keeps working: the app still reads
+> `ncsa_staff.yaml` when there is no `staff.yaml`.
+
 Update roster later:
 
 ```bash
 kubectl -n grant-sift create configmap grant-sift-roster \
   --from-file=roster.yaml=config/roster.yaml \
-  --from-file=ncsa_staff.yaml=config/ncsa_staff.yaml \
+  --from-file=staff.yaml=config/staff.yaml \
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n grant-sift rollout restart deploy/grant-sift
 ```

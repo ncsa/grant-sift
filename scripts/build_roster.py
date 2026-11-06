@@ -16,7 +16,7 @@ relationship that the projects do not support.
 A party is a person or an organisation. "Woodwell Climate Research Center"
 and "IDOT" are parties too; only `name` is required.
 
-ncsa_staff.yaml stays separate on purpose. It is US, not them. Merge our own
+staff.yaml stays separate on purpose. It is US, not them. Merge our own
 staff into the same list and the matcher starts matching us to ourselves.
 
 Run:
@@ -159,7 +159,7 @@ PROMOTIONS = [
 #                 better-sourced title (MarginDx is on Boppart from the ARPA-H
 #                 proposal; the placeholder would add a second copy)
 #   kind          "program" where there is genuinely nobody outside to email
-#   our_contact  our people, resolved to addresses via ncsa_staff.yaml
+#   our_contact  our people, resolved to addresses via staff.yaml
 SECOND_PASS = {
     "Permafrost Discovery Gateway": {
         "partner": {"name": "Anna Liljedahl",
@@ -525,7 +525,7 @@ HEADER = """\
 #   do-not-contact  never surfaced; dropped at load time
 #
 # WHO GOES HERE. Domain partners - the people who need an RSE and may not know
-# it. Our own staff belong in config/ncsa_staff.yaml and are referenced by
+# it. Our own staff belong in config/staff.yaml and are referenced by
 # name in `our_contact`, never listed here, or the matcher matches us to
 # ourselves.
 #

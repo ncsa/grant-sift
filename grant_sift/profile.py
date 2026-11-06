@@ -11,6 +11,7 @@ everything.
 """
 
 import os
+import re
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -132,6 +133,32 @@ def _described(raw, where, required):
     return out
 
 
+THEME_VARS = {"primary": "--c-primary", "accent": "--c-accent",
+              "accent_text": "--c-accent-text", "link": "--c-link"}
+_HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _theme(raw):
+    """Optional colour overrides; the stylesheet's defaults otherwise."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ProfileError("theme must be a mapping")
+    bad = set(raw) - set(THEME_VARS)
+    if bad:
+        raise ProfileError(f"theme: unknown key(s) {sorted(bad)}; use {', '.join(THEME_VARS)}")
+    for k, v in raw.items():
+        if not isinstance(v, str) or not _HEX.match(v):
+            raise ProfileError(f"theme.{k} must be a colour like \"#13294B\"")
+    return dict(raw)
+
+
+def theme_css():
+    """The profile's colours as a :root rule, for pages served without JS."""
+    t = PROFILE["theme"]
+    return (":root{" + "".join(f"{THEME_VARS[k]}:{v};" for k, v in t.items()) + "}") if t else ""
+
+
 def _scoring(raw):
     if not isinstance(raw, dict):
         raise ProfileError("scoring is required")
@@ -150,7 +177,8 @@ def parse(raw):
     group = raw.get("group") or {}
     scoring = _scoring(raw.get("scoring"))
     out = {"org": {k: _text(org, k, "org").strip()
-                   for k in ("name", "email_domain", "contact_email")},
+                   for k in ("name", "email_domain", "contact_email", "home")},
+           "theme": _theme(raw.get("theme")),
            "group": {k: _text(group, k, "group").strip()
                      for k in ("tagline", "description", "match_phrase")},
            "scoring": scoring,
@@ -188,7 +216,8 @@ PROFILE = load()
 
 def public():
     """What the page needs: wording and the chips, without the predicates."""
-    return {"org": {"name": PROFILE["org"]["name"]},
+    return {"org": {k: PROFILE["org"][k] for k in ("name", "home")},
+            "theme": {THEME_VARS[k]: v for k, v in PROFILE["theme"].items()},
             "group": PROFILE["group"],
             "score_label": PROFILE["scoring"]["label"],
             "call_types": [{k: c[k] for k in ("id", "label", "title")}

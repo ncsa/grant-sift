@@ -75,7 +75,7 @@ def normalise(entries, d=Path("config")):
     """One roster shape in, the shape the rest of the pipeline wants out.
 
     Adds the derived status, resolves `our_contact` names to addresses via
-    ncsa_staff.yaml, and computes `domain`, the field the model copies back
+    staff.yaml, and computes `domain`, the field the model copies back
     and the dashboard groups on. `domain` falls back from research areas to
     the unit to the name, because a party with none of the first two still
     has to land in some bucket.
@@ -122,6 +122,14 @@ def upgrade_entry(e):
     return e
 
 
+def staff_path(d=Path("config")):
+    """config/staff.yaml, or ncsa_staff.yaml, its name before the rename, so a
+    checkout or a pod that still mounts the old name keeps resolving."""
+    new = Path(d) / "staff.yaml"
+    old = Path(d) / "ncsa_staff.yaml"
+    return old if not new.is_file() and old.is_file() else new
+
+
 def load_staff(d=Path("config")):
     """Our own people, keyed by the spelling `our_contact` uses.
 
@@ -129,7 +137,7 @@ def load_staff(d=Path("config")):
     our own staff as the domain partner makes the matcher match us to
     ourselves.
     """
-    path = Path(d) / "ncsa_staff.yaml"
+    path = staff_path(d)
     if not path.is_file():
         return {}
     return {s["as_written"]: s for s in (yaml.safe_load(path.read_text()) or [])}
@@ -525,7 +533,8 @@ def roster_block(roster):
         for e in contacts:
             unit = (f" | {e['unit']}"
                     if e.get("unit") and e["unit"] != e.get("domain") else "")
-            org = f" | {e['org']}" if e.get("org") and e["org"] != "UIUC" else ""
+            org = (f" | {e['org']}" if e.get("org")
+                   and e["org"] != profile.PROFILE["org"]["home"] else "")
             lines.append(
                 f"- {e['domain']} | {e['collaborator']}{unit}{org} "
                 f"| status: {e.get('status', 'prospect')}"

@@ -68,8 +68,8 @@ def _require_config():
         return
     raise RuntimeError(
         "LLM gateway not configured: GRANT_SIFT_LLM_API_KEY is unset.\n"
-        "Needs a Lumen project key ('sk_...'), generated in the Lumen UI -\n"
-        "a machine-to-machine key, not your OAuth login.\n\n"
+        f"Needs an API key for {GATEWAY_NAME} - for NCSA Lumen, a project key\n"
+        "('sk_...') from the Lumen UI, not your OAuth login.\n\n"
         f"Gateway is {BASE_URL}\n"
         f"Model is {MODEL}\n"
         "Check that model is one your key can reach:\n"

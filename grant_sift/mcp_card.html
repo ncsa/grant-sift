@@ -40,13 +40,13 @@ h2.title { font-size: 20px; }
                display: grid; grid-template-columns: 56px 1fr auto; gap: 4px 12px;
                align-items: baseline; padding: 10px 2px; }
 .brief .open:hover .t { text-decoration: underline; }
-.brief .open:focus-visible { outline: 2px solid var(--il-industrial); }
+.brief .open:focus-visible { outline: 2px solid var(--c-link); }
 .brief .n { font-family: var(--serif); font-size: 18px; font-weight: 500;
             font-variant-numeric: tabular-nums; }
 .brief .t { font-weight: 600; line-height: 1.35; }
 .brief .sub { grid-column: 2 / 4; font-size: 12.5px; color: var(--text-3); }
 .brief .dl { font-size: 12.5px; color: var(--text-3); white-space: nowrap; }
-.brief .soon .dl { color: var(--il-altgeld); font-weight: 600; }
+.brief .soon .dl { color: var(--c-accent-text); font-weight: 600; }
 .brief .row { padding-top: 4px; }
 .section { margin: 14px 0 4px; }
 .status { font-size: 13px; color: var(--text-3); padding: 8px 2px; }
@@ -60,6 +60,7 @@ h2.title { font-size: 20px; }
 <script>
 "use strict";
 const DASHBOARD = /*DASHBOARD_URL*/"";
+const HOME_ORG = /*HOME_ORG*/"";
 const AXES = [["software_depth", "Software depth"], ["data_management", "Data management"],
               ["compute_intensity", "Compute"], ["sustainability", "Sustainability"],
               ["partner_need", "Partner need"]];
@@ -191,7 +192,7 @@ function fitHTML(o) {
     o.match_kind === "program" ? "our own program" : "",
   ].filter(Boolean).map(f => `<span class="cold"> · ${f}</span>`).join("");
   const lines = [];
-  const where = [c.unit, c.org && c.org !== "UIUC" ? c.org : null].filter(Boolean).join(", ");
+  const where = [c.unit, c.org && c.org !== HOME_ORG ? c.org : null].filter(Boolean).join(", ");
   if (c.kind !== "program" && (c.email || where)) {
     lines.push(`<div><span class="who">Them</span><span>${person(o.match_name, c.email, where)}</span></div>`);
   }
