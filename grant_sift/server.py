@@ -1254,11 +1254,24 @@ Rules:
   because no description was generated for that call yet. Treat those as
   weaker evidence, not as a reason to skip the call."""
 
-FOCUS_RANK_SYSTEM = """You are scoring shortlisted funding calls against a researcher's
-project idea, now with more of each call's text.
+# The recommendation is written by whichever pass scores the shortlist last:
+# the rank pass after a fresh match, the rescore pass after an edit. One wording
+# for both, so a pick reads the same however it was reached. (#73: rescoring
+# straight after ranking wrote every "why" twice, to get this one field.)
+RECOMMENDATION_SPEC = """2-3 sentences: which one to go for and why it beats the
+                     others. Name the runner-up and say what would change the
+                     answer. Deadlines count - a close fit that cannot be
+                     written well in the time left is often the wrong answer."""
 
-Return ONLY a JSON array, best first, no fences:
-[{"id": "exactly as given", "affinity": 0-100, "why": "one sentence, concrete"}]
+FOCUS_RANK_SYSTEM = """You are scoring shortlisted funding calls against a researcher's
+project idea, now with more of each call's text. They will choose ONE to write
+for.
+
+Return ONLY JSON, no fences:
+{
+  "recommendation": "%s",
+  "calls": [{"id": "exactly as given", "affinity": 0-100, "why": "one sentence, concrete"}]
+}
 
 affinity is how well THIS CALL fits THIS IDEA. It is not a quality score and it
 is not our group's relevance score; a superb call that does not fit the idea
@@ -1270,7 +1283,7 @@ scores low, and that is correct.
   0-39    not a fit
 
 Say why in terms of the idea, not the call in general. Drop anything under 40
-rather than listing it."""
+from "calls" rather than listing it, and recommend only from what you keep.""" % RECOMMENDATION_SPEC
 
 
 # Re-scoring is not searching, and reusing the search prompt was wrong: it says
@@ -1288,10 +1301,7 @@ fit. Score every one against the idea AS IT NOW READS.
 
 Return ONLY JSON, no fences:
 {
-  "recommendation": "2-3 sentences: which one to go for and why it beats the
-                     others. Name the runner-up and say what would change the
-                     answer. Deadlines count - a close fit that cannot be
-                     written well in the time left is often the wrong answer.",
+  "recommendation": "%s",
   "calls": [{"id": "exactly as given", "affinity": 0-100, "why": "one sentence"}]
 }
 
@@ -1305,7 +1315,7 @@ is the point of this pass.
   0-39    not a fit any more
 
 Include EVERY call given, the poor fits included - those are the ones the
-shortlist most needs told about. Omitting one leaves a stale score on screen."""
+shortlist most needs told about. Omitting one leaves a stale score on screen.""" % RECOMMENDATION_SPEC
 
 
 _corpus_cache: dict = {}
@@ -1417,10 +1427,54 @@ def _focus_json(text):
     return []
 
 
+def _focus_obj(text):
+    """The {"recommendation", "calls"} object the rank and rescore passes
+    return, with the same defensive parse as _focus_json. A model that
+    ignores the format and returns a bare array still yields its calls, with
+    no recommendation. A dict or {}."""
+    cleaned = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.MULTILINE).strip()
+    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    for candidate in (cleaned, match.group(0) if match else None):
+        if not candidate:
+            continue
+        try:
+            v = json.loads(candidate)
+        except (TypeError, ValueError):
+            continue
+        # A dict without either key is one call out of a bare array, which
+        # the {...} search above finds first: not the reply, so fall through.
+        if isinstance(v, dict) and ("calls" in v or "recommendation" in v):
+            return v
+    calls = _focus_json(text)
+    return {"calls": calls} if calls else {}
+
+
+def _focus_calls(data, known):
+    """Usable {id, affinity, why} rows from a parsed rank or rescore reply.
+    An id not in `known` is dropped, never fabricated back."""
+    out = []
+    for item in data.get("calls") or []:
+        if not isinstance(item, dict):
+            continue
+        rid = str(item.get("id") or "").strip()
+        if rid not in known:
+            continue
+        try:
+            aff = max(0, min(100, int(float(item.get("affinity")))))
+        except (TypeError, ValueError):
+            continue
+        # Deliberately not "score". The pipeline's score answers a different
+        # question on a different scale, and one averaged with the other is
+        # meaningless.
+        out.append({"id": rid, "affinity": aff, "why": str(item.get("why") or "")[:400]})
+    return out
+
+
 @app.post("/api/focus")
 def focus(request: Request, payload: dict = Body(...)):
-    """Idea text in, matching calls out. Two model calls, on the shared key or
-    the viewer's own.
+    """Idea text in, matching calls and a recommendation out. Two model calls
+    in sequence (the catalogue chunks in parallel, then one rank pass), on the
+    shared key or the viewer's own.
 
     Nothing about the idea is stored. It is not written to a table, not logged,
     and not exported: it is unpublished research, the same class of material as
@@ -1454,12 +1508,18 @@ def focus(request: Request, payload: dict = Body(...)):
         # In parallel: the chunks are independent, and run one after another a
         # search of the whole catalogue would take as long as the chunk count
         # multiplied by the slowest call. Bounded by FOCUS_MAX_CHUNKS above.
+        # Milliseconds per stage, returned with the result. Numbers only:
+        # nothing about the idea goes into them.
+        t0 = time.monotonic()
+        ms = lambda since: int((time.monotonic() - since) * 1000)  # noqa: E731
+        timing = {}
         usage = []
         picks = []
         with ThreadPoolExecutor(max_workers=min(len(chunks), 4)) as pool:
             for raw, used in pool.map(search, chunks):
                 usage.append(used)
                 picks += [p for p in _focus_json(raw) if isinstance(p, dict) and p.get("id")]
+        timing["search"] = ms(t0)
 
         ids = []
         for p in picks:
@@ -1468,8 +1528,8 @@ def focus(request: Request, payload: dict = Body(...)):
                 ids.append(pid)
         ids = ids[:FOCUS_SHORTLIST]
         if not ids:
-            return {"results": [], "searched": n, "trimmed": trimmed,
-                    "chunks": len(chunks), "usage": usage,
+            return {"results": [], "recommendation": "", "searched": n, "trimmed": trimmed,
+                    "chunks": len(chunks), "usage": usage, "timing_ms": timing,
                     "note": "no call matched that idea"}
 
         # Second pass over fuller text. One call rather than one per record:
@@ -1497,39 +1557,28 @@ def focus(request: Request, payload: dict = Body(...)):
                 f"{' '.join((r['summary'] or '').split())}\n"
                 f"{' '.join((r['synopsis'] or '').split())[:FOCUS_RERANK_CHARS]}")
         if not detail:
-            return {"results": [], "searched": n, "trimmed": trimmed,
-                    "chunks": len(chunks), "usage": usage,
+            return {"results": [], "recommendation": "", "searched": n, "trimmed": trimmed,
+                    "chunks": len(chunks), "usage": usage, "timing_ms": timing,
                     "note": "the model returned ids that are not in the catalogue"}
 
+        t1 = time.monotonic()
         ranked_raw, used = _focus_post(
             gw, FOCUS_RANK_SYSTEM + IDEA_INPUT_RULES,
             "SHORTLISTED CALLS:\n\n" + "\n\n".join(detail) + "\n\n" + idea,
             max_tokens=4000)
-
-        out = []
-        for item in _focus_json(ranked_raw):
-            if not isinstance(item, dict):
-                continue
-            rid = str(item.get("id") or "").strip()
-            r = rows.get(rid)
-            if not r:
-                continue
-            try:
-                aff = max(0, min(100, int(float(item.get("affinity")))))
-            except (TypeError, ValueError):
-                continue
-            out.append({
-                "id": rid,
-                # Deliberately not "score". The pipeline's score answers a
-                # different question on a different scale, and one averaged
-                # with the other is meaningless.
-                "affinity": aff,
-                "why": str(item.get("why") or "")[:400],
-            })
+        timing["rank"] = ms(t1)
+        timing["total"] = ms(t0)
         usage.append(used)
+
+        data = _focus_obj(ranked_raw)
+        out = _focus_calls(data, rows)
         out.sort(key=lambda x: -x["affinity"])
-        return {"results": out, "searched": n, "trimmed": trimmed,
-                "chunks": len(chunks), "usage": usage, "model": gw["model"]}
+        # The page shows this and does not rescore after a fresh match, so the
+        # rank pass is the only place it can come from.
+        rec = str(data.get("recommendation") or "")[:2000] if out else ""
+        return {"results": out, "recommendation": rec, "searched": n, "trimmed": trimmed,
+                "chunks": len(chunks), "usage": usage, "model": gw["model"],
+                "timing_ms": timing}
     finally:
         conn.close()
 
@@ -1592,33 +1641,8 @@ def rescore(request: Request, payload: dict = Body(...)):
         "SHORTLISTED CALLS:\n\n" + detail + "\n\n" + _idea_block(notes, doc),
         max_tokens=4000)
 
-    cleaned = re.sub(r"^```(?:json)?|```$", "", raw.strip(), flags=re.MULTILINE).strip()
-    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-    data = {}
-    for candidate in (cleaned, match.group(0) if match else None):
-        if not candidate:
-            continue
-        try:
-            v = json.loads(candidate)
-        except (TypeError, ValueError):
-            continue
-        if isinstance(v, dict):
-            data = v
-            break
-
-    known = set(rows)
-    out = []
-    for item in data.get("calls") or []:
-        if not isinstance(item, dict):
-            continue
-        rid = str(item.get("id") or "").strip()
-        if rid not in known:
-            continue        # an invented id is dropped, never fabricated back
-        try:
-            aff = max(0, min(100, int(float(item.get("affinity")))))
-        except (TypeError, ValueError):
-            continue
-        out.append({"id": rid, "affinity": aff, "why": str(item.get("why") or "")[:400]})
+    data = _focus_obj(raw)
+    out = _focus_calls(data, rows)
     if not out:
         raise HTTPException(502, "the model returned no usable scores")
 
