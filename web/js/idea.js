@@ -278,9 +278,10 @@ async function runMatch() {
     "Scanning open calls against your idea…",
     "Reading the catalogue in parallel…",
     "Gathering the strongest candidates…",
-    "Ranking matches by fit to your idea…",
+    "Ranking matches and picking the call to go for…",
   ];
   let stage = 0;
+  const t0 = performance.now();
   startIdeaStatus(stages[0]);
   const stageTimer = setInterval(() => {
     if (stage < stages.length - 1) setIdeaStatus(stages[++stage]);
@@ -295,10 +296,16 @@ async function runMatch() {
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.detail || `focus failed (${r.status})`);
     stop();
+    // Stage timings only (#73), never the idea or the matches.
+    console.info("Idea match timing (ms)",
+                 { ...(data.timing_ms || {}), page: Math.round(performance.now() - t0) });
     const results = data.results || [];
     // Replace, don't merge: the matches are for this idea as written.
     IDEA.items = results.map(row => ({ id: row.id, affinity: row.affinity, why: row.why }));
-    IDEA.recommendation = "";
+    // The rank pass writes the pick too, so a fresh match does not go on to
+    // /api/rescore: that would score the same shortlist against the same
+    // text a second time (#73). Rescore is for after the idea is edited.
+    IDEA.recommendation = data.recommendation || "";
     IDEA.matched = sig;
     IDEA.searched = data.searched || 0;
     saveIdea();
@@ -311,7 +318,7 @@ async function runMatch() {
     }
     if (!notesOverHint()) setIdeaHint(`Searched ${data.searched} open calls`
       + (data.trimmed ? ` (${data.trimmed} not searched)` : "") + ".");
-    await rankIdea({ searched: true });
+    await fetchUnseen();
   } catch (e) {
     setIdeaHint(String(e.message || e).slice(0, 240), true);
   } finally {
@@ -324,17 +331,15 @@ async function runMatch() {
 }
 
 // Re-score the matches against the idea as now written and pick one: seconds,
-// where a fresh match is a minute. Runs after every match, and when the idea
-// is edited and the field is left.
-async function rankIdea({ searched = false } = {}) {
+// where a fresh match is a minute. Runs when the idea is edited and the field
+// is left; a fresh match brings its own pick from /api/focus.
+async function rankIdea() {
   if (_rankBusy || !IDEA.items.length) return;
   if (!hasIdea()) return;
   if (!aiReady()) { openChatPanel(document.getElementById("idea-match")); return; }
   const { key, model, base } = keyBar();
   _rankBusy = true;
-  // After a match the clock keeps running from it; on its own it starts here.
-  if (searched) setIdeaStatus("Picking the call to go for…");
-  else startIdeaStatus("Re-ranking the matches against your edited idea…");
+  startIdeaStatus("Re-ranking the matches against your edited idea…");
   paintIdeaMode();
   if (IDEA.on) render();
   try {
@@ -353,7 +358,7 @@ async function rankIdea({ searched = false } = {}) {
     IDEA.recommendation = d.recommendation || "";
     saveIdea();
     await fetchUnseen();
-    if (!searched) paintMatchedHint();
+    paintMatchedHint();
   } catch (e) {
     setIdeaHint(String(e.message || e).slice(0, 240), true);
   } finally {
