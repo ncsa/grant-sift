@@ -114,10 +114,15 @@
     <div class="idearow">
       <label class="sr" for="idea">Your idea</label>
       <textarea id="idea" rows="1" maxlength="4000"
-        placeholder="Describe your idea in your own words"></textarea>
+        placeholder="Describe your idea, or drop a file here"></textarea>
+      <button type="button" class="secondary" id="idea-upload" aria-label="Upload file"
+        title="Read the idea from a .txt, .md, .pdf or .docx, up to 10 MB. Read in this browser; the file is not sent anywhere.">
+        <svg class="ico ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#upload"/></svg><span class="lbl">Upload file</span></button>
+      <input type="file" id="idea-file" accept=".txt,.md,.markdown,.pdf,.docx" hidden>
       <button type="button" class="primary" id="idea-match"
         title="Searches every open call and ranks what fits (about a minute). Cmd/Ctrl+Enter from the idea.">Match</button>
     </div>
+    <div class="dropnote" aria-hidden="true">Drop the file to read it into the idea</div>
     <div class="ideafoot">
       <span class="hint" id="idea-hint" aria-live="polite"></span>
       <button type="button" class="linkbtn" id="idea-show" hidden></button>
@@ -446,6 +451,7 @@
 <script src="js/list.js?v=11"></script>
 <script src="js/ai.js?v=11"></script>
 <script src="js/ui.js?v=11"></script>
+<script src="js/ideafile.js?v=11"></script>
 <script src="js/idea.js?v=11"></script>
 <script src="js/panels.js?v=11"></script>
 <script src="js/account.js?v=11"></script>
