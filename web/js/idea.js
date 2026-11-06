@@ -10,6 +10,8 @@ const IDEA_KEY = "gs.shortlist";
 let IDEA = { idea: "", items: [], recommendation: "", matched: "", searched: 0, on: false };
 let _matchBusy = false;
 let _rankBusy = false;
+let _fileBusy = false;
+const ideaBusy = () => _matchBusy || _rankBusy;
 // The dashboard page when the mode came on, so turning it off lands there.
 let _pageBefore = 1;
 
@@ -37,26 +39,60 @@ function setIdeaHint(text, err = false) {
   el.classList.toggle("err", !!err);
 }
 
+// The status bar under the idea while a match or a pick is running: what it
+// is doing and for how long, so a minute-long wait does not look stuck.
+let _statusClock = null;
+function startIdeaStatus(text) {
+  const el = document.getElementById("idea-status");
+  const started = Date.now();
+  const paint = () => {
+    const sec = Math.max(1, Math.round((Date.now() - started) / 1000));
+    el.querySelector(".time").textContent = `${sec}s`;
+  };
+  clearInterval(_statusClock);
+  el.querySelector(".msg").textContent = text;
+  paint();
+  el.hidden = false;
+  _statusClock = setInterval(paint, 1000);
+}
+function setIdeaStatus(text) {
+  document.querySelector("#idea-status .msg").textContent = text;
+}
+function stopIdeaStatus() {
+  clearInterval(_statusClock);
+  _statusClock = null;
+  document.getElementById("idea-status").hidden = true;
+}
+
 function paintIdeaMode() {
   const on = IDEA.on;
+  const busy = ideaBusy();
+  // While it runs, the idea is what is being matched: no typing, no upload,
+  // no drop, so the results cannot be for text that is no longer there.
+  document.getElementById("ideabox").classList.toggle("busy", busy);
+  ideaEl().readOnly = busy;
+  document.getElementById("idea-upload").disabled = busy || _fileBusy;
   const n = IDEA.items.length;
   document.getElementById("ideabox").classList.toggle("on", on);
   document.getElementById("idea-off").hidden = !on;
+  // Anything to clear, and not mid-match: the way back to plain browsing.
+  document.getElementById("idea-clear").hidden = busy || !(on || n || ideaText());
   const note = document.getElementById("facet-note");
   note.hidden = !on || !n;
   note.textContent = `Narrowing the ${n} ${n === 1 ? "call" : "calls"} that fit your idea`;
   // Matches kept from earlier, while the list shows every call: one click
   // brings them back without another minute-long match.
   const show = document.getElementById("idea-show");
-  show.hidden = on || !n || _matchBusy;
-  show.textContent = `Show the ${n} ${n === 1 ? "call" : "calls"} that fit${
+  show.hidden = on || !n || busy;
+  show.querySelector(".lbl").textContent = `Show the ${n} ${n === 1 ? "call" : "calls"} that fit${
     IDEA.matched && IDEA.matched !== ideaText() ? " the earlier idea" : ""}`;
   // The same sort, named for what it ranks by in each mode.
   document.querySelector('#sort option[value="score"]').textContent =
     on ? "Best fit to idea" : "Highest relevance";
   const btn = document.getElementById("idea-match");
-  btn.disabled = _matchBusy;
-  btn.textContent = _matchBusy ? "Matching…" : IDEA.items.length ? "Match again" : "Match";
+  btn.disabled = busy;
+  btn.textContent = _matchBusy ? "Matching…" : _rankBusy ? "Picking…"
+    : IDEA.items.length ? "Match again" : "Match";
 }
 
 function ideaEmptyHTML() {
@@ -151,7 +187,7 @@ function paintMatchedHint() {
 }
 
 async function runMatch() {
-  if (_matchBusy) return;
+  if (ideaBusy() || _fileBusy) return;
   const idea = ideaText();
   IDEA.idea = idea;
   saveIdea();
@@ -163,6 +199,15 @@ async function runMatch() {
   }
   if (!IDEA.on) { IDEA.on = true; _pageBefore = PAGE; PAGE = 1; saveIdea(); }
   const { key, model, base } = keyBar();
+  // A new match starts clean: the earlier matches and their pick were for
+  // the earlier idea, and must not sit under this one, least of all if this
+  // match fails.
+  IDEA.items = [];
+  IDEA.recommendation = "";
+  IDEA.matched = "";
+  IDEA.searched = 0;
+  saveIdea();
+  setIdeaHint("");
   _matchBusy = true;
   paintIdeaMode();
   render();
@@ -175,16 +220,12 @@ async function runMatch() {
     "Gathering the strongest candidates…",
     "Ranking matches by fit to your idea…",
   ];
-  const started = Date.now();
   let stage = 0;
-  const paint = () => {
-    const sec = Math.max(1, Math.round((Date.now() - started) / 1000));
-    setIdeaHint(`${sec}s · ${stages[stage]}`);
-  };
-  paint();
-  const stageTimer = setInterval(() => { if (stage < stages.length - 1) stage++; }, 12000);
-  const clock = setInterval(paint, 1000);
-  const stop = () => { clearInterval(stageTimer); clearInterval(clock); };
+  startIdeaStatus(stages[0]);
+  const stageTimer = setInterval(() => {
+    if (stage < stages.length - 1) setIdeaStatus(stages[++stage]);
+  }, 12000);
+  const stop = () => clearInterval(stageTimer);
   try {
     const r = await fetch("api/focus", {
       method: "POST",
@@ -202,21 +243,21 @@ async function runMatch() {
     IDEA.searched = data.searched || 0;
     saveIdea();
     _matchBusy = false;
-    paintIdeaMode();
     PAGE = 1;
     if (!results.length) {
+      stopIdeaStatus();
       setIdeaHint("");
       return;
     }
     setIdeaHint(`Searched ${data.searched} open calls`
-      + (data.trimmed ? ` (${data.trimmed} not searched)` : "")
-      + ". Picking the one to go for…");
-    await rankIdea();
+      + (data.trimmed ? ` (${data.trimmed} not searched)` : "") + ".");
+    await rankIdea({ searched: true });
   } catch (e) {
-    setIdeaHint(String(e.message || e).slice(0, 160));
+    setIdeaHint(String(e.message || e).slice(0, 240), true);
   } finally {
     stop();
     _matchBusy = false;
+    if (!_rankBusy) stopIdeaStatus();
     paintIdeaMode();
     if (IDEA.on) render();
   }
@@ -225,13 +266,17 @@ async function runMatch() {
 // Re-score the matches against the idea as now written and pick one: seconds,
 // where a fresh match is a minute. Runs after every match, and when the idea
 // is edited and the field is left.
-async function rankIdea() {
+async function rankIdea({ searched = false } = {}) {
   if (_rankBusy || !IDEA.items.length) return;
   const idea = ideaText();
   if (!idea) return;
   if (!aiReady()) { openChatPanel(document.getElementById("idea-match")); return; }
   const { key, model, base } = keyBar();
   _rankBusy = true;
+  // After a match the clock keeps running from it; on its own it starts here.
+  if (searched) setIdeaStatus("Picking the call to go for…");
+  else startIdeaStatus("Re-ranking the matches against your edited idea…");
+  paintIdeaMode();
   if (IDEA.on) render();
   try {
     const r = await fetch("api/rescore", {
@@ -249,16 +294,35 @@ async function rankIdea() {
     IDEA.recommendation = d.recommendation || "";
     saveIdea();
     await fetchUnseen();
-    paintMatchedHint();
+    if (!searched) paintMatchedHint();
   } catch (e) {
-    setIdeaHint(String(e.message || e).slice(0, 140));
+    setIdeaHint(String(e.message || e).slice(0, 240), true);
   } finally {
     _rankBusy = false;
+    stopIdeaStatus();
+    paintIdeaMode();
     if (IDEA.on) render();
   }
 }
 
+// Forget the idea entirely: text, matches, pick, and the mode. The list goes
+// back to every open call, on the page it was on before the mode came on.
+function clearIdea() {
+  if (ideaBusy()) return;
+  const wasOn = IDEA.on;
+  IDEA = { idea: "", items: [], recommendation: "", matched: "", searched: 0, on: false };
+  _rankedFor = "";
+  saveIdea();
+  ideaEl().value = "";
+  ideaEl().blur();
+  setIdeaHint("");
+  if (wasOn) PAGE = _pageBefore;
+  paintIdeaMode();
+  render();
+}
+
 document.getElementById("idea-off").addEventListener("click", () => setIdeaOn(false));
+document.getElementById("idea-clear").addEventListener("click", clearIdea);
 document.getElementById("idea-show").addEventListener("click", () => setIdeaOn(true));
 document.getElementById("idea-match").addEventListener("click", runMatch);
 ideaEl().addEventListener("input", e => {
@@ -282,9 +346,8 @@ ideaEl().addEventListener("focusout", () => {
 });
 
 // ---- From a file: Upload file, or drop one on the box --------------------
-let _fileBusy = false;
 async function takeIdeaFile(file) {
-  if (!file || _fileBusy) return;
+  if (!file || _fileBusy || ideaBusy()) return;
   _fileBusy = true;
   const btn = document.getElementById("idea-upload");
   btn.disabled = true;
@@ -307,7 +370,7 @@ async function takeIdeaFile(file) {
       : `Could not read ${file.name}. Paste the text instead.`, true);
   } finally {
     _fileBusy = false;
-    btn.disabled = false;
+    btn.disabled = ideaBusy();
   }
 }
 
@@ -323,7 +386,7 @@ let _dragDepth = 0;
 const box = document.getElementById("ideabox");
 const hasFiles = e => [...(e.dataTransfer?.types || [])].includes("Files");
 box.addEventListener("dragenter", e => {
-  if (!hasFiles(e)) return;
+  if (!hasFiles(e) || ideaBusy()) return;
   e.preventDefault();
   _dragDepth++;
   box.classList.add("drop");
@@ -331,6 +394,7 @@ box.addEventListener("dragenter", e => {
 box.addEventListener("dragover", e => {
   if (!hasFiles(e)) return;
   e.preventDefault();
+  if (ideaBusy()) { e.dataTransfer.dropEffect = "none"; return; }
   e.dataTransfer.dropEffect = "copy";
 });
 box.addEventListener("dragleave", e => {

@@ -872,6 +872,8 @@ def _gateway(payload: dict) -> dict:
 _REDACT = re.compile(r"(sk|gho|xoxb)[_-][A-Za-z0-9_\-]{8,}")
 # How a gateway says the key has run out of budget. Lumen meters in coins.
 _OUT_OF_BUDGET = re.compile(r"coin|credit|quota|budget|insufficient|balance", re.I)
+# How a gateway says no backend is serving the model.
+_NO_BACKEND = re.compile(r"no healthy (endpoint|upstream|backend)|no available (endpoint|backend)", re.I)
 
 
 def _gateway_error(gw: dict, r) -> HTTPException:
@@ -882,6 +884,13 @@ def _gateway_error(gw: dict, r) -> HTTPException:
     shared key it is not: an empty coin bucket is a "try later", not a raw
     402 and a body about our account.
     """
+    # The gateway is up but nothing behind it serves this model (Lumen says
+    # "No healthy endpoints for model ..."): an outage on their side, not a
+    # problem with the key or the idea. Say so, on either key.
+    if r.status_code in (502, 503) and _NO_BACKEND.search(r.text[:1000]):
+        return HTTPException(503, f"The model {gw['model']} is down on the gateway right now "
+                                  "(no server is running it). Try again later, or pick "
+                                  "another model under Change your model.")
     if gw["own"]:
         detail = _REDACT.sub("[redacted]", r.text[:300])
         return HTTPException(502, f"gateway returned {r.status_code}: {detail}")

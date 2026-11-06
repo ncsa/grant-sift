@@ -492,7 +492,8 @@ h2.title a { color: var(--il-blue); }
   font: inherit; font-size: 13.5px; font-weight: 600; height: 40px; padding: 0 16px; cursor: pointer;
   color: var(--il-blue); background: #fff; border: 1px solid var(--border-strong); border-radius: 8px;
 }
-.secondary:hover { background: var(--tint-blue); }
+.secondary:hover:not(:disabled) { background: var(--tint-blue); }
+.secondary:disabled { opacity: .5; cursor: not-allowed; }
 .linkbtn {
   font: inherit; font-size: 13px; font-weight: 600; color: var(--il-industrial);
   background: none; border: 0; padding: 0 4px; min-height: 28px; cursor: pointer;
@@ -576,7 +577,20 @@ h2.title a { color: var(--il-blue); }
                font-family: var(--serif); font-size: 19px; font-weight: 600; color: var(--il-blue); }
 .ideahead h2 .ic { color: var(--il-industrial); align-self: center; }
 .ideahead .about { font-size: 13px; color: var(--text-2); }
-.idearow { display: flex; align-items: flex-start; gap: 10px; }
+.ideahead .clearidea { margin-left: auto; align-self: center; display: inline-flex; align-items: center;
+                       gap: 6px; cursor: pointer; }
+/* Idea on the left over two rows; Upload and Match on the first, and the way
+   back to kept matches under them, where the tall box leaves room. */
+.idearow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: start; gap: 10px; }
+.idearow textarea { grid-row: 1 / span 2; }
+.showfit {
+  grid-column: 2 / 4; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 8px 14px; font: inherit; font-size: 14px; font-weight: 600; line-height: 1.3;
+  color: var(--il-industrial); background: #fff; border: 1.5px solid var(--il-industrial);
+  border-radius: 8px; cursor: pointer; text-align: left;
+}
+.showfit:hover { background: var(--il-industrial); color: #fff; }
+.showfit[hidden] { display: none; }
 .idearow textarea {
   flex: 1; min-width: 0; font: inherit; font-size: 15px; line-height: 1.55; color: var(--il-blue);
   padding: 10px 14px; height: 44px; min-height: 44px; resize: vertical;
@@ -597,6 +611,27 @@ h2.title a { color: var(--il-blue); }
   display: flex; align-items: center; justify-content: center; position: absolute; inset: 0;
   border: 2px dashed var(--il-industrial); border-radius: 12px; background: rgba(234, 240, 248, .94);
   font-size: 16px; font-weight: 600; color: var(--il-blue); pointer-events: none;
+}
+/* Matching: the idea is locked and a status bar says what is happening. */
+.ideabox.busy { border-color: var(--il-industrial); }
+.ideabox.busy .idearow textarea { background: var(--surface-2); color: var(--text-2); cursor: not-allowed; }
+.ideastatus { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+              padding: 12px 14px; background: #fff; border: 1px solid var(--border-strong);
+              border-left: 4px solid var(--il-industrial); border-radius: 10px; }
+.ideastatus[hidden] { display: none; }
+.ideastatus .msg { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; color: var(--il-blue); }
+.ideastatus .time { font-size: 13px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.ideastatus .spin { width: 18px; height: 18px; flex: none; border-radius: 999px;
+                    border: 2.5px solid var(--tint-blue); border-top-color: var(--il-industrial);
+                    animation: ideaspin .8s linear infinite; }
+.ideastatus .bar { flex: 1 1 100%; height: 4px; border-radius: 999px; overflow: hidden;
+                   background: var(--tint-blue); }
+.ideastatus .bar i { display: block; width: 35%; height: 100%; border-radius: 999px;
+                     background: var(--il-industrial); animation: ideabar 1.6s ease-in-out infinite; }
+@keyframes ideaspin { to { transform: rotate(360deg); } }
+@keyframes ideabar { 0% { transform: translateX(-100%); } 100% { transform: translateX(290%); } }
+@media (prefers-reduced-motion: reduce) {
+  .ideastatus .spin, .ideastatus .bar i { animation-duration: 3s; }
 }
 .ideafoot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
             gap: 4px 16px; }
@@ -654,6 +689,8 @@ footer a { margin-left: 6px; }
   .ideafoot .aibar { display: none; }
   .idearow .secondary { padding: 0 12px; }
   .idearow .secondary .lbl { display: none; }
+  .idearow textarea { grid-row: 1; }
+  .showfit { grid-column: 1 / -1; }
   .lead { flex: none; }
   .lead .score { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
   .lead .score .num b { font-size: 24px; }

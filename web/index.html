@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=11">
+<link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body>
 <header class="strip">
@@ -110,6 +110,9 @@
          title="Nothing about your idea is stored on the server: it and its matches stay in this browser.">
       <h2 id="idea-lbl"><svg class="ico ic" width="18" height="18" aria-hidden="true"><use href="icons.svg#bulb"/></svg>Match an idea</h2>
       <span class="about">Describe what you are working on; get the open calls that fit it, and the one to go for.</span>
+      <button type="button" class="linkbtn clearidea" id="idea-clear" hidden
+        title="Clear the idea, its matches and the recommendation, and go back to every open call.">
+        <svg class="ico ic" width="14" height="14" aria-hidden="true"><use href="icons.svg#reset"/></svg>Clear</button>
     </div>
     <div class="idearow">
       <label class="sr" for="idea">Your idea</label>
@@ -121,11 +124,19 @@
       <input type="file" id="idea-file" accept=".txt,.md,.markdown,.pdf,.docx" hidden>
       <button type="button" class="primary" id="idea-match"
         title="Searches every open call and ranks what fits (about a minute). Cmd/Ctrl+Enter from the idea.">Match</button>
+      <button type="button" class="showfit" id="idea-show" hidden
+        title="Back to the calls your last match found, and its recommendation. No new match needed.">
+        <svg class="ico ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#bulb"/></svg><span class="lbl"></span></button>
+    </div>
+    <div class="ideastatus" id="idea-status" role="status" aria-live="polite" hidden>
+      <span class="spin" aria-hidden="true"></span>
+      <span class="msg"></span>
+      <span class="time"></span>
+      <span class="bar" aria-hidden="true"><i></i></span>
     </div>
     <div class="dropnote" aria-hidden="true">Drop the file to read it into the idea</div>
     <div class="ideafoot">
       <span class="hint" id="idea-hint" aria-live="polite"></span>
-      <button type="button" class="linkbtn" id="idea-show" hidden></button>
       <div class="aibar" data-aibar></div>
     </div>
   </section>
@@ -451,8 +462,8 @@
 <script src="js/list.js?v=11"></script>
 <script src="js/ai.js?v=11"></script>
 <script src="js/ui.js?v=11"></script>
-<script src="js/ideafile.js?v=11"></script>
-<script src="js/idea.js?v=11"></script>
+<script src="js/ideafile.js?v=12"></script>
+<script src="js/idea.js?v=12"></script>
 <script src="js/panels.js?v=11"></script>
 <script src="js/account.js?v=11"></script>
 <script src="js/cards.js?v=11"></script>
