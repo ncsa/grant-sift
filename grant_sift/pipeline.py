@@ -656,7 +656,8 @@ def assess_new(conn, roster, limit=200, verbose=True, pending=None, models=None)
             result = _resolve_domain(_clean_match(result), roster)
             db.save_assessment(conn, opp["id"], result, used,
                                db.hash_text(opp["title"], opp.get("synopsis")),
-                               fallback_for=fallback_for)
+                               fallback_for=fallback_for,
+                               scoring_version=llm.SCORING_VERSION)
             done += 1
             if done % COMMIT_EVERY == 0:
                 conn.commit()
@@ -796,7 +797,8 @@ def catalogue_rows(conn, contacts, min_score=0):
                   a.score, a.category, a.rationale, a.summary,
                   a.axes_json, a.facts_json,
                   a.match_name, a.match_kind, a.match_domain, a.match_project,
-                  a.match_status, a.match_rationale
+                  a.match_status, a.match_rationale,
+                  a.model, a.scoring_version, a.assessed_at, a.fallback_for
            FROM opportunities o JOIN assessments a ON a.opportunity_id = o.id
            WHERE a.score >= ? AND {db.LIVE}
            ORDER BY (o.deadline IS NULL), o.deadline ASC, a.score DESC""",

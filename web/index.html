@@ -418,6 +418,54 @@
   </div>
 </div>
 
+<!-- How the scores were produced (#66). Opened from the footer, the
+     fallback notice, a card's "Scored by" line, and #scoring in the URL. -->
+<div class="modal-backdrop" id="scoring-modal" hidden>
+  <div class="modal panel scoring" role="dialog" aria-modal="true" aria-labelledby="scoring-title">
+    <header>
+      <h2 id="scoring-title">How scoring works</h2>
+      <button type="button" class="x" id="scoring-close" aria-label="Close"><svg class="ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#x"/></svg></button>
+    </header>
+    <div class="scorebody">
+      <section aria-labelledby="sc-now-h">
+        <h3 id="sc-now-h">Now</h3>
+        <dl class="scnow" id="sc-now"><dd class="help">Loading…</dd></dl>
+      </section>
+      <section aria-labelledby="sc-bd-h">
+        <h3 id="sc-bd-h">What the open calls were scored with</h3>
+        <div id="sc-breakdown"></div>
+      </section>
+      <section aria-labelledby="sc-how-h" class="schow">
+        <h3 id="sc-how-h">What the score means</h3>
+        <p>Each open call is scored 0 to 100 for <b class="sc-label">relevance</b>: how
+          much this group should look at it. A language model reads the call's title, funder,
+          deadline, award and synopsis and judges it against a description of the group.
+          The calls worth finding are less often the obvious research-software programmes
+          than domain calls with a software, data or computing need inside them.</p>
+        <pre class="scguide" id="sc-guide"></pre>
+        <p>The same pass puts the call in a category, writes the one-line reason shown on
+          the card, and rates it on <span id="sc-axes">a few independent axes</span>, each
+          0 to 100. The axes are meant to disagree with each other; they feed ranking and
+          the MCP filters.</p>
+        <h4>Roster matches</h4>
+        <p>The model also picks at most one person from the roster as the closest fit.
+          A <b>past collaboration</b> is work we did with that person. <b>Our own
+          program</b> is something we run, with no outside partner. A <b>contact</b>
+          (shown as <i>lead, not a past project</i>) is someone we have only emailed: an
+          outreach lead, never a past collaboration.</p>
+        <h4>Corrections</h4>
+        <p>A thumbs-down or thumbs-up on a card says which part was wrong: the score, the
+          category or the named person. It takes effect at once (a “not for us” leaves
+          the digests), the call is re-scored on the next nightly pass, and from then on
+          the correction is shown to the model as a calibration example when it scores
+          other calls.</p>
+        <p class="help">Scores are a first pass, not a decision. Detail in the
+          <a href="https://github.com/ncsa/grant-sift#how-it-works" target="_blank" rel="noopener">README</a>.</p>
+      </section>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="chat-modal" hidden>
   <div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="chat-title">
     <header>
@@ -474,15 +522,16 @@
 <!-- Plain scripts, not modules: they share top-level state, so order matters. -->
 <script src="js/format.js?v=13"></script>
 <script src="js/icons.js?v=11"></script>
-<script src="js/rows.js?v=14"></script>
+<script src="js/rows.js?v=15"></script>
 <script src="js/list.js?v=14"></script>
 <script src="js/ai.js?v=13"></script>
-<script src="js/ui.js?v=11"></script>
+<script src="js/ui.js?v=12"></script>
 <script src="js/ideafile.js?v=14"></script>
-<script src="js/idea.js?v=16"></script>
+<script src="js/idea.js?v=17"></script>
 <script src="js/panels.js?v=11"></script>
 <script src="js/account.js?v=11"></script>
-<script src="js/cards.js?v=12"></script>
-<script src="js/main.js?v=15"></script>
+<script src="js/cards.js?v=13"></script>
+<script src="js/scoring.js?v=1"></script>
+<script src="js/main.js?v=16"></script>
 </body>
 </html>

@@ -244,6 +244,41 @@ def public_config():
             "profile": profile.public()}
 
 
+@app.get("/api/scoring")
+def scoring(request: Request):
+    """How the scores on the page were produced: the Scoring panel (#66).
+
+    "now" is what the next pass will use; "breakdown" is what the live
+    catalogue was actually scored with, which can differ (an older prompt, a
+    backup model while the primary was down). Reads the database and the
+    environment only: no model call.
+    """
+    auth.principal(request)
+    conn = _conn()
+    try:
+        last = conn.execute("SELECT MAX(assessed_at) m FROM assessments").fetchone()["m"]
+        additions = len(db.roster_additions(conn))
+        breakdown = db.scoring_breakdown(conn)
+        fallback = db.fallback_scored(conn)
+    finally:
+        conn.close()
+    sc = profile.PROFILE["scoring"]
+    return {
+        "now": {"model": llm.MODEL, "fallbacks": llm.MODELS[1:],
+                "thinking": llm.THINKING, "scoring_version": llm.SCORING_VERSION,
+                "gateway": llm.GATEWAY_NAME,
+                "roster_size": len(_roster_entries()) + additions,
+                "last_pass": last},
+        "breakdown": breakdown,
+        "live_total": sum(b["count"] for b in breakdown),
+        "fallback_scored": fallback,
+        "label": sc["label"],
+        "categories": [c["id"] for c in sc["categories"]],
+        "axes": [a["id"] for a in sc["axes"]],
+        "guide": sc["guide"].strip(),
+    }
+
+
 @app.get("/api/whoami")
 def whoami(request: Request):
     """Who the proxy says you are, plus whether the gate is actually on.

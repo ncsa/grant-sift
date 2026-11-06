@@ -782,6 +782,14 @@ Only the shared key falls back. A viewer's own key and model are theirs.
   `llm_fallback_count` for Grafana, beside `assessed_by_model` and
   `fallback_scored_share` (see `helm/grant-sift/GRAFANA.md`).
 
+Each assessment also stores `scoring_version` (`llm.SCORING_VERSION`; bump it
+whenever the scoring prompt, the profile's `scoring:` block or the answer
+cleaning changes). Rows scored before it existed stay NULL. The dashboard's
+**How scoring works** panel (footer link, the fallback notice, a card's
+"Scored by" line, or `#scoring` in the URL) reads `/api/scoring`: the model,
+backups, thinking, scoring version, roster size and last pass, and the open
+calls broken down by model and scoring version. It makes no model call.
+
 No backups are configured by default: which model can stand in for gemma is a
 benchmarking question. Run the candidates on the same records as the table in
 `.env.example` first.

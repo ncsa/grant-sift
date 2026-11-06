@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS assessments (
     assessed_at      TEXT,
     requeued         INTEGER DEFAULT 0, -- feedback asked for a re-score; old score shown until then
     fallback_for     TEXT,            -- the primary model a backup stood in for (#67), else NULL
+    scoring_version  INTEGER,         -- llm.SCORING_VERSION when scored; NULL before #66
     FOREIGN KEY (opportunity_id) REFERENCES opportunities(id)
 );
 
@@ -263,6 +264,11 @@ def init(path: str = "grant-sift.db") -> None:
             # NULL on every existing row: they were all scored by whichever
             # model was primary at the time, with no backup involved.
             conn.execute("ALTER TABLE assessments ADD COLUMN fallback_for TEXT")
+            conn.commit()
+        if "scoring_version" not in acols:
+            # Added NULL and left NULL: nothing records which prompt scored
+            # an existing row, so "before versioning" is the honest value.
+            conn.execute("ALTER TABLE assessments ADD COLUMN scoring_version INTEGER")
             conn.commit()
         fcols = {r["name"] for r in conn.execute("PRAGMA table_info(feedback)")}
         for col in ("aspect", "created_by"):
@@ -974,17 +980,20 @@ def unassessed(conn, limit: int = 200):
 
 
 def save_assessment(conn, opp_id: str, a: dict, model: str, input_hash: str,
-                    fallback_for: str | None = None):
+                    fallback_for: str | None = None, scoring_version: int | None = None):
     """fallback_for: the primary model, when `model` is a backup that stood
     in for it. Replacing the row clears it, so a re-score on the primary
-    takes the record out of the fallback count."""
+    takes the record out of the fallback count.
+
+    scoring_version: llm.SCORING_VERSION, passed in rather than imported so
+    this module stays free of the model layer."""
     conn.execute(
         """INSERT OR REPLACE INTO assessments
            (opportunity_id, score, category, rationale, match_name, match_kind,
             match_domain, match_project, match_status, match_rationale,
             summary, axes_json, facts_json, model, input_hash, assessed_at,
-            fallback_for)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            fallback_for, scoring_version)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             opp_id, a.get("score") if a.get("score") is not None else 0,
             a.get("category") or profile.PROFILE["scoring"]["categories"][-1]["id"], a.get("rationale"),
@@ -996,7 +1005,7 @@ def save_assessment(conn, opp_id: str, a: dict, model: str, input_hash: str,
             # answered with nothing", which is what the backfill query keys on.
             json.dumps(a["axes"]) if a.get("axes") else None,
             json.dumps(a["facts"]) if a.get("facts") else None,
-            model, input_hash, now(), fallback_for,
+            model, input_hash, now(), fallback_for, scoring_version,
         ),
     )
 
@@ -1005,6 +1014,21 @@ def record_llm_event(conn, primary: str, used: str, path: str, kind: str = "fall
     conn.execute(
         """INSERT INTO llm_events (kind, primary_model, used_model, path, created_at)
            VALUES (?,?,?,?,?)""", (kind, primary, used, path, now()))
+
+
+def scoring_breakdown(conn):
+    """Live assessed calls by model x scoring version, biggest first, with
+    how many of each a backup scored."""
+    rows = conn.execute(
+        f"""SELECT a.model, a.scoring_version, COUNT(*) c,
+                   SUM(a.fallback_for IS NOT NULL) fb, MAX(a.assessed_at) latest
+              FROM opportunities o JOIN assessments a ON a.opportunity_id = o.id
+             WHERE {LIVE}
+             GROUP BY a.model, a.scoring_version
+             ORDER BY c DESC, a.model""").fetchall()
+    return [{"model": r["model"], "scoring_version": r["scoring_version"],
+             "count": r["c"], "fallback": r["fb"] or 0, "latest": r["latest"]}
+            for r in rows]
 
 
 def fallback_scored(conn):

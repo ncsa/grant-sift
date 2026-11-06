@@ -439,6 +439,15 @@ def build_assess_system(scoring):
 
 
 ASSESS_SYSTEM = build_assess_system(profile.PROFILE["scoring"])
+
+# Stored on every assessment (assessments.scoring_version), so two scores side
+# by side can be told apart when the rules that produced them differ. Bump it
+# whenever the scoring prompt or the rules around it change: this module's
+# prompt text, the profile's scoring: block, or how the answer is cleaned.
+# Rows scored before versioning stay NULL ("before versioning") (#66).
+#   1  the prompt as of #66: profile-driven scoring, three kinds of match,
+#      five axes, extracted facts.
+SCORING_VERSION = 1
 AXES = tuple(a["id"] for a in profile.PROFILE["scoring"]["axes"])
 # The category a call gets when the model names none.
 CATCH_ALL = profile.PROFILE["scoring"]["categories"][-1]["id"]

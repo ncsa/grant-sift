@@ -31,6 +31,7 @@ STOCK_METRICS = frozenset({
     "assessed_by_model",        # dim: model (#67)
     "fallback_scored_live",     # live records a backup model scored
     "fallback_scored_share",    # ... as a share of live assessed records
+    "assessed_by_scoring_version",  # dim: version, "none" before versioning (#66)
 })
 
 # Flow metrics counted for the calendar day.
@@ -145,6 +146,11 @@ def record_daily(conn, day: str | None = None) -> int:
         "SELECT COALESCE(model, 'unknown') model, COUNT(*) c FROM assessments GROUP BY 1"
     ):
         put("assessed_by_model", r["model"], r["c"])
+
+    for r in conn.execute(
+        "SELECT scoring_version v, COUNT(*) c FROM assessments GROUP BY 1"
+    ):
+        put("assessed_by_scoring_version", "none" if r["v"] is None else str(r["v"]), r["c"])
 
     live = conn.execute(
         f"""SELECT COUNT(*) c, SUM(a.fallback_for IS NOT NULL) fb

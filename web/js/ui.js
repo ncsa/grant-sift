@@ -98,7 +98,8 @@ document.addEventListener("keydown", e => {
     closeMenus();
     const close = { "roster-modal": closeRoster,
                     "sources-modal": closeSources, "chat-modal": closeChatPanel,
-                    "digest-modal": closeDigests }[topModal()?.id];
+                    "digest-modal": closeDigests,
+                    "scoring-modal": closeScoring }[topModal()?.id];
     if (close) close();
   }
 });
@@ -112,4 +113,6 @@ document.addEventListener("click", e => {
   if (s) return openSources(s);
   const p = e.target.closest("[data-aimodel]");
   if (p) return openChatPanel(p);
+  const sc = e.target.closest("[data-open-scoring]");
+  if (sc) { e.preventDefault(); return openScoring(sc); }
 });

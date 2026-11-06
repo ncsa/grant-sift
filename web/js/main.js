@@ -54,7 +54,9 @@ function boot(cat) {
   }
   document.getElementById("foot").innerHTML =
     `Scored ${esc(scored)}. Scores<span data-roster> and collaborator matches</span> are model-generated; treat them as a first pass, not a decision.` +
+    ` <a href="#scoring" data-open-scoring>How scoring works</a>` +
     ` <a href="https://github.com/ncsa/grant-sift/wiki/Grant-Sift-in-Claude:-setup" target="_blank" rel="noopener">Connect your AI assistant (MCP)</a>`;
+  openScoringFromHash();
   paintFallback(cat.fallback_scored);
   bootIdea();
   render();
@@ -77,7 +79,8 @@ function paintFallback(fb) {
     : `${fb.by_model.map(m => m.model).join(" and ")}`;
   document.getElementById("fallback-msg").innerHTML =
     `${n} call${n === 1 ? " was" : "s were"} scored by <b>${esc(by)}</b> while ` +
-    `<b>${esc(top.instead_of)}</b> was down. Their scores may not line up with the rest.`;
+    `<b>${esc(top.instead_of)}</b> was down. Their scores may not line up with the rest.` +
+    ` <button type="button" class="linkbtn" data-open-scoring>See the breakdown</button>`;
   document.getElementById("fallbackbar-close").onclick = () => {
     bar.hidden = true;
     try { localStorage.setItem(FALLBACK_KEY, sig); } catch (e) {}
