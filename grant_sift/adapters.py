@@ -425,7 +425,7 @@ def foundation_page(conn, name, url, force=False, min_text=None):
     if not db.page_changed(conn, url, text) and not force:
         return None  # hash before you spend; NOT the same as finding nothing
 
-    calls = llm.extract_calls(text, name)
+    calls = llm.extract_calls(text, name, conn)
     records = []
     for c in calls:
         program = (c.get("program_name") or "").strip()

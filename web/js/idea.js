@@ -317,7 +317,8 @@ async function runMatch() {
       return;
     }
     if (!notesOverHint()) setIdeaHint(`Searched ${data.searched} open calls`
-      + (data.trimmed ? ` (${data.trimmed} not searched)` : "") + ".");
+      + (data.trimmed ? ` (${data.trimmed} not searched)` : "") + "."
+      + fallbackNote(data));
     await fetchUnseen();
   } catch (e) {
     setIdeaHint(String(e.message || e).slice(0, 240), true);
@@ -328,6 +329,12 @@ async function runMatch() {
     paintIdeaMode();
     if (IDEA.on) render();
   }
+}
+
+// The shared model was down and a backup answered (#67).
+function fallbackNote(d) {
+  return d && d.fallback
+    ? ` Matched on ${d.model}: ${d.fallback} is down right now.` : "";
 }
 
 // Re-score the matches against the idea as now written and pick one: seconds,
@@ -359,6 +366,9 @@ async function rankIdea() {
     saveIdea();
     await fetchUnseen();
     paintMatchedHint();
+    if (d.fallback && !document.getElementById("idea-hint").textContent) {
+      setIdeaHint(fallbackNote(d).trim());
+    }
   } catch (e) {
     setIdeaHint(String(e.message || e).slice(0, 240), true);
   } finally {

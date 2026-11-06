@@ -519,4 +519,6 @@ def facets(conn, rows):
         "filters": list(FILTERS),
         "sorts": list(SORTS),
         "stale_sources": [dict(r) for r in db.stale_sources(conn)],
+        # Live calls a backup model scored while the primary was down (#67).
+        "fallback_scored": db.fallback_scored(conn),
     }

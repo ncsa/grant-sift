@@ -55,9 +55,33 @@ function boot(cat) {
   document.getElementById("foot").innerHTML =
     `Scored ${esc(scored)}. Scores<span data-roster> and collaborator matches</span> are model-generated; treat them as a first pass, not a decision.` +
     ` <a href="https://github.com/ncsa/grant-sift/wiki/Grant-Sift-in-Claude:-setup" target="_blank" rel="noopener">Connect your AI assistant (MCP)</a>`;
+  paintFallback(cat.fallback_scored);
   bootIdea();
   render();
   probeAPI();
+}
+
+// Calls a backup model scored while the primary was down (#67). Dismissing
+// hides this count; a different count is news and shows again.
+const FALLBACK_KEY = "gs.fallback.dismissed";
+function paintFallback(fb) {
+  const bar = document.getElementById("fallbackbar");
+  const n = (fb && fb.count) || 0;
+  const sig = n ? (fb.by_model || []).map(m => `${m.model}:${m.count}`).join(",") : "";
+  let gone = false;
+  try { gone = !!sig && localStorage.getItem(FALLBACK_KEY) === sig; } catch (e) {}
+  bar.hidden = !n || gone;
+  if (bar.hidden) return;
+  const top = fb.by_model[0];
+  const by = fb.by_model.length === 1 ? top.model
+    : `${fb.by_model.map(m => m.model).join(" and ")}`;
+  document.getElementById("fallback-msg").innerHTML =
+    `${n} call${n === 1 ? " was" : "s were"} scored by <b>${esc(by)}</b> while ` +
+    `<b>${esc(top.instead_of)}</b> was down. Their scores may not line up with the rest.`;
+  document.getElementById("fallbackbar-close").onclick = () => {
+    bar.hidden = true;
+    try { localStorage.setItem(FALLBACK_KEY, sig); } catch (e) {}
+  };
 }
 
 // Wording and Call type chips from config/profile.yaml.

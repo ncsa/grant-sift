@@ -89,6 +89,16 @@
   </div>
 </div>
 
+<!-- Some live calls were scored by a backup model while the primary was down
+     (#67). Dismissed per count, so a new outage brings it back. -->
+<div class="newsbar warnbar" id="fallbackbar" role="status" hidden>
+  <div class="wrap">
+    <svg class="ico ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#warn"/></svg>
+    <p id="fallback-msg"></p>
+    <button type="button" class="x" id="fallbackbar-close" aria-label="Dismiss"><svg class="ic" width="14" height="14" aria-hidden="true"><use href="icons.svg#x"/></svg></button>
+  </div>
+</div>
+
 <main class="wrap">
 
   <section class="overview" aria-label="Overview">

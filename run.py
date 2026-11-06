@@ -20,7 +20,7 @@ import traceback
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 
-from grant_sift import db, pipeline, telemetry
+from grant_sift import db, llm, pipeline, telemetry
 
 DB_PATH = os.environ.get("GRANT_SIFT_DB", "grant-sift.db")
 SMTP_HOST = os.environ.get("GRANT_SIFT_SMTP_HOST", "localhost")
@@ -94,6 +94,17 @@ def cmd_assess(conn, args):
         conn.commit()
         print(f"requeued {n} open call(s) for re-scoring; each run of assess "
               f"takes --limit of them (old scores shown until replaced)")
+    if getattr(args, "rescore_fallback", False):
+        # Primary only: the point is to replace backup scores, so falling
+        # back again would pay twice for the same result. If the primary is
+        # still down this stops at the first record and changes nothing.
+        pending = pipeline.fallback_pending(conn, args.limit)
+        print(f"Re-scoring {len(pending)} call(s) a backup model scored, "
+              f"on {llm.MODEL}:")
+        n = pipeline.assess_new(conn, roster, pending=pending, models=[llm.MODEL])
+        left = db.fallback_scored(conn)["count"]
+        print(f"{n} re-scored on {llm.MODEL}; {left} still scored by a backup")
+        return n
     print("Assessing:")
     n = pipeline.assess_new(conn, roster, limit=args.limit)
     print(f"{n} assessed")
@@ -349,6 +360,11 @@ def main():
                         "against the current profile's scoring: block. Run "
                         "after changing it; old scores stay visible until "
                         "replaced. Costs one model call per open call.")
+    a.add_argument("--rescore-fallback", action="store_true",
+                   help="re-score, on the primary model only, the open calls "
+                        "a backup model scored while the primary was down "
+                        "(GRANT_SIFT_LLM_MODELS). Run once the primary is "
+                        "back; clears the dashboard's fallback notice.")
     a.add_argument("--backfill-axes", action="store_true",
                    help="first clear assessments that predate the axis "
                         "subscores, so they are re-scored with subscores, "

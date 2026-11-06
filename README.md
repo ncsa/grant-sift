@@ -759,6 +759,33 @@ No URL fixes it. Left in the config so it fails loudly rather than vanishing.
 Stale sources appear at the top of every digest, in a dashboard banner, and in
 `run.py status`. Do not silence that banner.
 
+### When the model is down
+
+Lumen sometimes has no backend serving a model ("No healthy endpoints for
+model ..."). `GRANT_SIFT_LLM_MODELS` lists backups in order, primary first.
+Only "model unavailable" moves on to the next one: a 502/503 naming no healthy
+endpoint, or a 404 for an unknown model. Budget, 429, other errors and
+truncation never do, because another model would not fix them and switching
+would hide the real problem. A model that reported itself down is skipped for
+five minutes (`GRANT_SIFT_LLM_DOWN_SECONDS`), so a batch does not knock on it
+once per record.
+
+Only the shared key falls back. A viewer's own key and model are theirs.
+
+- **Ask and Idea match** say which model answered when it was a backup.
+- **`assess`** stores the backup's name in `assessments.model` and the primary
+  it stood in for in `fallback_for`. The dashboard shows a dismissible notice
+  with the count; `python run.py assess --rescore-fallback` re-scores those
+  calls on the primary only, and stops without spending if it is still down.
+- **Every fallback** writes a row to `llm_events` (primary, model used, path,
+  time; nothing about the content), which the nightly rollup turns into
+  `llm_fallback_count` for Grafana, beside `assessed_by_model` and
+  `fallback_scored_share` (see `helm/grant-sift/GRAFANA.md`).
+
+No backups are configured by default: which model can stand in for gemma is a
+benchmarking question. Run the candidates on the same records as the table in
+`.env.example` first.
+
 ## Cost
 
 **Prompt caching on Lumen: yes for speed, no for billing.** Measured with an

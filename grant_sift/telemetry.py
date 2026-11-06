@@ -28,6 +28,9 @@ STOCK_METRICS = frozenset({
     "detail_cache_ok",
     "detail_cache_fail",
     "subscribers",
+    "assessed_by_model",        # dim: model (#67)
+    "fallback_scored_live",     # live records a backup model scored
+    "fallback_scored_share",    # ... as a share of live assessed records
 })
 
 # Flow metrics counted for the calendar day.
@@ -36,6 +39,7 @@ FLOW_METRICS = frozenset({
     "feedback_up",
     "feedback_down",
     "digest_sent",
+    "llm_fallback_count",       # dim: "primary|used|path" (#67)
 })
 
 
@@ -137,6 +141,18 @@ def record_daily(conn, day: str | None = None) -> int:
     subs = conn.execute("SELECT COUNT(*) c FROM subscribers").fetchone()["c"]
     put("subscribers", "", subs)
 
+    for r in conn.execute(
+        "SELECT COALESCE(model, 'unknown') model, COUNT(*) c FROM assessments GROUP BY 1"
+    ):
+        put("assessed_by_model", r["model"], r["c"])
+
+    live = conn.execute(
+        f"""SELECT COUNT(*) c, SUM(a.fallback_for IS NOT NULL) fb
+              FROM opportunities o JOIN assessments a ON a.opportunity_id = o.id
+             WHERE {db.LIVE}""").fetchone()
+    put("fallback_scored_live", "", live["fb"] or 0)
+    put("fallback_scored_share", "", ((live["fb"] or 0) / live["c"]) if live["c"] else 0.0)
+
     # Flow: activity on this calendar day (UTC timestamps compared as prefixes).
     # first_seen / created_at / sent_at are ISO strings; day prefix works for UTC
     # and is close enough for Chicago overnight runs.
@@ -171,6 +187,14 @@ def record_daily(conn, day: str | None = None) -> int:
         (day, day_next),
     ):
         put("digest_sent", r["feed"], r["c"])
+
+    for r in conn.execute(
+        """SELECT primary_model, used_model, path, COUNT(*) c FROM llm_events
+           WHERE kind = 'fallback' AND created_at >= ? AND created_at < ?
+           GROUP BY primary_model, used_model, path""",
+        (day, day_next),
+    ):
+        put("llm_fallback_count", f"{r['primary_model']}|{r['used_model']}|{r['path']}", r["c"])
 
     conn.commit()
     return n

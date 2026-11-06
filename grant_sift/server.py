@@ -236,6 +236,7 @@ def public_config():
     return {"grafana_url": url or None,
             # What Ask and Idea match run on when the viewer brings no key.
             "ai": {"shared": bool(llm.API_KEY), "model": llm.MODEL,
+                   "fallbacks": llm.MODELS[1:],
                    "gateway": urlparse(llm.BASE_URL).hostname,
                    # Not secret: offered as the first own-key provider.
                    "base_url": llm.BASE_URL, "name": llm.GATEWAY_NAME},
@@ -884,8 +885,9 @@ def _gateway(payload: dict) -> dict:
 _REDACT = re.compile(r"(sk|gho|xoxb)[_-][A-Za-z0-9_\-]{8,}")
 # How a gateway says the key has run out of budget. Lumen meters in coins.
 _OUT_OF_BUDGET = re.compile(r"coin|credit|quota|budget|insufficient|balance", re.I)
-# How a gateway says no backend is serving the model.
-_NO_BACKEND = re.compile(r"no healthy (endpoint|upstream|backend)|no available (endpoint|backend)", re.I)
+# How a gateway says no backend is serving the model (shared with llm.py,
+# which decides from the same pattern whether to fall back).
+_NO_BACKEND = llm.NO_BACKEND
 
 
 def _gateway_error(gw: dict, r) -> HTTPException:
@@ -916,11 +918,40 @@ def _gateway_error(gw: dict, r) -> HTTPException:
 def _complete(gw: dict, messages: list, max_tokens: int, temperature: float = 0):
     """One chat completion on `gw`. Returns (content, usage).
 
+    On the shared key, a model that is down (llm.is_unavailable) hands over to
+    the next in llm.MODELS; every model that answered is appended to
+    gw["used"], so the endpoint can say which one did. The viewer's own key
+    never falls back: their model is their choice, and a quiet swap would
+    bill them for one they did not pick.
+
     The key is forwarded and dropped, and no error echoes it back. Nothing
     about the exchange is written anywhere: no table, no file, no log line
     carrying content.
     """
-    body = {"model": gw["model"], "max_tokens": max_tokens,
+    if gw.get("own"):
+        content, usage = _complete_on(gw, gw["model"], messages, max_tokens, temperature)
+        gw.setdefault("used", []).append(gw["model"])
+        return content, usage
+    try:
+        (content, usage), used = llm.run_with_fallback(
+            lambda m: _complete_on(gw, m, messages, max_tokens, temperature))
+    except llm.AllModelsDown as exc:
+        names = ", ".join(llm.MODELS)
+        raise HTTPException(
+            503, f"The shared AI model{'s' if len(llm.MODELS) > 1 else ''} "
+                 f"({names}) {'are' if len(llm.MODELS) > 1 else 'is'} down on the "
+                 "gateway right now. Try again in a few minutes, or use your "
+                 "own key under AI model.") from exc
+    gw.setdefault("used", []).append(used)
+    return content, usage
+
+
+def _complete_on(gw: dict, model: str, messages: list, max_tokens: int,
+                 temperature: float):
+    """One completion on one model. Raises llm.ModelUnavailable when the
+    shared gateway says the model is not being served, so _complete can move
+    on; every other failure is an HTTPException for the page."""
+    body = {"model": model, "max_tokens": max_tokens,
             "temperature": temperature, "messages": messages}
     # Lumen / some vLLM stacks bill reasoning as output; OpenAI-compatible
     # cloud APIs reject this unknown field, so only send it there.
@@ -937,7 +968,9 @@ def _complete(gw: dict, messages: list, max_tokens: int, temperature: float = 0)
     except requests.RequestException as exc:
         raise HTTPException(502, f"gateway unreachable: {type(exc).__name__}")
     if r.status_code != 200:
-        raise _gateway_error(gw, r)
+        if not gw.get("own") and llm.is_unavailable(r.status_code, r.text):
+            raise llm.ModelUnavailable(model, r.status_code, r.text)
+        raise _gateway_error({**gw, "model": model}, r)
     data = r.json()
     choice = (data.get("choices") or [{}])[0]
     content = ((choice.get("message") or {}).get("content") or "").strip()
@@ -947,6 +980,33 @@ def _complete(gw: dict, messages: list, max_tokens: int, temperature: float = 0)
                                  f"{choice.get('finish_reason')}, reasoning_tokens="
                                  f"{usage.get('reasoning_tokens')}). Try a larger max_tokens.")
     return content, (data.get("usage") or {})
+
+
+def _answered(gw: dict, path: str) -> dict:
+    """Which model answered, for the reply, and a trace when it was a backup.
+
+    {"model": the last model that answered, "fallback": the primary it stood
+    in for, or None}. A fallback on the shared key writes one llm_events row
+    per request, so an outage during Idea match or Ask leaves a trace for
+    Grafana (#67); nothing about the request's content goes in it.
+    """
+    used = gw.get("used") or [gw.get("model")]
+    last = used[-1]
+    if gw.get("own"):
+        return {"model": last, "fallback": None}
+    backups = [m for m in used if m != llm.MODEL]
+    if not backups:
+        return {"model": last, "fallback": None}
+    try:
+        conn = _conn()
+        try:
+            db.record_llm_event(conn, llm.MODEL, backups[-1], path)
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001 - a lost trace must not fail the answer
+        pass
+    return {"model": last, "fallback": llm.MODEL}
 
 
 # Who the group is comes from config/profile.yaml; the rest is how to answer.
@@ -1211,7 +1271,7 @@ def chat(request: Request, payload: dict = Body(...)):
         [{"role": "system", "content": f"{CHAT_SYSTEM}\n\nTHE CALL:\n{context['text']}"}] + clean,
         max_tokens=min(int(payload.get("max_tokens") or 1200), 4000),
         temperature=0.2)
-    return {"content": content, "usage": usage, "model": gw["model"],
+    return {"content": content, "usage": usage, **_answered(gw, "ask"),
             "unverified_quotes": unverified_quotes(content, context["synopsis"])}
 
 
@@ -1577,7 +1637,7 @@ def focus(request: Request, payload: dict = Body(...)):
         # rank pass is the only place it can come from.
         rec = str(data.get("recommendation") or "")[:2000] if out else ""
         return {"results": out, "recommendation": rec, "searched": n, "trimmed": trimmed,
-                "chunks": len(chunks), "usage": usage, "model": gw["model"],
+                "chunks": len(chunks), "usage": usage, **_answered(gw, "idea"),
                 "timing_ms": timing}
     finally:
         conn.close()
@@ -1648,7 +1708,7 @@ def rescore(request: Request, payload: dict = Body(...)):
 
     return {"recommendation": str(data.get("recommendation") or "")[:2000],
             "items": out, "scored": len(out), "of": len(ordered), "usage": usage,
-            "model": gw["model"]}
+            **_answered(gw, "idea")}
 
 
 _PAGE_MAX = 200

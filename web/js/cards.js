@@ -9,7 +9,11 @@ function turnHTML(t) {
     ? `<p class="unverified">Not found in the captured synopsis, so check against the solicitation before sending: ${
         t.unverified.map(q => `“${esc(q)}”`).join(", ")}</p>`
     : "";
-  return `<div class="turn ${role}">${body}${unver}</div>`;
+  // The shared model was down and a backup answered (#67): say so.
+  const by = t.fallback
+    ? `<p class="answeredby">Answered by ${esc(t.model)}; ${esc(t.fallback)} is down right now.</p>`
+    : "";
+  return `<div class="turn ${role}">${body}${unver}${by}</div>`;
 }
 const PENDING_TURN = `<div class="turn assistant pending" role="status" aria-label="Waiting for the answer"><i></i><i></i><i></i></div>`;
 
@@ -241,6 +245,7 @@ async function onChatSubmit(e) {
     const d = await r.json().catch(() => ({}));
     if (!r.ok) { hint.textContent = d.detail || `failed (${r.status})`; return; }
     const turn = { role: "assistant", content: d.content, model: d.model || model,
+                   fallback: d.fallback || null,
                    unverified: d.unverified_quotes || [] };
     CHATS[id].push(turn);
     pending.remove();
