@@ -93,6 +93,9 @@ config:
   GRANT_SIFT_LLM_BASE_URL: https://lumen.ncsa.illinois.edu/v1
   GRANT_SIFT_LLM_NAME: NCSA Lumen
   GRANT_SIFT_LLM_MODEL: gemma-4-31b-it
+  # Ordered backups for when the primary is down, primary first; replaces
+  # GRANT_SIFT_LLM_MODEL when set. Benchmark a backup before listing it (#67).
+  # GRANT_SIFT_LLM_MODELS: "gemma-4-31b-it,qwen3.8-flash"
   GRANT_SIFT_LLM_THINKING: "off"
   GRANT_SIFT_LLM_MAX_TOKENS: "4000"
   GRANT_SIFT_LLM_TIMEOUT: "120"

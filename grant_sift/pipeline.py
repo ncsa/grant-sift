@@ -598,8 +598,15 @@ def _resolve_domain(result, roster):
     return result
 
 
-def assess_new(conn, roster, limit=200, verbose=True):
-    pending = db.unassessed(conn, limit)
+def assess_new(conn, roster, limit=200, verbose=True, pending=None, models=None):
+    """Score what is unassessed, or `pending` when given.
+
+    `models` narrows which models may answer (default llm.MODELS, primary
+    first). A record a backup scored is flagged with the primary it stood in
+    for, and leaves one llm_events row.
+    """
+    if pending is None:
+        pending = db.unassessed(conn, limit)
     if not pending:
         return 0
     # config/roster.yaml is the baseline; dashboard additions live in the
@@ -615,6 +622,7 @@ def assess_new(conn, roster, limit=200, verbose=True):
     corrections = llm.format_corrections(db.few_shot_corrections(conn))
 
     done = 0
+    _warned = set()
     # Commit as we go. A full pass is hundreds of model calls over tens of
     # minutes, and every one is money already spent; holding them in a single
     # transaction means a Ctrl+C, a dropped connection or a killed process
@@ -626,14 +634,30 @@ def assess_new(conn, roster, limit=200, verbose=True):
         for row in pending:
             opp = dict(row)
             try:
-                result = llm.assess(opp, block, corrections)
+                result = llm.assess(opp, block, corrections, models=models)
+            except llm.AllModelsDown as exc:
+                # Every remaining record would fail the same way, each after
+                # nothing but a skip. Stop; the next run picks them up.
+                if verbose:
+                    print(f"  stopping: {exc}", flush=True)
+                break
             except Exception as exc:  # noqa: BLE001
                 if verbose:
                     print(f"  assess failed for {opp['id']}: {str(exc)[:80]}", flush=True)
                 continue
+            used = result.pop("model", None) or llm.MODEL
+            fallback_for = llm.MODEL if used != llm.MODEL else None
+            if fallback_for:
+                db.record_llm_event(conn, llm.MODEL, used, "assess")
+                if verbose and fallback_for not in _warned:
+                    print(f"  {llm.MODEL} is down; scoring on {used} "
+                          "(flagged; re-score with assess --rescore-fallback)", flush=True)
+                    _warned.add(fallback_for)
             result = _resolve_domain(_clean_match(result), roster)
-            db.save_assessment(conn, opp["id"], result, llm.MODEL,
-                               db.hash_text(opp["title"], opp.get("synopsis")))
+            db.save_assessment(conn, opp["id"], result, used,
+                               db.hash_text(opp["title"], opp.get("synopsis")),
+                               fallback_for=fallback_for,
+                               scoring_version=llm.SCORING_VERSION)
             done += 1
             if done % COMMIT_EVERY == 0:
                 conn.commit()
@@ -652,6 +676,17 @@ def assess_new(conn, roster, limit=200, verbose=True):
 # --------------------------------------------------------------------------
 # The catalogue as the dashboard, the API and MCP read it
 # --------------------------------------------------------------------------
+
+def fallback_pending(conn, limit=200):
+    """Live records a backup model scored, oldest first: the queue for
+    assess --rescore-fallback."""
+    return conn.execute(
+        f"""SELECT o.* FROM opportunities o
+              JOIN assessments a ON a.opportunity_id = o.id
+             WHERE a.fallback_for IS NOT NULL AND {db.LIVE}
+             ORDER BY a.assessed_at
+             LIMIT ?""", (limit,)).fetchall()
+
 
 def contact_index(roster):
     """collaborator name -> how to reach them, both ends of the introduction.
@@ -762,7 +797,8 @@ def catalogue_rows(conn, contacts, min_score=0):
                   a.score, a.category, a.rationale, a.summary,
                   a.axes_json, a.facts_json,
                   a.match_name, a.match_kind, a.match_domain, a.match_project,
-                  a.match_status, a.match_rationale
+                  a.match_status, a.match_rationale,
+                  a.model, a.scoring_version, a.assessed_at, a.fallback_for
            FROM opportunities o JOIN assessments a ON a.opportunity_id = o.id
            WHERE a.score >= ? AND {db.LIVE}
            ORDER BY (o.deadline IS NULL), o.deadline ASC, a.score DESC""",

@@ -188,7 +188,7 @@ function fitHTML(o) {
   const c = o.contact || {};
   const flags = [
     o.match_status && o.match_status !== "warm" ? esc(o.match_status) : "",
-    o.match_kind === "contact" ? "lead, not a past project" : "",
+    o.match_kind === "contact" ? "potential collaborator" : "",
     o.match_kind === "program" ? "our own program" : "",
   ].filter(Boolean).map(f => `<span class="cold"> · ${f}</span>`).join("");
   const lines = [];

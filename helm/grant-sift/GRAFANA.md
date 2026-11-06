@@ -222,6 +222,20 @@ http://grant-sift:8080/api/stats?metric=feedback_down&day_from=2026-08-01
 | `feedback_up` / `feedback_down` | aspect | **Flow** that day |
 | `digest_sent` | feed | **Flow** from `sent_log` |
 
+**Models (#67)**
+
+| Metric | `dim` | Notes |
+|---|---|---|
+| `assessed_by_model` | model | Assessments by the model that scored them (stock) |
+| `assessed_by_scoring_version` | version, `none` before versioning | Assessments by the rules that scored them (stock, #66) |
+| `fallback_scored_live` | — | Open calls a backup model scored while the primary was down (stock) |
+| `fallback_scored_share` | — | … as a share of open assessed calls, 0–1 (stock) |
+| `llm_fallback_count` | `primary\|used\|path` | **Flow** from `llm_events`: one per record (`assess`, `extract`) or per request (`idea`, `ask`) that fell back |
+
+Suggested alerts: `llm_fallback_count` above 0 on two consecutive days (the
+primary keeps going down); `fallback_scored_share` above 0.05 (too much of the
+list was scored by a backup; run `python run.py assess --rescore-fallback`).
+
 Stock metrics are end-of-day snapshots; flow metrics count events on that day (`GRANT_SIFT_DAILY_TZ`).
 
 ---

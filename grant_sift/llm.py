@@ -9,6 +9,7 @@ in this module is called from a request.
 import json
 import os
 import re
+import threading
 import time
 
 import requests
@@ -30,7 +31,28 @@ DEFAULT_MODEL = "gemma-4-31b-it"
 
 BASE_URL = os.environ.get("GRANT_SIFT_LLM_BASE_URL", DEFAULT_BASE_URL)
 API_KEY = os.environ.get("GRANT_SIFT_LLM_API_KEY", "")
-MODEL = os.environ.get("GRANT_SIFT_LLM_MODEL") or DEFAULT_MODEL
+
+
+def _model_list(models_env, model_env):
+    """GRANT_SIFT_LLM_MODELS, comma separated, in the order to try them.
+
+    GRANT_SIFT_LLM_MODEL still works and is a list of one. When both are set,
+    MODELS wins: it is the newer, more specific setting. Duplicates are
+    dropped, keeping the first, so a primary repeated as a backup is not
+    tried twice.
+    """
+    raw = [m.strip() for m in (models_env or "").split(",") if m.strip()]
+    if not raw:
+        raw = [(model_env or "").strip() or DEFAULT_MODEL]
+    return list(dict.fromkeys(raw))
+
+
+# The first is the primary; the rest are only tried when the one before it is
+# down (see ModelUnavailable). No default backups: which model can stand in
+# for gemma is a benchmarking question (issue #67), not a guess to ship.
+MODELS = _model_list(os.environ.get("GRANT_SIFT_LLM_MODELS"),
+                     os.environ.get("GRANT_SIFT_LLM_MODEL"))
+MODEL = MODELS[0]
 # What the page calls the shared gateway ("NCSA Lumen"); its host otherwise.
 GATEWAY_NAME = (os.environ.get("GRANT_SIFT_LLM_NAME") or "").strip() or (
     BASE_URL.split("//", 1)[-1].split("/", 1)[0])
@@ -51,6 +73,100 @@ ASSESS_MAX_TOKENS = int(os.environ.get("GRANT_SIFT_LLM_MAX_TOKENS", "4000"))
 THINKING = os.environ.get("GRANT_SIFT_LLM_THINKING", "off").strip().lower() in (
     "1", "on", "true", "yes")
 EXTRACT_MAX_TOKENS = int(os.environ.get("GRANT_SIFT_LLM_EXTRACT_MAX_TOKENS", "8000"))
+
+
+# --------------------------------------------------------------------------
+# Falling back when a model is down (#67)
+# --------------------------------------------------------------------------
+
+# How a gateway says no backend is serving the model. Lumen: "No healthy
+# endpoints for model gemma-4-31b-it".
+NO_BACKEND = re.compile(
+    r"no healthy (endpoint|upstream|backend)|no available (endpoint|backend)", re.I)
+# How a gateway says it does not know the model at all.
+UNKNOWN_MODEL = re.compile(
+    r"model.{0,80}(not found|does not exist|unknown|not available|no such)"
+    r"|(unknown|invalid|no such) model", re.I | re.S)
+
+# A model that reported itself down is skipped for this long, so a batch of
+# hundreds of records does not knock on a dead model once per record.
+DOWN_FOR = int(os.environ.get("GRANT_SIFT_LLM_DOWN_SECONDS", "300"))
+_down_until: dict = {}
+_down_lock = threading.Lock()
+
+
+class ModelUnavailable(RuntimeError):
+    """The gateway is up but this model is not being served.
+
+    The only failure that moves on to the next model. Budget, 429, other 4xx
+    and truncation do not: another model would not fix them, and switching
+    would hide the real problem.
+    """
+
+    def __init__(self, model, status, detail=""):
+        super().__init__(f"model {model} unavailable ({status}): {detail[:200]}")
+        self.model = model
+        self.status = status
+
+
+class AllModelsDown(RuntimeError):
+    """Every model in MODELS is down, or was within DOWN_FOR."""
+
+    def __init__(self, tried):
+        super().__init__("no model is available: " + ", ".join(tried))
+        self.tried = tried
+
+
+def is_unavailable(status: int, text: str) -> bool:
+    """502/503 naming no healthy endpoint, or 404 naming the model."""
+    text = (text or "")[:2000]
+    if status in (502, 503) and NO_BACKEND.search(text):
+        return True
+    return status == 404 and bool(UNKNOWN_MODEL.search(text))
+
+
+def mark_down(model: str, seconds: int | None = None) -> None:
+    with _down_lock:
+        _down_until[model] = time.monotonic() + (DOWN_FOR if seconds is None else seconds)
+
+
+def is_down(model: str) -> bool:
+    with _down_lock:
+        until = _down_until.get(model)
+        if until is None:
+            return False
+        if time.monotonic() >= until:
+            del _down_until[model]
+            return False
+        return True
+
+
+def reset_down() -> None:
+    """Forget every outage. For tests, and nothing else needs it."""
+    with _down_lock:
+        _down_until.clear()
+
+
+def run_with_fallback(call, models=None):
+    """call(model) on each model in turn until one is not down.
+
+    Returns (result, model_used). Only ModelUnavailable moves on; anything
+    else propagates from the model that raised it. A model that raises
+    ModelUnavailable is marked down and skipped by later calls in this
+    process for DOWN_FOR seconds.
+    """
+    models = list(models or MODELS)
+    tried = []
+    for m in models:
+        if is_down(m):
+            tried.append(f"{m} (down)")
+            continue
+        try:
+            return call(m), m
+        except ModelUnavailable:
+            mark_down(m)
+            tried.append(m)
+    raise AllModelsDown(tried)
 
 
 class TruncatedResponse(RuntimeError):
@@ -79,16 +195,20 @@ def _require_config():
     )
 
 
-def _post(messages, system, max_tokens=2000, retries=3):
-    """OpenAI-compatible chat completions. Point BASE_URL at your in-house gateway."""
-    _require_config()
+def _post_one(model, messages, system, max_tokens=2000, retries=3):
+    """One OpenAI-compatible chat completion on one model.
+
+    Retries a transient failure with backoff, as before. A model that says it
+    is not being served raises ModelUnavailable at once: retrying it three
+    times only delays the move to the next model.
+    """
     url = f"{BASE_URL.rstrip('/')}/chat/completions"
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {API_KEY}",
     }
     payload = {
-        "model": MODEL,
+        "model": model,
         "max_tokens": max_tokens,
         "temperature": 0,
         "messages": [{"role": "system", "content": system}] + messages,
@@ -102,6 +222,8 @@ def _post(messages, system, max_tokens=2000, retries=3):
     for attempt in range(retries):
         try:
             r = requests.post(url, headers=headers, json=payload, timeout=TIMEOUT)
+            if r.status_code != 200 and is_unavailable(r.status_code, r.text):
+                raise ModelUnavailable(model, r.status_code, r.text)
             r.raise_for_status()
             data = r.json()
             choice = (data.get("choices") or [{}])[0]
@@ -116,12 +238,20 @@ def _post(messages, system, max_tokens=2000, retries=3):
                 "A reasoning model spent the whole budget thinking; raise "
                 "GRANT_SIFT_LLM_MAX_TOKENS."
             )
-        except TruncatedResponse:
+        except (TruncatedResponse, ModelUnavailable):
             raise                      # deterministic, so do not burn retries
         except Exception as exc:  # noqa: BLE001
             last = exc
             time.sleep(2 ** attempt)
     raise RuntimeError(f"LLM call failed after {retries} attempts: {last}")
+
+
+def _post(messages, system, max_tokens=2000, retries=3, models=None):
+    """A completion on the first model in `models` (default MODELS) that is
+    up. Returns (content, model_used)."""
+    _require_config()
+    return run_with_fallback(
+        lambda m: _post_one(m, messages, system, max_tokens, retries), models)
 
 
 def _json(text, default):
@@ -174,13 +304,17 @@ Rules:
 - If the same call appears twice on the page, return it once."""
 
 
-def extract_calls(page_text: str, source_name: str) -> list:
+def extract_calls(page_text: str, source_name: str, conn=None) -> list:
+    """With `conn`, a fallback to a backup model leaves an llm_events row."""
     text = page_text[:60000]
-    out = _post(
+    out, used = _post(
         [{"role": "user", "content": f"Source: {source_name}\n\n---\n{text}"}],
         EXTRACT_SYSTEM,
         max_tokens=EXTRACT_MAX_TOKENS,
     )
+    if conn is not None and used != MODEL:
+        from . import db
+        db.record_llm_event(conn, MODEL, used, "extract")
     result = _json(out, [])
     return result if isinstance(result, list) else []
 
@@ -305,6 +439,15 @@ def build_assess_system(scoring):
 
 
 ASSESS_SYSTEM = build_assess_system(profile.PROFILE["scoring"])
+
+# Stored on every assessment (assessments.scoring_version), so two scores side
+# by side can be told apart when the rules that produced them differ. Bump it
+# whenever the scoring prompt or the rules around it change: this module's
+# prompt text, the profile's scoring: block, or how the answer is cleaned.
+# Rows scored before versioning stay NULL ("before versioning") (#66).
+#   1  the prompt as of #66: profile-driven scoring, three kinds of match,
+#      five axes, extracted facts.
+SCORING_VERSION = 1
 AXES = tuple(a["id"] for a in profile.PROFILE["scoring"]["axes"])
 # The category a call gets when the model names none.
 CATCH_ALL = profile.PROFILE["scoring"]["categories"][-1]["id"]
@@ -362,9 +505,13 @@ def _clean_facts(result):
     return result
 
 
-def assess(opportunity: dict, roster_block: str, corrections: str = "") -> dict:
+def assess(opportunity: dict, roster_block: str, corrections: str = "",
+           models=None) -> dict:
     """Roster goes in the prompt whole. At a few hundred entries this beats
-    embeddings on both match quality and explanation, and costs nothing."""
+    embeddings on both match quality and explanation, and costs nothing.
+
+    The model that answered is returned as result["model"]: with backups
+    configured it is not always MODEL, and the record must say which."""
     parts = [f"COLLABORATOR ROSTER:\n{roster_block}"]
     if corrections:
         parts.append(
@@ -379,8 +526,8 @@ def assess(opportunity: dict, roster_block: str, corrections: str = "") -> dict:
         f"Award ceiling: {opportunity.get('award_ceiling')}\n"
         f"Synopsis: {(opportunity.get('synopsis') or '')[:6000]}"
     )
-    out = _post([{"role": "user", "content": "\n\n".join(parts)}], ASSESS_SYSTEM,
-                max_tokens=ASSESS_MAX_TOKENS)
+    out, used = _post([{"role": "user", "content": "\n\n".join(parts)}], ASSESS_SYSTEM,
+                      max_tokens=ASSESS_MAX_TOKENS, models=models)
     result = _json(out, {})
     # _json returns its default ({}) when parsing fails, and an empty dict is a
     # dict, so an isinstance check alone lets a scoreless result through.
@@ -395,6 +542,7 @@ def assess(opportunity: dict, roster_block: str, corrections: str = "") -> dict:
         result["score"] = max(0, min(100, int(float(result["score"]))))
     except (TypeError, ValueError):
         raise ValueError(f"non-numeric score {result.get('score')!r}")
+    result["model"] = used
     # After the score, never before: a malformed axis block must not cost us a
     # record whose score parsed cleanly.
     return _clean_facts(_clean_axes(result))

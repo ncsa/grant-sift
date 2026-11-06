@@ -38,6 +38,11 @@
               <span class="mtxt"><b>Sources</b><small>Funder pages and feeds we read</small></span>
               <span class="status" id="stale-n" hidden></span>
             </button>
+            <button type="button" class="mitem" role="menuitem" id="open-scoring" data-open-scoring>
+              <svg class="ico ic ic-blue" width="18" height="18" aria-hidden="true"><use href="icons.svg#info"/></svg>
+              <span class="mtxt"><b>How scoring works</b><small>The model behind each score</small></span>
+              <span class="status" id="backup-n" hidden></span>
+            </button>
           </div>
           <div class="mgrp" id="grafana-grp" hidden>
             <a class="mitem" role="menuitem" id="grafana-link" href="#" target="_blank" rel="noopener">
@@ -247,7 +252,7 @@
               <option value="">Any</option>
               <option value="collaboration">Past collaborator</option>
               <option value="program">Program</option>
-              <option value="contact" title="An outreach lead, not a past collaboration">Outreach contact</option>
+              <option value="contact" title="Their work lines up, but we have not worked with them yet">Potential collaborator</option>
             </select>
           </label>
           <label class="field pick-f" data-roster>
@@ -408,6 +413,37 @@
   </div>
 </div>
 
+<!-- How the scores were produced (#66). Opened from the Data menu, a card's
+     "Scored by" line, and #scoring in the URL. -->
+<div class="modal-backdrop" id="scoring-modal" hidden>
+  <div class="modal panel scoring" role="dialog" aria-modal="true" aria-labelledby="scoring-title">
+    <header>
+      <h2 id="scoring-title">How scoring works</h2>
+      <button type="button" class="x" id="scoring-close" aria-label="Close"><svg class="ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#x"/></svg></button>
+    </header>
+    <div class="scorebody">
+      <p id="sc-now" class="scnow">Loading…</p>
+      <p>An AI model reads each open call (its title, funder, deadline, award and
+        description) and scores it 0 to 100 on how well it fits what this site is set up
+        for<span id="sc-group"></span>. It also writes the
+        one-line reason on the card.</p>
+      <table class="scguide" id="sc-guide" hidden>
+        <caption class="sr">What the score means</caption>
+        <thead><tr><th scope="col">Score</th><th scope="col">Means</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p>When roster matching is on (see <a href="#" data-open-roster>Who we know</a>),
+        it also suggests the closest person on the roster. A <b>potential
+        collaborator</b> is someone whose work lines up with the call, but who we have
+        not worked with yet.</p>
+      <p>Your thumbs up or down on a card count right away, and teach the model when it
+        scores other calls.</p>
+      <p class="help">Scores are a first pass, not a decision.</p>
+      <div id="sc-breakdown"></div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="chat-modal" hidden>
   <div class="modal panel" role="dialog" aria-modal="true" aria-labelledby="chat-title">
     <header>
@@ -464,15 +500,16 @@
 <!-- Plain scripts, not modules: they share top-level state, so order matters. -->
 <script src="js/format.js?v=13"></script>
 <script src="js/icons.js?v=11"></script>
-<script src="js/rows.js?v=14"></script>
+<script src="js/rows.js?v=16"></script>
 <script src="js/list.js?v=14"></script>
 <script src="js/ai.js?v=13"></script>
-<script src="js/ui.js?v=11"></script>
+<script src="js/ui.js?v=12"></script>
 <script src="js/ideafile.js?v=14"></script>
-<script src="js/idea.js?v=16"></script>
+<script src="js/idea.js?v=17"></script>
 <script src="js/panels.js?v=11"></script>
 <script src="js/account.js?v=11"></script>
-<script src="js/cards.js?v=12"></script>
-<script src="js/main.js?v=15"></script>
+<script src="js/cards.js?v=13"></script>
+<script src="js/scoring.js?v=5"></script>
+<script src="js/main.js?v=18"></script>
 </body>
 </html>

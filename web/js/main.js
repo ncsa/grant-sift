@@ -42,9 +42,17 @@ function boot(cat) {
   const stale = (cat.stale_sources || []).length;
   document.getElementById("stale-n").hidden = !stale;
   document.getElementById("stale-n").textContent = `${stale} stale`;
-  document.getElementById("data-flag").hidden = !stale;
-  if (stale) {
-    document.getElementById("databtn").setAttribute("aria-label", `Data: ${stale} stale sources`);
+  // Same for calls a backup model scored while the main one was down.
+  const backup = cat.backup_scored || 0;
+  const bn = document.getElementById("backup-n");
+  bn.hidden = !backup;
+  bn.textContent = `${backup} backup`;
+  bn.title = `${backup} open call${backup === 1 ? " was" : "s were"} scored by a backup model`;
+  document.getElementById("data-flag").hidden = !stale && !backup;
+  const flags = [stale && `${stale} stale sources`, backup && `${backup} calls scored by a backup model`]
+    .filter(Boolean);
+  if (flags.length) {
+    document.getElementById("databtn").setAttribute("aria-label", `Data: ${flags.join(", ")}`);
   }
   let scored = "unknown";
   if (cat.updated_at) {
@@ -55,6 +63,7 @@ function boot(cat) {
   document.getElementById("foot").innerHTML =
     `Scored ${esc(scored)}. Scores<span data-roster> and collaborator matches</span> are model-generated; treat them as a first pass, not a decision.` +
     ` <a href="https://github.com/ncsa/grant-sift/wiki/Grant-Sift-in-Claude:-setup" target="_blank" rel="noopener">Connect your AI assistant (MCP)</a>`;
+  openScoringFromHash();
   bootIdea();
   render();
   probeAPI();

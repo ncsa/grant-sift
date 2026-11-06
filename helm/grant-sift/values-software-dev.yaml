@@ -70,6 +70,12 @@ config:
   GRANT_SIFT_LLM_BASE_URL: https://lumen.ncsa.illinois.edu/v1
   GRANT_SIFT_LLM_NAME: NCSA Lumen
   GRANT_SIFT_LLM_MODEL: gemma-4-31b-it
+  # Fallback order when gemma is down (#67); replaces GRANT_SIFT_LLM_MODEL.
+  # Both backups are benchmarked on our records (.env.example): nemotron is
+  # close to the baseline; deepseek scores lower but covers the times
+  # nemotron goes down together with gemma. Backup-scored calls are flagged;
+  # re-score them with `python run.py assess --rescore-fallback`.
+  GRANT_SIFT_LLM_MODELS: "gemma-4-31b-it,nemotron-3-super-120b-a12b,deepseek-v4-flash"
   GRANT_SIFT_FROM: grant-sift@ncsa.illinois.edu
   # Campus outbound relay (Tech Services KB 47888). Needs a campus-recognized
   # source IP — pod CIDR 10.42/16 often cannot use this; if digests fail to

@@ -129,6 +129,14 @@ function canIntro(o) {
     && !["departed", "do-not-contact"].includes(o.match_status);
 }
 
+// "Nov 6", or "Nov 6, 2025" when not this year.
+function shortScored(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const s = `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  return d.getFullYear() === new Date().getFullYear() ? s : `${s}, ${d.getFullYear()}`;
+}
+
 function rowHTML(o, opts = {}) {
   const away = daysAway(o.deadline);
   const soon = away !== null && away >= 0 && away <= 30;
@@ -174,7 +182,7 @@ function rowHTML(o, opts = {}) {
   const flags = [
     o.match_status && o.match_status !== "warm" ? esc(o.match_status) : "",
     o.match_kind === "contact"
-      ? `<span title="On the outreach list. We have emailed them; we have not worked with them.">lead, not a past project</span>` : "",
+      ? `<span title="Their work lines up with this call, but we have not worked with them yet.">potential collaborator</span>` : "",
     o.match_kind === "program"
       ? `<span title="Something we run. There is no outside partner to approach; this call could fund work on it.">our own program</span>` : "",
   ].filter(Boolean).map(f => `<span class="cold"> · ${f}</span>`).join("");
@@ -206,6 +214,13 @@ function rowHTML(o, opts = {}) {
       </div>
     </aside>`;
 
+  // How this score was produced (#66): one line, into the Scoring panel.
+  const prov = o.model ? `<p class="prov"><button type="button" class="provlink" data-open-scoring
+      title="How scoring works">Scored by ${esc(o.model)}${
+      o.fallback_for ? ` <span class="fb">(backup; ${esc(o.fallback_for)} was down)</span>` : ""
+    } · ${o.scoring_version ? `scoring v${esc(String(o.scoring_version))}` : "before versioning"}${
+      o.assessed_at ? ` · ${esc(shortScored(o.assessed_at))}` : ""}</button></p>` : "";
+
   const why = idea
     ? (idea.why ? `<p class="why"><span class="tag">Fits your idea</span>${esc(idea.why)}</p>` : "")
     : (o.rationale ? `<p class="why"><span class="tag">Why it fits</span>${esc(o.rationale)}</p>` : "");
@@ -220,6 +235,7 @@ function rowHTML(o, opts = {}) {
       ${why}
       ${o.summary ? `<p class="sumry">${esc(o.summary)}</p>` : ""}
       ${fit}
+      ${prov}
       <div class="acts">
         ${introBtn(o)}
         <button class="askbtn" data-chat="${esc(o.id)}" aria-expanded="false">${ICON_CHAT}<span class="asklbl">Ask about this call</span></button>

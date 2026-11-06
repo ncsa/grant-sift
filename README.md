@@ -301,7 +301,7 @@ matched in `match_kind`:
 | --- | --- | --- | --- |
 | PAST COLLABORATIONS | *(default)* | `collaboration` | them + via us |
 | PROGRAMS WE RUN | `program` | `program` | via us only, badged *our own program* |
-| KNOWN CONTACTS | *(default, no projects)* | `contact` | them + via us, badged *lead, not a past project* |
+| KNOWN CONTACTS | *(default, no projects)* | `contact` | them + via us, badged *potential collaborator* |
 
 `kind: program` exists because roughly a third of the roster is not a partner
 at all: Clowder, Ergo, Brown Dog, EarthCube, the NDS Labs Workbench. There is
@@ -758,6 +758,42 @@ No URL fixes it. Left in the config so it fails loudly rather than vanishing.
 
 Stale sources appear at the top of every digest, in a dashboard banner, and in
 `run.py status`. Do not silence that banner.
+
+### When the model is down
+
+Lumen sometimes has no backend serving a model ("No healthy endpoints for
+model ..."). `GRANT_SIFT_LLM_MODELS` lists backups in order, primary first.
+Only "model unavailable" moves on to the next one: a 502/503 naming no healthy
+endpoint, or a 404 for an unknown model. Budget, 429, other errors and
+truncation never do, because another model would not fix them and switching
+would hide the real problem. A model that reported itself down is skipped for
+five minutes (`GRANT_SIFT_LLM_DOWN_SECONDS`), so a batch does not knock on it
+once per record.
+
+Only the shared key falls back. A viewer's own key and model are theirs.
+
+- **Ask and Idea match** say which model answered when it was a backup.
+- **`assess`** stores the backup's name in `assessments.model` and the primary
+  it stood in for in `fallback_for`. Those cards say so, and the Scoring panel
+  counts them; `python run.py assess --rescore-fallback` re-scores those
+  calls on the primary only, and stops without spending if it is still down.
+- **Every fallback** writes a row to `llm_events` (primary, model used, path,
+  time; nothing about the content), which the nightly rollup turns into
+  `llm_fallback_count` for Grafana, beside `assessed_by_model` and
+  `fallback_scored_share` (see `helm/grant-sift/GRAFANA.md`).
+
+Each assessment also stores `scoring_version` (`llm.SCORING_VERSION`; bump it
+whenever the scoring prompt, the profile's `scoring:` block or the answer
+cleaning changes). Rows scored before it existed stay NULL. The dashboard's
+**How scoring works** panel (Data menu, a card's "Scored by" line, or
+`#scoring` in the URL) says in plain words how a score is produced, which model
+and scoring version, and how the open calls split by model when they differ.
+It reads `/api/scoring` (which also returns thinking, roster size and the
+fallback count for operators) and makes no model call.
+
+No backups are configured by default: which model can stand in for gemma is a
+benchmarking question. Run the candidates on the same records as the table in
+`.env.example` first.
 
 ## Cost
 

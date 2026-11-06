@@ -193,7 +193,7 @@ def rate(rec):
         f"Award ceiling: {rec['award_ceiling']}\n"
         f"Synopsis: {(rec['synopsis'] or '')[:6000]}"
     )
-    out = llm._post([{"role": "user", "content": body}], EXPERIMENT_SYSTEM,
+    out, _ = llm._post([{"role": "user", "content": body}], EXPERIMENT_SYSTEM,
                     max_tokens=llm.ASSESS_MAX_TOKENS)
     result = llm._json(out, {})
     if not isinstance(result, dict):
