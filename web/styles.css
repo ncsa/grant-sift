@@ -601,11 +601,23 @@ h2.title a { color: var(--il-blue); }
 }
 /* Room to write once the mode is on, or the box is in use. */
 .ideabox.on .idearow textarea, .idearow textarea:focus { min-height: 112px; }
-.idearow .primary { flex: none; min-width: 112px; }
+.ideabtns { flex: none; display: flex; flex-direction: column; gap: 8px; }
+.ideabtns .primary, .ideabtns .secondary { min-width: 132px; display: inline-flex; align-items: center;
+                                           justify-content: center; gap: 6px; }
+.ideabtns .secondary { height: 44px; }
+/* A file dragged over the box: the whole card is the target. */
+.ideabox { position: relative; }
+.ideabox .dropnote { display: none; }
+.ideabox.drop .dropnote {
+  display: flex; align-items: center; justify-content: center; position: absolute; inset: 0;
+  border: 2px dashed var(--il-industrial); border-radius: 12px; background: rgba(234, 240, 248, .94);
+  font-size: 16px; font-weight: 600; color: var(--il-blue); pointer-events: none;
+}
 .ideafoot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
             gap: 4px 16px; }
 .ideafoot .hint { font-size: 12.5px; color: var(--text-2); }
 .ideafoot .hint:empty { display: none; }
+.ideafoot .hint.err { color: var(--il-altgeld); font-weight: 500; }
 .ideafoot .aibar { margin: 0 0 0 auto; }
 .primary {
   font: inherit; font-size: 14px; font-weight: 600; color: #fff; background: var(--il-blue);
@@ -643,6 +655,8 @@ footer a { margin-left: 6px; }
   .advbody .find { grid-template-columns: 1fr; }
   .advbody .field.range { grid-column: auto; }
   .idearow { flex-direction: column; align-items: stretch; }
+  .ideabtns { flex-direction: row; }
+  .ideabtns > button { flex: 1 1 0; min-width: 0; }
   .lead { flex: none; }
   .lead .score { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
   .lead .score .num b { font-size: 24px; }

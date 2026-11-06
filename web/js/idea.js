@@ -31,8 +31,10 @@ const ideaView = () => IDEA.on ? { items: IDEA.items } : null;
 const ideaEl = () => document.getElementById("idea");
 function ideaText() { return ideaEl().value.trim(); }
 
-function setIdeaHint(text) {
-  document.getElementById("idea-hint").textContent = text || "";
+function setIdeaHint(text, err = false) {
+  const el = document.getElementById("idea-hint");
+  el.textContent = text || "";
+  el.classList.toggle("err", !!err);
 }
 
 function paintIdeaMode() {
@@ -278,6 +280,71 @@ ideaEl().addEventListener("focusout", () => {
   if (!IDEA.on || !IDEA.items.length || !next || next === _rankedFor || next === IDEA.matched) return;
   _rankedFor = next;
   rankIdea();
+});
+
+// ---- From a file: Upload file, or drop one on the box --------------------
+let _fileBusy = false;
+async function takeIdeaFile(file) {
+  if (!file || _fileBusy) return;
+  _fileBusy = true;
+  const btn = document.getElementById("idea-upload");
+  btn.disabled = true;
+  setIdeaHint(`Reading ${file.name}\u2026`);
+  try {
+    const { text, trimmed, detail } = await readIdeaFile(file);
+    ideaEl().value = text;
+    IDEA.idea = text;
+    saveIdea();
+    const from = `Read ${file.name}${detail ? ` (${detail})` : ""}.`;
+    setIdeaHint(trimmed
+      ? `${from} Trimmed to the first ${IDEA_MAX_CHARS.toLocaleString()} characters, which is all a match reads: `
+        + "edit the box to keep the parts that matter, then Match."
+      : `${from} Check or edit the text, then Match.`);
+    ideaEl().focus();
+    ideaEl().setSelectionRange(0, 0);
+    ideaEl().scrollTop = 0;
+  } catch (e) {
+    setIdeaHint(e instanceof IdeaFileError ? e.message
+      : `Could not read ${file.name}. Paste the text instead.`, true);
+  } finally {
+    _fileBusy = false;
+    btn.disabled = false;
+  }
+}
+
+document.getElementById("idea-upload").addEventListener("click", () =>
+  document.getElementById("idea-file").click());
+document.getElementById("idea-file").addEventListener("change", e => {
+  takeIdeaFile(e.target.files[0]);
+  e.target.value = "";          // the same file again is a fresh pick
+});
+// The drop target is the whole card. dragleave fires on every child crossed,
+// so depth is counted rather than trusting the last event.
+let _dragDepth = 0;
+const box = document.getElementById("ideabox");
+const hasFiles = e => [...(e.dataTransfer?.types || [])].includes("Files");
+box.addEventListener("dragenter", e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  _dragDepth++;
+  box.classList.add("drop");
+});
+box.addEventListener("dragover", e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "copy";
+});
+box.addEventListener("dragleave", e => {
+  if (!hasFiles(e)) return;
+  if (--_dragDepth <= 0) { _dragDepth = 0; box.classList.remove("drop"); }
+});
+box.addEventListener("drop", e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  _dragDepth = 0;
+  box.classList.remove("drop");
+  // One idea, one file: past the first, a drop is ignored.
+  takeIdeaFile(e.dataTransfer.files[0]);
 });
 
 function bootIdea() {

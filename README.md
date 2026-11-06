@@ -516,6 +516,14 @@ finishes, the list fills with the hits and a recommendation follows. Editing
 the idea and leaving the field re-ranks the matches without another full
 catalogue search; Match again searches the whole catalogue with the new text.
 
+**From a file:** Upload file, or drop one on the Idea box. `.txt` and `.md`
+are read as text; `.pdf` with pdf.js and `.docx` with mammoth.js, each loaded
+from cdnjs (exact versions) only when such a file is picked. The file is read
+in the tab and never sent anywhere; its text fills the Idea box to check and
+edit before matching. Text past 4,000 characters (`MAX_IDEA_CHARS`, all a match
+reads) is trimmed and the box says so. Old `.doc`, scanned PDFs with no text
+layer, other types and files over 10 MB each get a plain message instead.
+
 Closed calls are excluded from both prompts and from the catalogue
 (`db.LIVE`). Affinity is **fit to this idea**, not the group’s relevance score,
 and the two are never averaged.
