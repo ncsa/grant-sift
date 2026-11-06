@@ -1,0 +1,103 @@
+# A general profile: no research area, for a sibling instance that ranks calls
+# for any university researcher rather than for one group. Same format as
+# config/profile.yaml, which explains every key.
+#
+# Use it with GRANT_SIFT_PROFILE=config/profile.general.yaml, or in Kubernetes:
+#   kubectl -n grant-sift-general create configmap grant-sift-profile \
+#     --from-file=profile.yaml=config/profile.general.yaml
+# and set profile.existingConfigMap: grant-sift-profile in the Helm values.
+#
+# Its scoring differs from the RSE profile, so a database copied from that
+# instance needs `python run.py assess --rescore-all` before its scores mean
+# anything here.
+
+org:
+  name: NCSA
+  email_domain: illinois.edu
+  contact_email: rse@ncsa.illinois.edu
+  ai_gateway: NCSA Lumen
+
+group:
+  tagline: Open funding calls, ranked for university researchers
+  description: a university researcher
+  match_phrase: match someone on the roster
+
+scoring:
+  label: Relevance
+  prompt: |
+    You screen funding opportunities for researchers at a university. Any field
+    of research counts: do not prefer one subject over another.
+
+    Score each opportunity 0-100 on whether a university researcher should look
+    at it.
+
+    Judge the call, not its topic. A good call is open, funds real work, and is
+    one a university team is eligible for and could realistically win. Calls
+    that exclude universities (for-profit only, a single agency's own staff,
+    individuals outside academia), that are not funding at all (prizes with no
+    award, notices, events), or that are effectively closed score low.
+  categories:
+    - id: research
+      description: funds a research project, in any field
+    - id: infrastructure
+      description: equipment, facilities, shared instruments or computing
+    - id: training
+      description: education, workforce, fellowships, early-career awards
+    - id: collaboration
+      description: centres, consortia, multi-institution or industry partnerships
+    - id: not_relevant
+      description: not open to a university team, or not a funding call
+  guide: |
+    80-100  a strong, open call a university team should look at
+    60-79   worth a look; eligible, but narrow or a partial fit
+    40-59   marginal
+    0-39    not for a university team
+  axes:
+    - id: partner_need
+      description: |
+        does this STRUCTURALLY require partners outside one lab?
+        0 = a single PI can do all of it. 100 = it cannot be
+        proposed without other institutions or sectors.
+    - id: interdisciplinary
+      description: |
+        how many fields the work has to span. 0 = squarely one
+        discipline. 100 = the call is about bridging fields.
+    - id: early_career
+      description: |
+        how much it is aimed at early-career researchers. 0 = no
+        preference. 100 = only early-career applicants may apply.
+
+digests:
+  - id: closing-soon
+    label: Closing within 30 days
+    deadline_within_days: 30
+    min_score: 60
+  - id: roster-match
+    label: Matches someone on the roster
+    has_match: true
+    min_score: 60
+  - id: research
+    label: Research project calls
+    category: [research]
+    min_score: 65
+  - id: foundations
+    label: Foundations (non-grants.gov)
+    exclude_source: [grants.gov]
+    min_score: 60
+
+call_types:
+  - id: research
+    label: Research
+    category: [research]
+  - id: infrastructure
+    label: Infrastructure
+    category: [infrastructure]
+  - id: training
+    label: Training
+    category: [training]
+  - id: collaboration
+    label: Collaboration
+    category: [collaboration]
+  - id: foundation
+    label: Foundations
+    exclude_source: [grants.gov]

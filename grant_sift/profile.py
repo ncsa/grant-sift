@@ -1,4 +1,5 @@
-"""The deployment's profile: who it is for, its digests and call-type chips.
+"""The deployment's profile: its organisation, how calls are scored, its
+wording, digests and call-type chips.
 
 Read from config/profile.yaml (or GRANT_SIFT_PROFILE) once, at import. Digests
 and chips are declarative rules over columns every scored call already has, so
@@ -107,17 +108,65 @@ def _entries(raw, key):
     return out
 
 
+def _text(d, key, where):
+    v = d.get(key)
+    if not isinstance(v, str) or not v.strip():
+        raise ProfileError(f"{where}.{key} is required")
+    return v
+
+
+def _described(raw, where, required):
+    """[{id, description}] with unique ids, in file order."""
+    items = raw if raw is not None else []
+    if not isinstance(items, list) or (required and not items):
+        raise ProfileError(f"{where} must be a {'non-empty ' if required else ''}list")
+    seen, out = set(), []
+    for i, it in enumerate(items):
+        w = f"{where}[{i}]"
+        if not isinstance(it, dict) or not isinstance(it.get("id"), str) or not it["id"]:
+            raise ProfileError(f"{w}: needs an id")
+        if it["id"] in seen:
+            raise ProfileError(f"{w}: duplicate id {it['id']!r}")
+        seen.add(it["id"])
+        out.append({"id": it["id"], "description": _text(it, "description", w)})
+    return out
+
+
+def _scoring(raw):
+    if not isinstance(raw, dict):
+        raise ProfileError("scoring is required")
+    return {"label": _text(raw, "label", "scoring").strip(),
+            "prompt": _text(raw, "prompt", "scoring"),
+            "guide": _text(raw, "guide", "scoring"),
+            "categories": _described(raw.get("categories"), "scoring.categories", True),
+            "axes": _described(raw.get("axes"), "scoring.axes", False)}
+
+
 def parse(raw):
     """A loaded YAML mapping -> the profile the app reads."""
     if not isinstance(raw, dict):
         raise ProfileError("profile must be a mapping")
+    org = raw.get("org") or {}
     group = raw.get("group") or {}
-    for k in ("tagline", "description", "match_phrase"):
-        if not isinstance(group.get(k), str) or not group[k].strip():
-            raise ProfileError(f"group.{k} is required")
-    return {"group": {k: group[k].strip() for k in ("tagline", "description", "match_phrase")},
-            "digests": _entries(raw, "digests"),
-            "call_types": _entries(raw, "call_types")}
+    scoring = _scoring(raw.get("scoring"))
+    out = {"org": {k: _text(org, k, "org").strip()
+                   for k in ("name", "email_domain", "contact_email", "ai_gateway")},
+           "group": {k: _text(group, k, "group").strip()
+                     for k in ("tagline", "description", "match_phrase")},
+           "scoring": scoring,
+           "digests": _entries(raw, "digests"),
+           "call_types": _entries(raw, "call_types")}
+    # A rule naming a category the scorer never assigns would match nothing,
+    # silently. Most likely a typo, or a scoring change that left it behind.
+    cats = {c["id"] for c in scoring["categories"]}
+    for key in ("digests", "call_types"):
+        for spec in raw.get(key) or []:
+            names = spec.get("category") or []
+            bad = sorted(set([names] if isinstance(names, str) else names) - cats)
+            if bad:
+                raise ProfileError(f"{key} {spec.get('id')!r}: category {bad} is not "
+                                   f"a scoring category ({', '.join(sorted(cats))})")
+    return out
 
 
 def load(path=None):
@@ -139,6 +188,8 @@ PROFILE = load()
 
 def public():
     """What the page needs: wording and the chips, without the predicates."""
-    return {"group": PROFILE["group"],
+    return {"org": {k: PROFILE["org"][k] for k in ("name", "ai_gateway")},
+            "group": PROFILE["group"],
+            "score_label": PROFILE["scoring"]["label"],
             "call_types": [{k: c[k] for k in ("id", "label", "title")}
                            for c in PROFILE["call_types"]]}

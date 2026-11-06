@@ -15,13 +15,14 @@ from xml.etree import ElementTree
 
 import requests
 
-from . import db, llm
+from . import db, llm, profile
 
 # Below this much stripped text, a "successful" fetch is not a real listing:
 # a bot wall or a client-rendered shell. Raise instead of extracting nothing.
 MIN_PAGE_TEXT = 500
 
-UA = "Grant Sift/1.0 (NCSA research software funding watch; contact: rse@ncsa.illinois.edu)"
+UA = (f"Grant Sift/1.0 ({profile.PROFILE['org']['name']} funding watch; "
+      f"contact: {profile.PROFILE['org']['contact_email']})")
 HEADERS = {"User-Agent": UA}
 TIMEOUT = 45
 

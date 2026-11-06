@@ -65,6 +65,12 @@ function paintProfile(p) {
   const g = p.group || {};
   if (g.tagline) document.getElementById("tagline").textContent = g.tagline;
   if (g.match_phrase) document.getElementById("match-phrase").textContent = g.match_phrase;
+  const org = (p.org || {}).name;
+  if (org) {
+    document.querySelector('.chip[data-filter="via-me"]').title =
+      `Calls where you are the ${org} contact to introduce`;
+    document.getElementById("sub-email").placeholder = `Your ${org} address`;
+  }
   if (p.score_label) {
     SCORE_LABEL = p.score_label;
     document.querySelectorAll(".score-lbl").forEach(el => {
@@ -92,8 +98,12 @@ function paintProfile(p) {
 const CONFIG = fetch("/api/config")
   .then(r => r.ok ? r.json() : null)
   .then(cfg => {
-    if (cfg && cfg.ai) { AI = cfg.ai; paintAI(); }
     if (cfg && cfg.profile) paintProfile(cfg.profile);
+    if (cfg && cfg.ai) {
+      const org = (cfg.profile && cfg.profile.org) || {};
+      AI = { ...cfg.ai, org: org.name, gateway_name: org.ai_gateway };
+      paintAI();
+    }
     // Optional Grafana link: the Ops & signal item in the Data menu.
     const url = cfg && (cfg.grafana_url || cfg.grafana_embed_url);
     if (!url) return;

@@ -8,6 +8,8 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from . import profile
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sources (
     name          TEXT PRIMARY KEY,
@@ -961,7 +963,7 @@ def save_assessment(conn, opp_id: str, a: dict, model: str, input_hash: str):
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             opp_id, a.get("score") if a.get("score") is not None else 0,
-            a.get("category") or "not_relevant", a.get("rationale"),
+            a.get("category") or profile.PROFILE["scoring"]["categories"][-1]["id"], a.get("rationale"),
             a.get("match_name"), a.get("match_kind"), a.get("match_domain"),
             a.get("match_project"), a.get("match_status"),
             a.get("match_rationale"), a.get("summary"),

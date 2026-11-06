@@ -13,6 +13,8 @@ import time
 
 import requests
 
+from . import profile
+
 # NCSA Lumen, the default gateway: a self-hosted OpenAI-compatible proxy.
 # BASE_URL is the prefix only, "/chat/completions" is appended below.
 DEFAULT_BASE_URL = "https://lumen.ncsa.illinois.edu/v1"
@@ -184,38 +186,14 @@ def extract_calls(page_text: str, source_name: str) -> list:
 # 2. Relevance classification + 3. Collaborator matching (one call, one pass)
 # --------------------------------------------------------------------------
 
-# What the 0-100 score measures, as the dashboard names it. It follows this
-# prompt, not config/profile.yaml: the score is stored per call, so a
-# different group's label only becomes true after re-scoring (issue #58).
-SCORE_LABEL = "RSE relevance"
+# The scoring prompt. Who the group is, its categories, score guide and axes
+# come from config/profile.yaml (scoring:); how to match the roster, write the
+# summary, extract facts and shape the JSON stays here, because the code reads
+# that JSON. The default profile rebuilds the prompt the RSE instance has always
+# used, byte for byte (tests/test_profile.py), so its stored scores stay valid.
+# Changing scoring: in a profile means re-scoring that instance's calls.
 
-ASSESS_SYSTEM = """You screen funding opportunities for a university research software
-engineering (RSE) group at a supercomputing centre. The group builds and sustains
-research software: data pipelines, scientific workflows, HPC and GPU computing,
-data management and curation, geospatial and imaging systems, web platforms and
-APIs for research, reproducibility and software sustainability.
-
-Score each opportunity 0-100 on whether this group should look at it.
-
-The valuable finds are NOT the obvious cyberinfrastructure calls, which everyone
-already sees. They are domain solicitations that carry a software, data-management,
-computational, or sustainability requirement inside them, where a domain PI will
-need an RSE partner and may not realise it yet.
-
-Categories:
-  "ci_program"        explicit cyberinfrastructure / research software programme
-  "embedded_software" domain call with a software, data, or computational requirement
-  "domain_subaward"   domain call where we would plausibly join a PI as a subaward
-  "sustainability"    maintenance, reproducibility, open source, infrastructure
-  "not_relevant"      none of the above
-
-Scoring guide:
-  80-100  we should almost certainly pursue or bring to a PI
-  60-79   worth a look; real but partial fit
-  40-59   marginal
-  0-39    not for us
-
-Then match against the roster. Pick at most ONE person: the closest fit by domain
+_ROSTER_AND_SUMMARY = """Then match against the roster. Pick at most ONE person: the closest fit by domain
 and by the kind of work involved. Copy match_domain verbatim from that roster
 line's first field so it can be grouped on. If nobody on the roster is a real fit,
 return null for every match field rather than reaching.
@@ -252,26 +230,16 @@ This applies to "summary" ALONE. Always return a numeric score, a category and
 a rationale, however thin the text; judge those from the title if that is all
 there is.
 
-"axes" are five INDEPENDENT 0-100 ratings. They measure different things and
+"""
+
+_AXES_INTRO = """"axes" are five INDEPENDENT 0-100 ratings. They measure different things and
 are expected to disagree; a call can be high on one and near zero on another.
 Do not smooth them toward each other or toward the score. Rate the call as
 written, not its fit for us.
 
-  software_depth     how much software actually has to be BUILT. 0 = no
-                     engineering, a science proposal with a data sentence.
-                     100 = the deliverable is a system, pipeline or platform.
-  data_management    volume, curation, sharing mandates, DMP weight. 0 = data
-                     is not discussed. 100 = data stewardship IS the call.
-  compute_intensity  HPC, GPU, simulation, large-scale training. 0 = runs on a
-                     laptop. 100 = only runs at a centre.
-  sustainability     maintenance, reproducibility, open source, keeping
-                     existing software alive. 0 = pure new work. 100 = the call
-                     is about upkeep and reuse.
-  partner_need       does this STRUCTURALLY require a partner outside the
-                     domain? 0 = a domain lab does all of it alone. 100 = the
-                     PI cannot staff this without a software or data partner.
+"""
 
-"facts" are extracted, not judged. Use null for anything the text does not
+_FACTS_AND_JSON_HEAD = """"facts" are extracted, not judged. Use null for anything the text does not
 state; do not infer.
 
   call_domain       the call's OWN subject area, 2-4 words, lowercase
@@ -293,15 +261,50 @@ Return ONLY JSON, no fences:
   "match_status": "warm | cold | prospect | departed | do-not-contact | null",
   "match_rationale": "one sentence on why this person, or null",
   "summary": "2-3 sentences on what it funds and who is eligible",
-  "axes": {"software_depth": 0-100, "data_management": 0-100,
-           "compute_intensity": 0-100, "sustainability": 0-100,
-           "partner_need": 0-100},
-  "facts": {"call_domain": "...", "award_ceiling_usd": null,
+"""
+
+_JSON_TAIL = """  "facts": {"call_domain": "...", "award_ceiling_usd": null,
             "subaward_ok": null, "solicitation_type": "..."}
 }"""
 
-AXES = ("software_depth", "data_management", "compute_intensity",
-        "sustainability", "partner_need")
+_COUNT = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six",
+          7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+
+
+def _hang(label, text, width):
+    """'  label     first line' with later lines under the first."""
+    lines = text.rstrip("\n").split("\n")
+    pad = max(width, len(label) + 1)
+    out = [f"  {label:<{pad}}{lines[0]}"]
+    out += [" " * (pad + 2) + ln if ln else "" for ln in lines[1:]]
+    return "\n".join(out)
+
+
+def build_assess_system(scoring):
+    """The scoring prompt for a profile's scoring: block."""
+    parts = [scoring["prompt"].rstrip("\n"), "", "Categories:"]
+    parts += [_hang(f'"{c["id"]}"', c["description"], 20) for c in scoring["categories"]]
+    parts += ["", "Scoring guide:"]
+    parts += ["  " + ln if ln else "" for ln in scoring["guide"].rstrip("\n").split("\n")]
+    parts += ["", ""]
+    text = "\n".join(parts) + _ROSTER_AND_SUMMARY
+    axes = scoring["axes"]
+    if axes:
+        n = len(axes)
+        text += _AXES_INTRO.replace("are five", f"are {_COUNT.get(n, n)}", 1)
+        text += "\n".join(_hang(a["id"], a["description"], 19) for a in axes) + "\n\n"
+    text += _FACTS_AND_JSON_HEAD
+    if axes:
+        items = [f'"{a["id"]}": 0-100' for a in axes]
+        rows = [", ".join(items[i:i + 2]) for i in range(0, len(items), 2)]
+        text += '  "axes": {' + ",\n           ".join(rows) + "},\n"
+    return text + _JSON_TAIL
+
+
+ASSESS_SYSTEM = build_assess_system(profile.PROFILE["scoring"])
+AXES = tuple(a["id"] for a in profile.PROFILE["scoring"]["axes"])
+# The category a call gets when the model names none.
+CATCH_ALL = profile.PROFILE["scoring"]["categories"][-1]["id"]
 FACTS = ("call_domain", "award_ceiling_usd", "subaward_ok", "solicitation_type")
 
 

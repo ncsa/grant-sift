@@ -45,7 +45,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from . import auth
+from . import auth, profile
 
 # Where clients reach this app, e.g. https://grant-sift.software-dev.ncsa.illinois.edu.
 # Names the resource in the protected-resource metadata, and its host is added
@@ -91,12 +91,38 @@ _apps = Apps()
 _apps.add_html_resource(CARD_URI, _card_html(), name="opportunity-card",
                         title="Grant Sift opportunity card", prefers_border=True)
 
+_P = profile.PROFILE
+_AXES = [a["id"] for a in _P["scoring"]["axes"]]
+_TOKENS = {
+    "$ORG": _P["org"]["name"],
+    "$SCORE": _P["scoring"]["label"],
+    "$CATEGORIES": ", ".join(c["id"] for c in _P["scoring"]["categories"]),
+    "$CALL_TYPES": ", ".join(c["id"] for c in _P["call_types"]),
+    "$AXES": (f'subscore floors, e.g. {{"{_AXES[0]}": 70}}; axes are {", ".join(_AXES)}'
+              if _AXES else "subscore floors; this deployment scores no axes"),
+}
+
+
+def _words(text):
+    """Docstrings and instructions name this deployment's org, score,
+    categories and axes from the profile, not from code."""
+    for k, v in _TOKENS.items():
+        text = text.replace(k, v)
+    return text
+
+
+def _doc(fn):
+    """Below @mcp.tool, so the tool is registered with the filled-in text."""
+    fn.__doc__ = _words(fn.__doc__ or "")
+    return fn
+
+
 mcp = MCPServer(
     name="grant-sift",
     extensions=[_apps],
-    instructions=(
-        "Grant Sift tracks open funding calls and scores each for research "
-        "software engineering relevance (0-100) against a roster of past "
+    instructions=_words(
+        "Grant Sift tracks open funding calls and scores each for $SCORE "
+        "(0-100) against a roster of past "
         "collaborators. Use search_opportunities to find calls (fuzzy on names "
         "and titles), get_opportunity for one call's full record, and "
         "my_opportunities for calls tied to the signed-in person, and "
@@ -168,6 +194,7 @@ def whoami(ctx: Context) -> dict:
 
 
 @mcp.tool(annotations=_READ, meta=_CARD)
+@_doc
 def search_opportunities(
     ctx: Context,
     query: str = "",
@@ -197,11 +224,10 @@ def search_opportunities(
     query: every word must match. Names, titles, funders and people match
     fuzzily (a typo still finds them); rationale, summary and the captured
     synopsis match exactly. filters (all must hold): soon (closes within 30
-    days), match (has a roster match), embedded, ci, foundation, rolling (no
+    days), match (has a roster match), $CALL_TYPES (call types), rolling (no
     deadline), voted-up, voted-down, subaward-ok (stated as allowed), and the
     personal ones via-me, my-sources, my-digests; prefix any with - to
-    exclude it ("-voted-down"). category e.g. ci_program, embedded_software,
-    domain_subaward. funder is the paying organisation from the agency field
+    exclude it ("-voted-down"). category is one of $CATEGORIES. funder is the paying organisation from the agency field
     (NIH, NSF, ARPA-H, ...); source is the listing (grants.gov, sam.gov, a
     foundation page). funder, category and source take a comma list matching
     any ("NSF,NIH"). area is a roster research area.
@@ -213,14 +239,13 @@ def search_opportunities(
     out. match_kind: collaboration, program, contact (a contact is an
     outreach lead, not a past collaborator). match_status: warm, cold,
     prospect, departed, do-not-contact. solicitation_type: single-pi, center,
-    consortium, fellowship, training, conference, other. min_axes: subscore
-    floors, e.g. {"software_depth": 70}; axes are software_depth,
-    data_management, compute_intensity, sustainability, partner_need.
+    consortium, fellowship, training, conference, other. min_axes:
+    $AXES.
     solicitation_type and min_axes need the scorer's extracted fields, so
     calls assessed before those existed drop out.
 
     sort: relevance (default with a query; only meaningful with one), score
-    (default otherwise, the 0-100 relevance to research software - what
+    (default otherwise, the 0-100 $SCORE score - what
     "rank by relevance score" means), deadline, award-desc, award-asc, new.
     get_catalogue lists the funders, areas and their counts.
     """
@@ -267,11 +292,12 @@ _SCOPES = {"contacts": "via-me", "sources": "my-sources", "subscriptions": "my-d
 
 
 @mcp.tool(annotations=_READ, meta=_CARD)
+@_doc
 def my_opportunities(ctx: Context, scope: str = "all", page_size: int = 25) -> dict:
     """Open calls tied to you, the signed-in person.
 
     scope:
-      contacts       matched to a collaborator you are the NCSA contact for
+      contacts       matched to a collaborator you are the $ORG contact for
       sources        from funder pages or feeds you added in the dashboard
       subscriptions  in the email digests you subscribe to
       all            each of the above, separately
@@ -309,9 +335,10 @@ def preview_feed(ctx: Context, feed: str, since_days: int = 7, limit: int = 25) 
 
 
 @mcp.tool(annotations=_READ)
+@_doc
 def list_roster(ctx: Context) -> dict:
     """Everyone on the roster, the reviewed file and dashboard additions
-    together, with how to reach them and who at NCSA already knows them.
+    together, with how to reach them and who at $ORG already knows them.
     Check here before add_roster_entry: a duplicate splits one person's
     history in two."""
     return _rest(ctx, "roster_list")

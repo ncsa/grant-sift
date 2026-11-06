@@ -143,6 +143,18 @@ roster:
   staffKey: ""
   staffMountPath: /app/config/ncsa_staff.yaml
 
+# Who this instance is for: org, scoring prompt, wording, digests, chips.
+# Empty uses config/profile.yaml baked into the image (the NCSA RSE group).
+# For a sibling instance, create a ConfigMap from your own profile and name it
+# here; it is mounted over the default. Restart the pod after editing it.
+#   kubectl -n grant-sift-x create configmap grant-sift-profile \
+#     --from-file=profile.yaml=config/profile.general.yaml
+# Changing its scoring: block means re-scoring:
+#   kubectl -n grant-sift-x exec deploy/grant-sift -- python run.py assess --rescore-all
+profile:
+  existingConfigMap: ""
+  key: profile.yaml
+
 # Secret env. Leave empty in git; supply via --set, --set-file, or values-secrets.yaml.
 secrets:
   # Required for the assess step of the nightly run.

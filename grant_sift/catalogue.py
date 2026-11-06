@@ -169,7 +169,7 @@ def mine(conn, principal):
                if s.get("created_by") == principal.label}
     email = (principal.email or principal.username).strip().lower()
     if "@" not in email:
-        email += "@illinois.edu"
+        email += "@" + profile.PROFILE["org"]["email_domain"]
     feeds = [pipeline.FEEDS[f] for f in db.list_feeds_for_email(conn, email)
              if f in pipeline.FEEDS]
     return sources, feeds

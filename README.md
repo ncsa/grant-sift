@@ -38,29 +38,58 @@ contain them.
 
 ### Profile: who this deployment is for
 
-`config/profile.yaml` holds what is written for one group: the header tagline,
-the overview wording, the group description in the Ask prompt, the email
-digests, and the "Call type" chips. Digests and chips are rules over columns
-every scored call already has (`category`, `score`, `source`, `deadline`,
-`match_name`), so editing them needs no re-scoring and no database change:
+Nothing about the group is written in code. `config/profile.yaml` holds the
+organisation (name, sign-in email domain, crawler contact, AI gateway name),
+the scoring prompt (who the group is, categories, score guide, axes, and what
+the score is called), the page wording and the Ask prompt's group description,
+the email digests, and the "Call type" chips. The shipped file is the NCSA RSE
+group; `config/profile.general.yaml` is a field-neutral one for any university
+researcher.
+
+Two kinds of setting, with different costs:
+
+- **`scoring:`** is what the model judges each call on. Score, category and
+  axes are stored per call, so changing it means re-scoring:
+  `python run.py assess --rescore-all` requeues every open call (old scores
+  stay visible until replaced), then each `assess` or nightly run works through
+  `--limit` of them. The default profile rebuilds the RSE prompt byte for byte
+  (`tests/fixtures/assess_system_rse.txt`), so that instance's scores stay valid.
+- **Everything else** is rules and wording over what is already stored. Change
+  freely; no re-scoring and no database change. Digests and chips are rules
+  over `category`, `score`, `source`, `deadline` and `match_name`:
 
 ```yaml
 digests:
   - id: ci-programs                 # subscriptions are stored under this id
     label: CI / research-software programs
-    category: [ci_program]
+    category: [ci_program]          # must be a scoring category
     min_score: 60
 ```
 
 Rule keys: `category`, `source`, `exclude_source`, `min_score`,
-`deadline_within_days`, `has_match`. An unknown key stops the app at start-up
-rather than becoming a rule that matches everything. Set `GRANT_SIFT_PROFILE`
-to use another file; restart to pick up an edit.
+`deadline_within_days`, `has_match`. An unknown key, a category the scorer
+never assigns, or a duplicate id stops the app at start-up rather than
+silently matching everything or nothing. Set `GRANT_SIFT_PROFILE` to use
+another file; restart to pick up an edit.
 
-Not in the profile: the scoring prompt (`ASSESS_SYSTEM` in `grant_sift/llm.py`),
-which sets the categories and what the 0–100 score measures. The score is
-stored per call, so changing it means re-scoring; until that moves to config
-the dashboard labels the score for what it is, **RSE relevance**.
+**A sibling instance** (another department, or no field at all) is a separate
+Helm release with its own database, roster and profile:
+
+```bash
+kubectl create namespace grant-sift-general
+kubectl -n grant-sift-general create configmap grant-sift-profile \
+  --from-file=profile.yaml=config/profile.general.yaml
+# values: profile.existingConfigMap: grant-sift-profile, its own ingress host,
+# roster ConfigMap and secrets; then helm upgrade --install as below.
+```
+
+To skip re-crawling, seed its database from a copy of an existing one with the
+group's own state removed, then re-score:
+
+```sql
+DELETE FROM assessments; DELETE FROM feedback; DELETE FROM roster_entries;
+DELETE FROM subscribers; DELETE FROM sent_log;
+```
 
 ## Commands
 
@@ -517,11 +546,11 @@ open calls fit it?” The Idea box sits under Search with an on/off switch. On,
 the main list becomes the calls that fit the idea, best fit first, each with
 why it fits; the recommendation (the call to go for, and the runner-up) sits
 above the list. Funder, deadline, award and the other filters narrow the
-matched set, and the sort “Highest RSE relevance” becomes “Best idea fit”. Off, the
+matched set, and the sort “Highest <score label>” becomes “Best idea fit”. Off, the
 dashboard is as it was, with its filters and sort.
 
 Each row leads with one of two scores, labelled so they are never confused:
-**RSE relevance** (the 0–100 relevance score, the same for everyone) or,
+the profile’s score (“RSE relevance” by default: the 0–100 score, the same for everyone) or,
 in Idea match, **Idea fit** (fit to this idea, from `/api/focus` and
 `/api/rescore`). Hovering either label explains it. The two are never averaged.
 

@@ -236,9 +236,8 @@ def public_config():
             # What Ask and Idea match run on when the viewer brings no key.
             "ai": {"shared": bool(llm.API_KEY), "model": llm.MODEL,
                    "gateway": urlparse(llm.BASE_URL).hostname},
-            # Wording and call-type chips from config/profile.yaml, and the
-            # name of what the score measures, which follows the scoring prompt.
-            "profile": profile.public() | {"score_label": llm.SCORE_LABEL}}
+            # Wording, the score's name and call-type chips (config/profile.yaml).
+            "profile": profile.public()}
 
 
 @app.get("/api/whoami")
@@ -369,7 +368,7 @@ def _normalize_email(raw: str) -> str:
         raise HTTPException(400, "email required")
     if "@" not in email:
         # Keycloak sometimes puts NetID in the email claim.
-        email = f"{email}@illinois.edu"
+        email = f"{email}@{profile.PROFILE['org']['email_domain']}"
     if not _EMAIL_RE.match(email) or len(email) > 200:
         raise HTTPException(400, "invalid email address")
     return email

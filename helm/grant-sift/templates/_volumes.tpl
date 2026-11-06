@@ -15,6 +15,12 @@
   readOnly: true
 {{- end }}
 {{- end }}
+{{- if .Values.profile.existingConfigMap }}
+- name: profile
+  mountPath: /app/config/profile.yaml
+  subPath: {{ .Values.profile.key | quote }}
+  readOnly: true
+{{- end }}
 {{- end }}
 
 {{- define "grant-sift.volumes" -}}
@@ -27,5 +33,10 @@
 - name: roster
   configMap:
     name: {{ .Values.roster.existingConfigMap | quote }}
+{{- end }}
+{{- if .Values.profile.existingConfigMap }}
+- name: profile
+  configMap:
+    name: {{ .Values.profile.existingConfigMap | quote }}
 {{- end }}
 {{- end }}
