@@ -71,11 +71,6 @@ a:hover { color: var(--il-blue); text-decoration: underline; }
 }
 .tbtn:hover, .tbtn[aria-expanded="true"] { background: rgba(255, 255, 255, 0.14); }
 #databtn .flag { width: 8px; height: 8px; border-radius: 999px; background: var(--il-orange); }
-#shelfbtn .n {
-  font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
-  color: var(--il-blue); background: #fff; border-radius: 999px;
-  min-width: 20px; padding: 1px 7px; text-align: center;
-}
 .acct {
   font: inherit; cursor: pointer; margin-left: 4px;
   height: 38px; padding: 0 8px 0 4px; display: inline-flex; align-items: center; gap: 6px;
@@ -115,14 +110,6 @@ a:hover { color: var(--il-blue); text-decoration: underline; }
           color: var(--notice-fg); background: var(--notice-bg); }
 .status.ready { color: var(--il-blue); background: var(--tint-blue); }
 
-.aibtn {
-  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
-  height: 38px; padding: 0 14px; display: inline-flex; align-items: center; gap: 8px;
-  color: var(--il-blue); background: #fff; border: 1px solid #fff; border-radius: 8px;
-}
-.aibtn:hover { background: var(--tint-blue); }
-.aibtn .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--il-orange); }
-.aibtn .dot[hidden] { display: none; }
 
 /* One-line announcement under the top bar; dismissed for good per browser. */
 .newsbar { background: var(--tint-blue); border-bottom: 1px solid var(--border); }
@@ -159,6 +146,10 @@ main.wrap { padding-top: 32px; padding-bottom: 64px; }
 
 /* ---- find row + quick views ---- */
 .controls { margin-top: 20px; display: flex; flex-direction: column; gap: 14px; }
+/* Says which set the filters narrow: every call, or the idea's matches. */
+.facethead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.facethead h2 { margin: 0; }
+.facetnote { font-size: 13px; color: var(--text-2); }
 .find { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field > .flbl { font-size: 12px; font-weight: 600; color: var(--text-3); }
@@ -271,7 +262,7 @@ main.wrap { padding-top: 32px; padding-bottom: 64px; }
 .meta .via { color: var(--text-3); }
 .cap { color: var(--il-altgeld); }
 .also a { color: inherit; }
-.kept, .verdict {
+.verdict {
   font-size: 12px; font-weight: 500; border-radius: 999px; padding: 2px 9px;
   color: var(--il-industrial); background: var(--tint-blue);
 }
@@ -378,6 +369,7 @@ h2.title a { color: var(--il-blue); }
 .amtnote { font-size: 12.5px; color: var(--text-3); margin-top: 3px; line-height: 1.4; }
 .noamt { font-size: 15px; color: var(--text-3); margin-top: 3px; }
 /* Fit is a score and a word, not a bar: a filling bar reads as progress. */
+.score[title] { cursor: help; }
 .score .num { display: flex; align-items: baseline; gap: 2px; margin-top: 3px; }
 .score .num b { font-family: var(--serif); font-size: 20px; line-height: 1.2; font-weight: 500;
                 font-variant-numeric: tabular-nums; }
@@ -476,8 +468,6 @@ h2.title a { color: var(--il-blue); }
    power-user options grouped together. */
 .aibar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin-top: 4px;
          font-size: 12.5px; color: var(--text-3); }
-.aipriv { display: inline-flex; align-items: center; color: var(--text-3); cursor: default; }
-.aipriv:focus-visible { border-radius: 4px; }
 .aipower { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .aipower .aplbl { font-weight: 600; color: var(--text-3); }
 .aipower .aplbl::after { content: ":"; }
@@ -503,7 +493,8 @@ h2.title a { color: var(--il-blue); }
   font: inherit; font-size: 13.5px; font-weight: 600; height: 40px; padding: 0 16px; cursor: pointer;
   color: var(--il-blue); background: #fff; border: 1px solid var(--border-strong); border-radius: 8px;
 }
-.secondary:hover { background: var(--tint-blue); }
+.secondary:hover:not(:disabled) { background: var(--tint-blue); }
+.secondary:disabled { opacity: .5; cursor: not-allowed; }
 .linkbtn {
   font: inherit; font-size: 13px; font-weight: 600; color: var(--il-industrial);
   background: none; border: 0; padding: 0 4px; min-height: 28px; cursor: pointer;
@@ -536,11 +527,10 @@ h2.title a { color: var(--il-blue); }
   background: #fff; border-top: 6px solid var(--il-orange); border-radius: 4px;
   padding: 24px 28px 28px; color: var(--il-blue);
 }
-/* Idea match and the two Data panels share one large size. */
-#shelf-modal .modal, #roster-modal .modal, #sources-modal .modal {
+/* The two Data panels share one large size. */
+#roster-modal .modal, #sources-modal .modal {
   width: min(1180px, 100%); max-height: min(92vh, 960px);
 }
-#shelf-modal .modal { padding: 0; }
 .modal header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
 .modal header h2 { margin: 0; font-family: var(--serif); font-size: 24px; font-weight: 500; letter-spacing: -0.01em; }
 .modal .x {
@@ -578,51 +568,117 @@ h2.title a { color: var(--il-blue); }
 .pill.prospect { color: var(--text-3); }
 .pill.departed, .pill.stale { color: var(--il-altgeld); border-color: var(--il-altgeld); }
 
-/* ---- Idea match panel ---- */
-#shelf-modal header { padding: 24px 32px 16px; margin: 0; border-bottom: 1px solid var(--rule); }
-#shelf-modal header h2 { font-size: 26px; line-height: 1.15; }
-#shelf-modal header p { margin: 4px 0 0; font-size: 13.5px; color: var(--text-3); max-width: 60ch; }
-#shelf-body { padding: 24px 32px 32px; display: flex; flex-direction: column; gap: 24px; }
-/* The pick sits beside the idea, so it shows without scrolling past the form. */
-.ideagrid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 24px;
-            align-items: stretch; }
-#shelf-body .ideaf { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.bkout.pending { display: flex; flex-direction: column; background: var(--surface-2);
-                 border: 1px dashed var(--border-strong); }
-.bkout .placeholder { margin: 8px 0 0; font-size: 14px; line-height: 1.55; color: var(--text-3); }
-#shelf-body textarea {
-  width: 100%; font: inherit; font-size: 15px; line-height: 1.6; color: var(--il-blue);
-  padding: 14px 16px; resize: vertical; min-height: 280px;
-  border: 1px solid var(--border); border-radius: 10px; background: #fff;
+/* ---- Idea match: its own card, above the filters ---- */
+.ideabox { margin-top: 24px; display: flex; flex-direction: column; gap: 10px; padding: 16px 18px;
+           background: var(--tint-blue); border: 1px solid transparent; border-radius: 12px; }
+/* While the list is the idea's matches, the card that made it is marked. */
+.ideabox.on { border-color: var(--il-industrial); }
+.ideahead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; cursor: help; }
+.ideahead h2 { margin: 0; display: inline-flex; align-items: center; gap: 8px;
+               font-family: var(--serif); font-size: 19px; font-weight: 600; color: var(--il-blue); }
+.ideahead h2 .ic { color: var(--il-industrial); align-self: center; }
+.ideahead .about { font-size: 13px; color: var(--text-2); }
+.ideahead .clearidea { margin-left: auto; align-self: center; display: inline-flex; align-items: center;
+                       gap: 6px; cursor: pointer; }
+/* Idea on the left over two rows; Upload and Match on the first, and the way
+   back to kept matches under them, where the tall box leaves room. */
+.idearow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: start; gap: 10px; }
+.idearow textarea { grid-row: 1 / span 2; }
+.showfit {
+  grid-column: 2 / 4; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 8px 14px; font: inherit; font-size: 14px; font-weight: 600; line-height: 1.3;
+  color: var(--il-industrial); background: #fff; border: 1.5px solid var(--il-industrial);
+  border-radius: 8px; cursor: pointer; text-align: left;
 }
-.shelfacts { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.showfit:hover { background: var(--il-industrial); color: #fff; }
+.showfit[hidden] { display: none; }
+.idearow textarea {
+  flex: 1; min-width: 0; font: inherit; font-size: 15px; line-height: 1.55; color: var(--il-blue);
+  padding: 10px 14px; height: 44px; min-height: 44px; resize: vertical;
+  border: 1px solid var(--border-strong); border-radius: 10px; background: #fff;
+}
+/* One line until there is an idea in it; then room for a paragraph. Held
+   open while it has text, so leaving the field does not shift Match out
+   from under the pointer. */
+.idearow textarea:focus, .idearow textarea:not(:placeholder-shown) { height: 112px; }
+/* An empty one-line box shows its prompt on that line, not half of two. */
+.idearow textarea:placeholder-shown:not(:focus) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.idearow .primary { flex: none; min-width: 112px; }
+.idearow .secondary { flex: none; height: 44px; display: inline-flex; align-items: center; gap: 6px; }
+/* A file dragged over the card: the whole card is the target. */
+.ideabox { position: relative; }
+.ideabox .dropnote { display: none; }
+.ideabox.drop .dropnote {
+  display: flex; align-items: center; justify-content: center; position: absolute; inset: 0;
+  border: 2px dashed var(--il-industrial); border-radius: 12px; background: rgba(234, 240, 248, .94);
+  font-size: 16px; font-weight: 600; color: var(--il-blue); pointer-events: none;
+}
+/* Matching: the idea is locked and a status bar says what is happening. */
+.ideabox.busy { border-color: var(--il-industrial); }
+.ideabox.busy .idearow textarea { background: var(--surface-2); color: var(--text-2); cursor: not-allowed; }
+/* The attached file: one chip under the box, which then holds the notes. */
+.ideadoc { display: flex; align-items: center; gap: 8px; min-width: 0; align-self: flex-start; max-width: 100%;
+           padding: 6px 6px 6px 12px; background: #fff; border: 1px solid var(--border-strong); border-radius: 999px;
+           font-size: 14px; color: var(--il-blue); }
+.ideadoc[hidden] { display: none; }
+.ideadoc > .ic { flex: none; color: var(--il-industrial); }
+.ideadoc .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ideadoc .meta { flex: none; font-size: 13px; color: var(--text-3); }
+.ideadoc.trimmed .meta { color: var(--il-altgeld); }
+.ideadoc button { flex: none; display: inline-flex; align-items: center; justify-content: center;
+                  width: 28px; height: 28px; padding: 0; border: 0; border-radius: 999px;
+                  background: transparent; color: var(--text-2); cursor: pointer; }
+.ideadoc button:hover:not(:disabled) { background: var(--surface-2); color: var(--il-blue); }
+.ideadoc button:disabled { opacity: .4; cursor: not-allowed; }
+@media (max-width: 560px) { .ideadoc .meta { display: none; } }
+.ideastatus { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+              padding: 12px 14px; background: #fff; border: 1px solid var(--border-strong);
+              border-left: 4px solid var(--il-industrial); border-radius: 10px; }
+.ideastatus[hidden] { display: none; }
+.ideastatus .msg { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; color: var(--il-blue); }
+.ideastatus .time { font-size: 13px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.ideastatus .spin { width: 18px; height: 18px; flex: none; border-radius: 999px;
+                    border: 2.5px solid var(--tint-blue); border-top-color: var(--il-industrial);
+                    animation: ideaspin .8s linear infinite; }
+.ideastatus .bar { flex: 1 1 100%; height: 4px; border-radius: 999px; overflow: hidden;
+                   background: var(--tint-blue); }
+.ideastatus .bar i { display: block; width: 35%; height: 100%; border-radius: 999px;
+                     background: var(--il-industrial); animation: ideabar 1.6s ease-in-out infinite; }
+@keyframes ideaspin { to { transform: rotate(360deg); } }
+@keyframes ideabar { 0% { transform: translateX(-100%); } 100% { transform: translateX(290%); } }
+@media (prefers-reduced-motion: reduce) {
+  .ideastatus .spin, .ideastatus .bar i { animation-duration: 3s; }
+}
+.ideafoot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+            gap: 4px 16px; }
+.ideafoot .hint { font-size: 12.5px; color: var(--text-2); }
+.ideafoot .hint:empty { display: none; }
+.ideafoot .hint.err { color: var(--il-altgeld); font-weight: 500; }
+.ideafoot .aibar { margin: 0 0 0 auto; }
+.ideafoot .linkbtn { padding: 0; }
+.resultl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ideapill {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 12px;
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  color: #fff; background: var(--il-blue); border: 0; border-radius: 999px;
+}
+.ideapill:hover { background: #0C1C36; }
 .primary {
   font: inherit; font-size: 14px; font-weight: 600; color: #fff; background: var(--il-blue);
   border: 0; border-radius: 8px; height: 44px; padding: 0 18px; cursor: pointer;
 }
 .primary:hover:not(:disabled) { background: #0C1C36; }
 .primary:disabled { opacity: .6; cursor: progress; }
-#shelf-body .hint { font-size: 12.5px; color: var(--text-3); }
-.bkout { background: var(--tint-blue); border-radius: 12px; padding: 20px 22px; min-width: 0;
-         overflow-y: auto; max-height: 360px; }
+/* The recommendation: above the list, while Idea match is on. */
+#idea-rec { margin-top: 20px; }
+.bkout { background: var(--tint-blue); border-radius: 12px; padding: 20px 22px; min-width: 0; }
+.bkout.pending { background: var(--surface-2); border: 1px dashed var(--border-strong); }
+.bkout .placeholder { margin: 8px 0 0; font-size: 14px; line-height: 1.55; color: var(--text-3); }
 .bkout .tag { display: block; margin: 0; }
-.bkout .pick { margin: 8px 0 0; font-family: var(--serif); font-size: 19px; line-height: 1.45; }
-.bkout .rest { margin: 10px 0 0; font-size: 14px; line-height: 1.55; color: var(--text-2); }
+.bkout .pick { margin: 8px 0 0; font-family: var(--serif); font-size: 19px; line-height: 1.45; max-width: 90ch; }
+.bkout .rest { margin: 10px 0 0; font-size: 14px; line-height: 1.55; color: var(--text-2); max-width: 110ch; }
 .bkout a { color: var(--il-blue); font-weight: 600; text-decoration: underline;
            text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
-.shelfhead { display: flex; justify-content: space-between; align-items: baseline;
-             padding-bottom: 10px; border-bottom: 1px solid var(--il-blue);
-             font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
-#shelf-list { margin: -24px 0 0; padding: 0; list-style: none; }
-#shelf-list .row:last-child { border-bottom: none; }
-#shelf-list .when { flex-basis: 92px; }
-#shelf-list .body { flex-basis: 420px; }
-#shelf-list h2.title { font-size: 22px; }
-#shelf-list .why { font-size: 15.5px; }
-#shelf-list .meta .mininum { display: inline-flex; align-items: baseline; gap: 2px; }
-#shelf-list .meta .mininum b { font-family: var(--serif); font-size: 17px; font-weight: 500;
-                               color: var(--il-blue); font-variant-numeric: tabular-nums; }
-#shelf-list .mute { margin: 0; color: var(--text-3); font-size: 14px; }
 
 .empty { padding: 60px 0; text-align: center; color: var(--text-3); list-style: none; }
 .empty b { font-family: var(--serif); font-size: 20px; font-weight: 500; display: block;
@@ -639,10 +695,18 @@ footer a { margin-left: 6px; }
 }
 /* Phones: one column, Fit then Body then Deadline & award. */
 @media (max-width: 760px) {
-  #shelfbtn .lbl, #databtn .lbl, .tagline { display: none; }
+  #databtn .lbl, .tagline { display: none; }
   .advbody .find { grid-template-columns: 1fr; }
   .advbody .field.range { grid-column: auto; }
-  .ideagrid { grid-template-columns: 1fr; }
+  /* Phones: the card stays short. Match keeps its place beside the box, and
+     the model options are in the Account menu already. */
+  .ideabox { padding: 14px; }
+  .idearow .primary { min-width: 0; padding: 0 14px; }
+  .ideafoot .aibar { display: none; }
+  .idearow .secondary { padding: 0 12px; }
+  .idearow .secondary .lbl { display: none; }
+  .idearow textarea { grid-row: 1; }
+  .showfit { grid-column: 1 / -1; }
   .lead { flex: none; }
   .lead .score { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
   .lead .score .num b { font-size: 24px; }
@@ -651,7 +715,6 @@ footer a { margin-left: 6px; }
   .wrap { padding: 0 16px; }
   main.wrap { padding-top: 28px; }
   .overview h1 { font-size: 30px; }
-  .aibtn { display: none; }
   .chipgroup:not([hidden]) ~ .chipgroup:not([hidden]) { margin-left: 0; padding-left: 0; border-left: 0; }
   .filters { gap: 10px 20px; }
   .find .field { flex: 1 1 100%; }
@@ -663,8 +726,6 @@ footer a { margin-left: 6px; }
   .body { flex: none; }
   .side { margin-left: 0; gap: 32px; }
   h2.title { font-size: 20px; }
-  #shelf-modal header { padding: 24px 20px 16px; }
-  #shelf-body { padding: 20px; }
   .modal { padding: 20px; }
   .modal-backdrop { padding: 8px; }
 }

@@ -486,15 +486,24 @@ rather than anonymous.
 
 ## Idea match
 
-**Idea match** is the dashboard panel for “I have a project idea — which open
-calls fit it?” It combines reverse lookup (#6) and a browser-local shortlist
-(#7) in one place. The homepage list is left alone; matches never filter it.
+**Idea match** is a mode of the dashboard for “I have a project idea — which
+open calls fit it?” The Idea box sits under Search with an on/off switch. On,
+the main list becomes the calls that fit the idea, best fit first, each with
+why it fits; the recommendation (the call to go for, and the runner-up) sits
+above the list. Funder, deadline, award and the other filters narrow the
+matched set, and the sort “Best overall fit” becomes “Best idea fit”. Off, the
+dashboard is as it was, with its filters and sort.
+
+Each row leads with one of two scores, labelled so they are never confused:
+**Overall fit** (the group’s 0–100 relevance score, the same for everyone) or,
+in Idea match, **Idea fit** (fit to this idea, from `/api/focus` and
+`/api/rescore`). Hovering either label explains it. The two are never averaged.
 
 ```
-idea ──► Match with all open calls ──► prune ──► edit idea ──► auto re-rank
+idea ──► Match ──► matches in the list ──► filter / sort ──► edit idea ──► auto re-rank
 ```
 
-**Nothing about the idea is stored on the server.** The paragraph, the kept
+**Nothing about the idea is stored on the server.** The paragraph, the matched
 calls and the recommendation live in `localStorage` / the tab only — the same
 posture as the chat transcript. Clear browser data and they are gone; they do not
 follow you to another device.
@@ -508,9 +517,36 @@ follow you to another device.
 | `POST /api/rescore` | Re-score kept calls against the idea as now written; pick one | ~2k tokens, seconds |
 
 Matching shows elapsed time and staged status while `/api/focus` runs. When it
-finishes, the panel opens with the hits and automatically generates a
-recommendation. Editing the idea and leaving the field re-ranks the kept calls
-without another full catalogue search.
+finishes, the list fills with the hits and a recommendation follows. Editing
+the idea and leaving the field re-ranks the matches without another full
+catalogue search; Match again searches the whole catalogue with the new text.
+
+**From a file:** one file, attached with Upload file or by dropping it on the
+Idea box. `.txt` and `.md` are read as text; `.pdf` with pdf.js and `.docx`
+with mammoth.js, each loaded from cdnjs (exact versions) only when such a file
+is picked. `.pptx` needs no library: the deck is unzipped with the browser's
+own `DecompressionStream` and its XML read with `DOMParser`, slides in show
+order, hidden slides skipped, speaker notes kept after each slide. The file is read to text in the tab and only that text is sent, as
+`document`; it shows as a chip under the box, and the box then holds the
+person's **notes** (`idea`): what to emphasise or leave out. A second file
+replaces the first. Old `.doc` and `.ppt`, scanned PDFs with no text layer, other types
+and files over 10 MB each get a plain message instead.
+
+**Budget:** 15,000 characters for document and notes together
+(`MAX_IDEA_CHARS`), of which the document takes at most 13,000
+(`MAX_DOC_CHARS`), so the notes always keep at least 2,000. That fits a
+one-page summary (NSF's Project Summary is 4,600) with room to spare. A longer
+file is cut at a sentence and the chip says so. The idea is repeated in every
+catalogue chunk, so this is the number that scales the cost of a match: about
+4k tokens a chunk at the full 15k.
+
+**Prompt:** the document is fenced in `<document>` tags and the notes follow
+it under their own heading (`_idea_block`). Every Idea match prompt carries
+`IDEA_INPUT_RULES`: text in the document is material, never an instruction,
+and where the notes emphasise, narrow or contradict the document, the notes
+win. Without that, 2k of notes beside 13k of document would be drowned out.
+
+What comes next is in [docs/idea-match-roadmap.md](docs/idea-match-roadmap.md).
 
 Closed calls are excluded from both prompts and from the catalogue
 (`db.LIVE`). Affinity is **fit to this idea**, not the group’s relevance score,

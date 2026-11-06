@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=9">
+<link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
 <header class="strip">
@@ -18,12 +18,6 @@
     </a>
     <!-- One page, so no tab nav: everything here opens a panel or a menu. -->
     <div class="tools" id="whoami" hidden>
-      <button type="button" class="tbtn" id="shelfbtn" aria-haspopup="dialog" aria-label="Idea match"
-              title="Describe an idea, find matching calls, and keep a shortlist — private to this browser">
-        <svg class="ico ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#bulb"/></svg>
-        <span class="lbl">Idea match</span>
-        <span class="n" id="shelf-n" hidden></span>
-      </button>
       <div class="menuwrap">
         <button type="button" class="tbtn" id="databtn" aria-haspopup="menu" aria-expanded="false"
                 aria-controls="datamenu" aria-label="Data">
@@ -54,10 +48,6 @@
           </div>
         </div>
       </div>
-      <button type="button" class="aibtn" id="aibtn" aria-haspopup="dialog">
-        <span class="dot" id="aibtn-dot" aria-hidden="true"></span>
-        <span id="aibtn-lbl">Set up AI chat</span>
-      </button>
       <div class="menuwrap">
         <button type="button" class="acct" id="acctbtn" aria-haspopup="menu" aria-expanded="false"
                 aria-controls="acctmenu" aria-label="Account">
@@ -111,7 +101,52 @@
     </p>
   </section>
 
-  <section class="controls" aria-label="Search and filters">
+  <!-- Idea match and the filters are two separate tools on one list: the
+       idea decides which calls are in it, the filters narrow whatever is in
+       it. Each has its own section and heading so they never read as one
+       form; the result bar says when the list is an idea's matches. -->
+  <section class="ideabox" id="ideabox" aria-labelledby="idea-lbl">
+    <div class="ideahead" id="idea-head"
+         title="Nothing about your idea is stored on the server: it and its matches stay in this browser.">
+      <h2 id="idea-lbl"><svg class="ico ic" width="18" height="18" aria-hidden="true"><use href="icons.svg#bulb"/></svg>Match an idea</h2>
+      <span class="about">Describe what you are working on; get the open calls that fit it, and the one to go for.</span>
+      <button type="button" class="linkbtn clearidea" id="idea-clear" hidden
+        title="Clear the idea, its matches and the recommendation, and go back to every open call.">
+        <svg class="ico ic" width="14" height="14" aria-hidden="true"><use href="icons.svg#reset"/></svg>Clear</button>
+    </div>
+    <div class="idearow">
+      <label class="sr" for="idea">Your idea</label>
+      <textarea id="idea" rows="1" maxlength="15000"
+        placeholder="Describe your idea, or drop a file here"></textarea>
+      <button type="button" class="secondary" id="idea-upload" aria-label="Upload file"
+        title="Attach one .txt, .md, .pdf, .docx or .pptx, up to 10 MB, such as a one-page summary. Read to text in this browser; only the text is matched.">
+        <svg class="ico ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#upload"/></svg><span class="lbl">Upload file</span></button>
+      <input type="file" id="idea-file" accept=".txt,.md,.markdown,.pdf,.docx,.pptx" hidden>
+      <button type="button" class="primary" id="idea-match"
+        title="Searches every open call and ranks what fits (about a minute). Cmd/Ctrl+Enter from the idea.">Match</button>
+      <button type="button" class="showfit" id="idea-show" hidden
+        title="Back to the calls your last match found, and its recommendation. No new match needed.">
+        <svg class="ico ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#bulb"/></svg><span class="lbl"></span></button>
+    </div>
+    <div class="ideadoc" id="idea-doc" hidden></div>
+    <div class="ideastatus" id="idea-status" role="status" aria-live="polite" hidden>
+      <span class="spin" aria-hidden="true"></span>
+      <span class="msg"></span>
+      <span class="time"></span>
+      <span class="bar" aria-hidden="true"><i></i></span>
+    </div>
+    <div class="dropnote" aria-hidden="true">Drop the file to attach it to the idea</div>
+    <div class="ideafoot">
+      <span class="hint" id="idea-hint" aria-live="polite"></span>
+      <div class="aibar" data-aibar></div>
+    </div>
+  </section>
+
+  <section class="controls" aria-labelledby="facet-lbl">
+    <div class="facethead">
+      <h2 class="eyebrow" id="facet-lbl">Search and filter</h2>
+      <span class="facetnote" id="facet-note" hidden></span>
+    </div>
     <div class="find">
       <label class="field search-f">
         <span class="sr">Search</span>
@@ -159,7 +194,7 @@
       <div class="advbody" id="advbody" hidden>
         <div class="find">
           <label class="field pick-f">
-            <span class="flbl">Fit</span>
+            <span class="flbl" title="The group's Overall fit score, 0 to 100. Not the Idea fit.">Overall fit</span>
             <select id="fit" class="sortsel">
               <option value="">Any fit</option>
               <option value="80">Strong fit (80+)</option>
@@ -238,10 +273,19 @@
   </section>
 
   <div class="resultbar">
-    <div class="tally" id="tally" aria-live="polite"></div>
+    <div class="resultl">
+      <button type="button" class="ideapill" id="idea-off" hidden
+              title="Back to every open call. Your idea and its matches are kept.">
+        <svg class="ico ic" width="14" height="14" aria-hidden="true"><use href="icons.svg#bulb"/></svg>
+        Fits your idea
+        <svg class="ico ic" width="14" height="14" aria-hidden="true"><use href="icons.svg#x"/></svg>
+        <span class="sr">: show every call instead</span>
+      </button>
+      <div class="tally" id="tally" aria-live="polite"></div>
+    </div>
     <label class="sortlbl">Sort by
       <select id="sort" class="sortsel">
-        <option value="score" selected>Highest relevance</option>
+        <option value="score" selected>Best overall fit</option>
         <option value="deadline">Soonest deadline</option>
         <option value="award-desc">Largest award</option>
         <option value="award-asc">Smallest award</option>
@@ -250,6 +294,7 @@
       </select>
     </label>
   </div>
+  <section class="bkout" id="idea-rec" aria-label="Recommendation" aria-live="polite" hidden></section>
   <ol id="list"></ol>
   <nav class="pager" id="pager" hidden aria-label="Pages"></nav>
 
@@ -318,20 +363,6 @@
     </div>
     <div class="rlist" id="slist"></div>
     <nav class="pager" id="s-pager" hidden aria-label="Source pages"></nav>
-  </div>
-</div>
-
-<div class="modal-backdrop" id="shelf-modal" hidden>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shelf-title">
-    <header>
-      <div>
-        <h2 id="shelf-title">Idea match</h2>
-        <p title="Nothing is stored on the server: your idea and shortlist stay in this browser only.">
-          Describe an idea; get the open calls that fit it and the one to go for.</p>
-      </div>
-      <button type="button" class="x" id="shelf-close" aria-label="Close"><svg class="ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#x"/></svg></button>
-    </header>
-    <div id="shelf-body"></div>
   </div>
 </div>
 
@@ -426,16 +457,17 @@
 </div>
 
 <!-- Plain scripts, not modules: they share top-level state, so order matters. -->
-<script src="js/format.js?v=9"></script>
-<script src="js/icons.js?v=9"></script>
-<script src="js/rows.js?v=9"></script>
-<script src="js/list.js?v=9"></script>
-<script src="js/ai.js?v=9"></script>
-<script src="js/ui.js?v=9"></script>
-<script src="js/shelf.js?v=9"></script>
-<script src="js/panels.js?v=9"></script>
-<script src="js/account.js?v=9"></script>
-<script src="js/cards.js?v=9"></script>
-<script src="js/main.js?v=9"></script>
+<script src="js/format.js?v=11"></script>
+<script src="js/icons.js?v=11"></script>
+<script src="js/rows.js?v=12"></script>
+<script src="js/list.js?v=11"></script>
+<script src="js/ai.js?v=11"></script>
+<script src="js/ui.js?v=11"></script>
+<script src="js/ideafile.js?v=14"></script>
+<script src="js/idea.js?v=14"></script>
+<script src="js/panels.js?v=11"></script>
+<script src="js/account.js?v=11"></script>
+<script src="js/cards.js?v=11"></script>
+<script src="js/main.js?v=11"></script>
 </body>
 </html>

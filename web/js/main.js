@@ -55,8 +55,7 @@ function boot(cat) {
   document.getElementById("foot").innerHTML =
     `Scored ${esc(scored)}. Scores and collaborator matches are model-generated; treat them as a first pass, not a decision.` +
     ` <a href="https://github.com/ncsa/grant-sift/wiki/Grant-Sift-in-Claude:-setup" target="_blank" rel="noopener">Connect your AI assistant (MCP)</a>`;
-  loadShelf();
-  paintShelfBtn();
+  bootIdea();
   render();
   probeAPI();
 }
