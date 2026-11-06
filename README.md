@@ -491,8 +491,13 @@ open calls fit it?” The Idea box sits under Search with an on/off switch. On,
 the main list becomes the calls that fit the idea, best fit first, each with
 why it fits; the recommendation (the call to go for, and the runner-up) sits
 above the list. Funder, deadline, award and the other filters narrow the
-matched set, and “Highest relevance” becomes “Best fit to idea”. Off, the
+matched set, and the sort “Best overall fit” becomes “Best idea fit”. Off, the
 dashboard is as it was, with its filters and sort.
+
+Each row leads with one of two scores, labelled so they are never confused:
+**Overall fit** (the group’s 0–100 relevance score, the same for everyone) or,
+in Idea match, **Idea fit** (fit to this idea, from `/api/focus` and
+`/api/rescore`). Hovering either label explains it. The two are never averaged.
 
 ```
 idea ──► Match ──► matches in the list ──► filter / sort ──► edit idea ──► auto re-rank

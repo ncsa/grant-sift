@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=13">
+<link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
 <header class="strip">
@@ -194,7 +194,7 @@
       <div class="advbody" id="advbody" hidden>
         <div class="find">
           <label class="field pick-f">
-            <span class="flbl">Fit</span>
+            <span class="flbl" title="The group's Overall fit score, 0 to 100. Not the Idea fit.">Overall fit</span>
             <select id="fit" class="sortsel">
               <option value="">Any fit</option>
               <option value="80">Strong fit (80+)</option>
@@ -285,7 +285,7 @@
     </div>
     <label class="sortlbl">Sort by
       <select id="sort" class="sortsel">
-        <option value="score" selected>Highest relevance</option>
+        <option value="score" selected>Best overall fit</option>
         <option value="deadline">Soonest deadline</option>
         <option value="award-desc">Largest award</option>
         <option value="award-asc">Smallest award</option>
@@ -459,12 +459,12 @@
 <!-- Plain scripts, not modules: they share top-level state, so order matters. -->
 <script src="js/format.js?v=11"></script>
 <script src="js/icons.js?v=11"></script>
-<script src="js/rows.js?v=11"></script>
+<script src="js/rows.js?v=12"></script>
 <script src="js/list.js?v=11"></script>
 <script src="js/ai.js?v=11"></script>
 <script src="js/ui.js?v=11"></script>
 <script src="js/ideafile.js?v=14"></script>
-<script src="js/idea.js?v=13"></script>
+<script src="js/idea.js?v=14"></script>
 <script src="js/panels.js?v=11"></script>
 <script src="js/account.js?v=11"></script>
 <script src="js/cards.js?v=11"></script>

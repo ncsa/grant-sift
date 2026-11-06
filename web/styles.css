@@ -369,6 +369,7 @@ h2.title a { color: var(--il-blue); }
 .amtnote { font-size: 12.5px; color: var(--text-3); margin-top: 3px; line-height: 1.4; }
 .noamt { font-size: 15px; color: var(--text-3); margin-top: 3px; }
 /* Fit is a score and a word, not a bar: a filling bar reads as progress. */
+.score[title] { cursor: help; }
 .score .num { display: flex; align-items: baseline; gap: 2px; margin-top: 3px; }
 .score .num b { font-family: var(--serif); font-size: 20px; line-height: 1.2; font-weight: 500;
                 font-variant-numeric: tabular-nums; }

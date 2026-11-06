@@ -146,7 +146,7 @@ function paintIdeaMode() {
     IDEA.matched && IDEA.matched !== ideaSig() ? " the earlier idea" : ""}`;
   // The same sort, named for what it ranks by in each mode.
   document.querySelector('#sort option[value="score"]').textContent =
-    on ? "Best fit to idea" : "Highest relevance";
+    on ? "Best idea fit" : "Best overall fit";
   const btn = document.getElementById("idea-match");
   btn.disabled = busy;
   btn.textContent = _matchBusy ? "Matching…" : _rankBusy ? "Picking…"
