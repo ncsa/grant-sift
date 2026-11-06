@@ -48,7 +48,7 @@ function reach(o) {
 // The next step after finding who to write to. One button, so the action row
 // stays one line; what the draft will claim is its tooltip.
 function introBtn(o) {
-  if (!canIntro(o)) return "";
+  if (!ROSTER_ON || !canIntro(o)) return "";
   const how = o.match_kind === "contact"
     ? "Written as a first contact: it never claims we have worked together."
     : "Cites the project we did together and quotes why this call needs us.";
@@ -178,7 +178,7 @@ function rowHTML(o, opts = {}) {
     o.match_kind === "program"
       ? `<span title="Something we run. There is no outside partner to approach; this call could fund work on it.">our own program</span>` : "",
   ].filter(Boolean).map(f => `<span class="cold"> · ${f}</span>`).join("");
-  const fit = o.match_name ? `
+  const fit = ROSTER_ON && o.match_name ? `
     <div class="fit">
       <div class="fithead">
         <div class="fitwho"><span class="eyebrow">Closest fit</span><b>${esc(o.match_name)}</b>${

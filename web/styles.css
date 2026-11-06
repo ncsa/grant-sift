@@ -37,6 +37,8 @@ a { color: var(--c-link); text-decoration: none; }
 a:hover { color: var(--c-primary); text-decoration: underline; }
 :focus-visible { outline: 2px solid var(--c-link); outline-offset: 2px; }
 [hidden] { display: none !important; }
+/* The viewer turned roster matches off (Who we know). Set on <html> by list.js. */
+.noroster [data-roster] { display: none !important; }
 
 .wrap { max-width: 1400px; margin: 0 auto; padding: 0 32px; }
 .eyebrow {
@@ -547,6 +549,12 @@ h2.title a { color: var(--c-primary); }
 .modal input, .modal select { font: inherit; font-size: 13.5px; height: 36px; padding: 0 10px;
          border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--c-primary); }
 .modal .wide { flex: 1 1 220px; }
+.modal .rostershow { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px;
+  margin-bottom: 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface-2);
+  cursor: pointer; }
+.modal .rostershow input { width: 18px; height: 18px; margin: 2px 0 0; flex: none; accent-color: var(--c-primary); }
+.modal .rostershow b { display: block; font-weight: 600; color: var(--c-primary); }
+.modal .rostershow small { display: block; font-size: 12.5px; color: var(--text-3); }
 .modal .rlist { margin-top: 12px; font-size: 13px; color: var(--text-2); }
 .modal .note { font-size: 12px; color: var(--text-3); margin-top: 12px; max-width: 74ch; line-height: 1.45; }
 .modal .hint { font-size: 12px; color: var(--text-3); }

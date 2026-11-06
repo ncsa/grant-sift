@@ -1055,9 +1055,12 @@ def unverified_quotes(reply: str, synopsis: str) -> list[str]:
             if len(_norm(q).split()) >= 4 and _norm(q) not in source]
 
 
-def _opportunity_context(conn, opp_id: str) -> dict:
+def _opportunity_context(conn, opp_id: str, roster: bool = True) -> dict:
     """The call as the chat and the intro brief see it: the context text, the
-    synopsis it quotes from, and whether its match can be written to."""
+    synopsis it quotes from, and whether its match can be written to.
+
+    roster=False leaves the match out of the text, for a viewer who has turned
+    roster matches off: the chat must not bring up a person the page hides."""
     row = conn.execute(
         """SELECT o.title, o.agency, o.source, o.url, o.deadline, o.award_ceiling,
                   o.indirect_cap, o.synopsis,
@@ -1090,8 +1093,9 @@ def _opportunity_context(conn, opp_id: str) -> dict:
             f"Pipeline score: {r['score']}/100 ({r['category']})",
             f"Why: {r['rationale']}",
         ]
-    c = _roster().get((r["match_name"] or "").strip().lower()) or {}
-    if r.get("match_name"):
+    matched = r.get("match_name") if roster else None
+    c = _roster().get((matched or "").strip().lower()) or {}
+    if matched:
         # A contact is not a collaboration, and the chat must not blur them:
         # "we worked with them" is the single most damaging thing it could
         # get wrong here, because it is exactly what someone would repeat in
@@ -1119,9 +1123,9 @@ def _opportunity_context(conn, opp_id: str) -> dict:
         if via:
             lines.append(f"Our people who already know them: {via}")
     intro = _intro(r, c, due)
-    if intro["eligible"]:
+    if roster and intro["eligible"]:
         lines += ["", intro["rules"]]
-    elif r.get("match_name"):
+    elif matched:
         lines += ["", f"No intro email: {intro['reason']}. If asked for one, say so."]
     # The stored synopsis, not a fresh fetch of the solicitation. Re-fetching
     # here would put a third-party site in a user-facing request path.
@@ -1195,7 +1199,8 @@ def chat(request: Request, payload: dict = Body(...)):
 
     conn = _conn()
     try:
-        context = _opportunity_context(conn, opp_id)
+        context = _opportunity_context(conn, opp_id,
+                                       roster=payload.get("roster") is not False)
     finally:
         conn.close()
 
