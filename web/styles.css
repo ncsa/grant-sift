@@ -615,6 +615,21 @@ h2.title a { color: var(--il-blue); }
 /* Matching: the idea is locked and a status bar says what is happening. */
 .ideabox.busy { border-color: var(--il-industrial); }
 .ideabox.busy .idearow textarea { background: var(--surface-2); color: var(--text-2); cursor: not-allowed; }
+/* The attached file: one chip under the box, which then holds the notes. */
+.ideadoc { display: flex; align-items: center; gap: 8px; min-width: 0; align-self: flex-start; max-width: 100%;
+           padding: 6px 6px 6px 12px; background: #fff; border: 1px solid var(--border-strong); border-radius: 999px;
+           font-size: 14px; color: var(--il-blue); }
+.ideadoc[hidden] { display: none; }
+.ideadoc > .ic { flex: none; color: var(--il-industrial); }
+.ideadoc .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ideadoc .meta { flex: none; font-size: 13px; color: var(--text-3); }
+.ideadoc.trimmed .meta { color: var(--il-altgeld); }
+.ideadoc button { flex: none; display: inline-flex; align-items: center; justify-content: center;
+                  width: 28px; height: 28px; padding: 0; border: 0; border-radius: 999px;
+                  background: transparent; color: var(--text-2); cursor: pointer; }
+.ideadoc button:hover:not(:disabled) { background: var(--surface-2); color: var(--il-blue); }
+.ideadoc button:disabled { opacity: .4; cursor: not-allowed; }
+@media (max-width: 560px) { .ideadoc .meta { display: none; } }
 .ideastatus { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
               padding: 12px 14px; background: #fff; border: 1px solid var(--border-strong);
               border-left: 4px solid var(--il-industrial); border-radius: 10px; }

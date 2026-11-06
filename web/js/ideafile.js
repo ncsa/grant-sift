@@ -1,18 +1,19 @@
-// Idea match from a file: a white paper or a one-page summary, read into the
-// Idea box so the person sees and edits exactly what will be matched.
+// Idea match from a file: a white paper or a one-page summary, read to text
+// and attached beside the Idea box, which stays free for the person's notes.
 
-// Read here, in the tab. The file is never uploaded anywhere: only the text,
-// once it is in the box, goes to /api/focus as typed text always has.
+// Read here, in the tab. The file itself is never uploaded: only its text goes
+// to /api/focus and /api/rescore, as the `document` field.
 // The two readers are large (pdf.js ~1 MB with its worker, mammoth ~600 KB),
 // so each loads from cdnjs only when a file of its kind is picked. Versions
 // are exact: a reader that changed under us could change what gets matched.
 const PDFJS_BASE = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/";
 const MAMMOTH_SRC = "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.9.0/mammoth.browser.min.js";
 const MAMMOTH_SRI = "sha384-F9c4WGfCRfzaY1ngABA8Z7qHFDuWabKbcwCb2Tk3Qf4njoUVhOChtw0UrXJmSp1y";
-// The server reads at most this much of an idea (server.MAX_IDEA_CHARS), so
-// more would be sent and silently dropped. Trimmed here instead, where the
-// person can see it and choose which part to keep.
-const IDEA_MAX_CHARS = 4000;
+// The server reads at most this much (server.MAX_IDEA_CHARS for the document
+// and notes together, server.MAX_DOC_CHARS for the document), so more would be
+// sent and silently dropped. Trimmed here instead, where the chip can say so.
+const IDEA_TOTAL_CHARS = 15000;
+const IDEA_DOC_MAX_CHARS = 13000;
 const IDEA_FILE_MAX_MB = 10;
 
 let _pdfjs = null, _mammoth = null;
@@ -68,7 +69,7 @@ async function pdfText(file) {
   let len = 0, read = 0;
   // Pages past the limit would be trimmed anyway, and a long report can have
   // hundreds of them, so reading stops once there is enough.
-  for (let n = 1; n <= doc.numPages && len <= IDEA_MAX_CHARS; n++) {
+  for (let n = 1; n <= doc.numPages && len <= IDEA_DOC_MAX_CHARS; n++) {
     const page = await doc.getPage(n);
     const content = await page.getTextContent();
     const text = content.items.map(i => (i.str || "") + (i.hasEOL ? "\n" : "")).join("");
@@ -116,12 +117,12 @@ async function readIdeaFile(file) {
   else if (ext === "docx") got = await docxText(file);
   else got = { text: tidyText(await file.text()) };
   if (!got.text) throw new IdeaFileError("This file has no text in it.");
-  const trimmed = got.more || got.text.length > IDEA_MAX_CHARS;
+  const trimmed = got.more || got.text.length > IDEA_DOC_MAX_CHARS;
   // Cut at the last sentence or line inside the limit, not mid-word.
-  let text = got.text.slice(0, IDEA_MAX_CHARS);
-  if (got.text.length > IDEA_MAX_CHARS) {
+  let text = got.text.slice(0, IDEA_DOC_MAX_CHARS);
+  if (got.text.length > IDEA_DOC_MAX_CHARS) {
     const cut = Math.max(text.lastIndexOf("\n"), text.lastIndexOf(". ") + 1);
-    if (cut > IDEA_MAX_CHARS * 0.8) text = text.slice(0, cut);
+    if (cut > IDEA_DOC_MAX_CHARS * 0.8) text = text.slice(0, cut);
     text = text.trim();
   }
   const detail = got.pages ? `${got.pages} ${got.pages === 1 ? "page" : "pages"}` : "";

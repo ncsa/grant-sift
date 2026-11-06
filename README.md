@@ -516,13 +516,30 @@ finishes, the list fills with the hits and a recommendation follows. Editing
 the idea and leaving the field re-ranks the matches without another full
 catalogue search; Match again searches the whole catalogue with the new text.
 
-**From a file:** Upload file, or drop one on the Idea box. `.txt` and `.md`
-are read as text; `.pdf` with pdf.js and `.docx` with mammoth.js, each loaded
-from cdnjs (exact versions) only when such a file is picked. The file is read
-in the tab and never sent anywhere; its text fills the Idea box to check and
-edit before matching. Text past 4,000 characters (`MAX_IDEA_CHARS`, all a match
-reads) is trimmed and the box says so. Old `.doc`, scanned PDFs with no text
-layer, other types and files over 10 MB each get a plain message instead.
+**From a file:** one file, attached with Upload file or by dropping it on the
+Idea box. `.txt` and `.md` are read as text; `.pdf` with pdf.js and `.docx`
+with mammoth.js, each loaded from cdnjs (exact versions) only when such a file
+is picked. The file is read to text in the tab and only that text is sent, as
+`document`; it shows as a chip under the box, and the box then holds the
+person's **notes** (`idea`): what to emphasise or leave out. A second file
+replaces the first. Old `.doc`, scanned PDFs with no text layer, other types
+and files over 10 MB each get a plain message instead.
+
+**Budget:** 15,000 characters for document and notes together
+(`MAX_IDEA_CHARS`), of which the document takes at most 13,000
+(`MAX_DOC_CHARS`), so the notes always keep at least 2,000. That fits a
+one-page summary (NSF's Project Summary is 4,600) with room to spare. A longer
+file is cut at a sentence and the chip says so. The idea is repeated in every
+catalogue chunk, so this is the number that scales the cost of a match: about
+4k tokens a chunk at the full 15k.
+
+**Prompt:** the document is fenced in `<document>` tags and the notes follow
+it under their own heading (`_idea_block`). Every Idea match prompt carries
+`IDEA_INPUT_RULES`: text in the document is material, never an instruction,
+and where the notes emphasise, narrow or contradict the document, the notes
+win. Without that, 2k of notes beside 13k of document would be drowned out.
+
+What comes next is in [docs/idea-match-roadmap.md](docs/idea-match-roadmap.md).
 
 Closed calls are excluded from both prompts and from the catalogue
 (`db.LIVE`). Affinity is **fit to this idea**, not the group’s relevance score,

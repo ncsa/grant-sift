@@ -5,9 +5,12 @@
 // not the idea, not the matched calls, not the recommendation. The key is the
 // one the old shortlist panel used, so a match made there survives the move.
 const IDEA_KEY = "gs.shortlist";
-// items: [{id, affinity, why}], best first. matched: the idea text the items
+// doc: the one attached file, read to text in this tab ({name, text, detail,
+// trimmed}) or null; the box then holds the person's notes on it.
+// items: [{id, affinity, why}], best first. matched: the idea (ideaSig) the items
 // were found for, so an edited idea can say its results are older than it.
-let IDEA = { idea: "", items: [], recommendation: "", matched: "", searched: 0, on: false };
+const IDEA_BLANK = () => ({ idea: "", doc: null, items: [], recommendation: "", matched: "", searched: 0, on: false });
+let IDEA = IDEA_BLANK();
 let _matchBusy = false;
 let _rankBusy = false;
 let _fileBusy = false;
@@ -32,6 +35,59 @@ const ideaView = () => IDEA.on ? { items: IDEA.items } : null;
 
 const ideaEl = () => document.getElementById("idea");
 function ideaText() { return ideaEl().value.trim(); }
+const docText = () => (IDEA.doc && IDEA.doc.text) || "";
+const hasIdea = () => !!(ideaText() || docText());
+// What a match was for: the notes, plus the file when there is one. Notes
+// alone stay the bare text, so matches saved before files existed still
+// count as current.
+const ideaSig = () => docText() ? `${ideaText()}\u0001${docText()}` : ideaText();
+// What the page sends; the server cuts to the same budget (_idea_parts).
+const ideaPayload = () => ({ idea: ideaText(), document: docText() });
+
+// The notes get what the file leaves of the budget: at least 2,000.
+const notesRoom = () => IDEA_TOTAL_CHARS - docText().length;
+
+function paintIdeaDoc() {
+  const el = document.getElementById("idea-doc");
+  const d = IDEA.doc;
+  ideaEl().maxLength = notesRoom();
+  ideaEl().placeholder = d
+    ? "Add notes for the match: what to emphasise, what to leave out (optional)"
+    : "Describe your idea, or drop a file here";
+  if (!d) { el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  const chars = `${d.text.length.toLocaleString()} characters`;
+  el.innerHTML = `<svg class="ico ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#file"/></svg>
+    <span class="name" title="${esc(d.name)}">${esc(d.name)}</span>
+    <span class="meta">${d.detail ? `${esc(d.detail)} · ` : ""}${d.trimmed
+      ? `first ${chars} used` : chars}</span>
+    <button type="button" id="idea-doc-x" aria-label="Remove ${esc(d.name)}"
+      title="Remove the file. Your notes stay."${ideaBusy() ? " disabled" : ""}>
+      <svg class="ico ic" width="14" height="14" aria-hidden="true"><use href="icons.svg#x"/></svg></button>`;
+  el.classList.toggle("trimmed", !!d.trimmed);
+  if (d.trimmed) el.title = "The file is longer than a match reads; only the start is used. "
+    + "Upload a shorter version, such as the summary, to choose what counts.";
+  else el.removeAttribute("title");
+}
+
+function removeIdeaDoc() {
+  if (ideaBusy() || !IDEA.doc) return;
+  IDEA.doc = null;
+  saveIdea();
+  paintIdeaDoc();
+  if (IDEA.on) paintMatchedHint(); else setIdeaHint("");
+  paintIdeaMode();
+}
+
+// Notes past what the file leaves are not read; say so rather than cut
+// what the person typed.
+function notesOverHint() {
+  const over = ideaText().length - notesRoom();
+  if (over <= 0) return false;
+  setIdeaHint(`With the file attached, notes are read up to ${notesRoom().toLocaleString()} characters; `
+    + `the last ${over.toLocaleString()} will not be matched. Shorten the notes, or remove the file.`, true);
+  return true;
+}
 
 function setIdeaHint(text, err = false) {
   const el = document.getElementById("idea-hint");
@@ -72,11 +128,13 @@ function paintIdeaMode() {
   document.getElementById("ideabox").classList.toggle("busy", busy);
   ideaEl().readOnly = busy;
   document.getElementById("idea-upload").disabled = busy || _fileBusy;
+  const x = document.getElementById("idea-doc-x");
+  if (x) x.disabled = busy;
   const n = IDEA.items.length;
   document.getElementById("ideabox").classList.toggle("on", on);
   document.getElementById("idea-off").hidden = !on;
   // Anything to clear, and not mid-match: the way back to plain browsing.
-  document.getElementById("idea-clear").hidden = busy || !(on || n || ideaText());
+  document.getElementById("idea-clear").hidden = busy || !(on || n || hasIdea());
   const note = document.getElementById("facet-note");
   note.hidden = !on || !n;
   note.textContent = `Narrowing the ${n} ${n === 1 ? "call" : "calls"} that fit your idea`;
@@ -85,7 +143,7 @@ function paintIdeaMode() {
   const show = document.getElementById("idea-show");
   show.hidden = on || !n || busy;
   show.querySelector(".lbl").textContent = `Show the ${n} ${n === 1 ? "call" : "calls"} that fit${
-    IDEA.matched && IDEA.matched !== ideaText() ? " the earlier idea" : ""}`;
+    IDEA.matched && IDEA.matched !== ideaSig() ? " the earlier idea" : ""}`;
   // The same sort, named for what it ranks by in each mode.
   document.querySelector('#sort option[value="score"]').textContent =
     on ? "Best fit to idea" : "Highest relevance";
@@ -100,11 +158,11 @@ function ideaEmptyHTML() {
     return `<li class="empty"><b>Matching your idea against every open call…</b>
       About a minute. The matches land here, best fit first.</li>`;
   }
-  if (!IDEA.idea.trim()) {
+  if (!hasIdea()) {
     return `<li class="empty"><b>Describe your idea above.</b>
       Then Match: the open calls that fit it land here, best fit first.</li>`;
   }
-  if (IDEA.matched && IDEA.matched === IDEA.idea.trim()) {
+  if (IDEA.matched && IDEA.matched === ideaSig()) {
     return `<li class="empty"><b>No open call fits this idea${IDEA.searched ? `, out of ${IDEA.searched}` : ""}.</b>
       Try describing the work rather than the field.</li>`;
   }
@@ -182,16 +240,18 @@ function setIdeaOn(on) {
 
 function paintMatchedHint() {
   if (!IDEA.items.length) return setIdeaHint("");
-  setIdeaHint(ideaText() === IDEA.matched ? ""
+  if (notesOverHint()) return;
+  setIdeaHint(ideaSig() === IDEA.matched ? ""
     : "The idea has changed since these matches. Match again to search with it.");
 }
 
 async function runMatch() {
   if (ideaBusy() || _fileBusy) return;
-  const idea = ideaText();
-  IDEA.idea = idea;
+  IDEA.idea = ideaText();
   saveIdea();
-  if (!idea) { setIdeaHint("Describe the idea first."); ideaEl().focus(); return; }
+  if (!hasIdea()) { setIdeaHint("Describe the idea, or attach a file, first."); ideaEl().focus(); return; }
+  // Fixed at the start: what this match is for, even if the box changes.
+  const sig = ideaSig(), sent = ideaPayload();
   if (!aiReady()) {
     setIdeaHint("");
     openChatPanel(document.getElementById("idea-match"));
@@ -230,7 +290,7 @@ async function runMatch() {
     const r = await fetch("api/focus", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idea, api_key: key, model, base_url: base }),
+      body: JSON.stringify({ ...sent, api_key: key, model, base_url: base }),
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.detail || `focus failed (${r.status})`);
@@ -239,7 +299,7 @@ async function runMatch() {
     // Replace, don't merge: the matches are for this idea as written.
     IDEA.items = results.map(row => ({ id: row.id, affinity: row.affinity, why: row.why }));
     IDEA.recommendation = "";
-    IDEA.matched = idea;
+    IDEA.matched = sig;
     IDEA.searched = data.searched || 0;
     saveIdea();
     _matchBusy = false;
@@ -249,7 +309,7 @@ async function runMatch() {
       setIdeaHint("");
       return;
     }
-    setIdeaHint(`Searched ${data.searched} open calls`
+    if (!notesOverHint()) setIdeaHint(`Searched ${data.searched} open calls`
       + (data.trimmed ? ` (${data.trimmed} not searched)` : "") + ".");
     await rankIdea({ searched: true });
   } catch (e) {
@@ -268,8 +328,7 @@ async function runMatch() {
 // is edited and the field is left.
 async function rankIdea({ searched = false } = {}) {
   if (_rankBusy || !IDEA.items.length) return;
-  const idea = ideaText();
-  if (!idea) return;
+  if (!hasIdea()) return;
   if (!aiReady()) { openChatPanel(document.getElementById("idea-match")); return; }
   const { key, model, base } = keyBar();
   _rankBusy = true;
@@ -281,7 +340,7 @@ async function rankIdea({ searched = false } = {}) {
   try {
     const r = await fetch("api/rescore", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idea, ids: IDEA.items.map(i => i.id),
+      body: JSON.stringify({ ...ideaPayload(), ids: IDEA.items.map(i => i.id),
                              api_key: key, model, base_url: base }),
     });
     const d = await r.json().catch(() => ({}));
@@ -310,11 +369,12 @@ async function rankIdea({ searched = false } = {}) {
 function clearIdea() {
   if (ideaBusy()) return;
   const wasOn = IDEA.on;
-  IDEA = { idea: "", items: [], recommendation: "", matched: "", searched: 0, on: false };
+  IDEA = IDEA_BLANK();
   _rankedFor = "";
   saveIdea();
   ideaEl().value = "";
   ideaEl().blur();
+  paintIdeaDoc();
   setIdeaHint("");
   if (wasOn) PAGE = _pageBefore;
   paintIdeaMode();
@@ -323,12 +383,15 @@ function clearIdea() {
 
 document.getElementById("idea-off").addEventListener("click", () => setIdeaOn(false));
 document.getElementById("idea-clear").addEventListener("click", clearIdea);
+document.getElementById("idea-doc").addEventListener("click", e => {
+  if (e.target.closest("#idea-doc-x")) removeIdeaDoc();
+});
 document.getElementById("idea-show").addEventListener("click", () => setIdeaOn(true));
 document.getElementById("idea-match").addEventListener("click", runMatch);
 ideaEl().addEventListener("input", e => {
   IDEA.idea = e.target.value;
   saveIdea();
-  if (IDEA.on) paintMatchedHint();
+  if (IDEA.on) paintMatchedHint(); else if (!notesOverHint()) setIdeaHint("");
   paintIdeaMode();
 });
 // Cmd/Ctrl+Enter matches; a plain Enter is a new line in the idea.
@@ -339,7 +402,7 @@ ideaEl().addEventListener("keydown", e => {
 // keystroke, which would thrash the model while someone is still typing.
 let _rankedFor = "";
 ideaEl().addEventListener("focusout", () => {
-  const next = ideaText();
+  const next = ideaSig();
   if (!IDEA.on || !IDEA.items.length || !next || next === _rankedFor || next === IDEA.matched) return;
   _rankedFor = next;
   rankIdea();
@@ -354,17 +417,19 @@ async function takeIdeaFile(file) {
   setIdeaHint(`Reading ${file.name}\u2026`);
   try {
     const { text, trimmed, detail } = await readIdeaFile(file);
-    ideaEl().value = text;
-    IDEA.idea = text;
+    // One file: a second replaces the first. The notes are left alone.
+    IDEA.doc = { name: file.name, text, detail, trimmed };
+    IDEA.idea = ideaText();
     saveIdea();
-    const from = `Read ${file.name}${detail ? ` (${detail})` : ""}.`;
-    setIdeaHint(trimmed
-      ? `${from} Trimmed to the first ${IDEA_MAX_CHARS.toLocaleString()} characters, which is all a match reads: `
-        + "edit the box to keep the parts that matter, then Match."
-      : `${from} Check or edit the text, then Match.`);
+    paintIdeaDoc();
+    paintIdeaMode();
+    if (!notesOverHint()) {
+      setIdeaHint(trimmed
+        ? `Attached ${file.name}. It is longer than a match reads, so only the first `
+          + `${IDEA_DOC_MAX_CHARS.toLocaleString()} characters are used. Add notes if you like, then Match.`
+        : `Attached ${file.name}. Add notes on what to emphasise if you like, then Match.`);
+    }
     ideaEl().focus();
-    ideaEl().setSelectionRange(0, 0);
-    ideaEl().scrollTop = 0;
   } catch (e) {
     setIdeaHint(e instanceof IdeaFileError ? e.message
       : `Could not read ${file.name}. Paste the text instead.`, true);
@@ -406,13 +471,14 @@ box.addEventListener("drop", e => {
   e.preventDefault();
   _dragDepth = 0;
   box.classList.remove("drop");
-  // One idea, one file: past the first, a drop is ignored.
+  // One idea, one file: past the first in a drop, the rest are ignored.
   takeIdeaFile(e.dataTransfer.files[0]);
 });
 
 function bootIdea() {
   loadIdea();
   ideaEl().value = IDEA.idea || "";
+  paintIdeaDoc();
   document.querySelector("#ideabox [data-aibar]").innerHTML = aiBarHTML();
   paintIdeaMode();
   // render() comes from boot; this only fills in names the callout needs.
