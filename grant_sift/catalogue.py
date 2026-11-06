@@ -156,7 +156,7 @@ def is_me(person_email, principal):
 
 
 def _via_me(o, principal):
-    people = (o.get("contact") or {}).get("ncsa_contact") or []
+    people = (o.get("contact") or {}).get("our_contact") or []
     return any(is_me(p.get("email"), principal) for p in people)
 
 
@@ -283,7 +283,7 @@ def _short_text(o):
         o["match_domain"], o["match_project"], c.get("email"), c.get("unit"),
         # Our own people are searchable too: "kooper" should answer "what is
         # on Rob's plate this month" without him reading all of it.
-        *[v for p in c.get("ncsa_contact") or [] for v in (p.get("name"), p.get("email"))],
+        *[v for p in c.get("our_contact") or [] for v in (p.get("name"), p.get("email"))],
     ) if x).lower()
 
 

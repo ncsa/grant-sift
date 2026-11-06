@@ -100,8 +100,7 @@ class Defaults(unittest.TestCase):
 
 class Validation(unittest.TestCase):
     BASE = {
-        "org": {"name": "O", "email_domain": "o.edu", "contact_email": "a@o.edu",
-                "ai_gateway": "G"},
+        "org": {"name": "O", "email_domain": "o.edu", "contact_email": "a@o.edu"},
         "group": {"tagline": "t", "description": "d", "match_phrase": "m"},
         "scoring": {"label": "L", "prompt": "P", "guide": "80-100  good",
                     "categories": [{"id": "a", "description": "A"},
@@ -152,6 +151,20 @@ class Validation(unittest.TestCase):
         self.assertFalse(t({"match_name": None, "source": "nih"}))
 
 
+class RosterContactKey(unittest.TestCase):
+    def test_legacy_ncsa_contact_still_resolves(self):
+        old = {"name": "Ada", "ncsa_contact": ["Bo"]}
+        new = {"name": "Ada", "our_contact": ["Bo"]}
+        for e in (old, new):
+            out = pipeline.normalise([e], ROOT / "tests")
+            self.assertEqual([p["name"] for p in out[0]["our_contact"]], ["Bo"])
+            self.assertNotIn("ncsa_contact", out[0])
+
+    def test_new_key_wins(self):
+        e = pipeline.upgrade_entry({"ncsa_contact": ["Old"], "our_contact": ["New"]})
+        self.assertEqual(e["our_contact"], ["New"])
+
+
 class ShippedProfiles(unittest.TestCase):
     def test_every_shipped_profile_loads(self):
         for path in sorted((ROOT / "config").glob("profile*.yaml")):
@@ -165,8 +178,7 @@ class ShippedProfiles(unittest.TestCase):
         text = (ROOT / "config/profile.general.yaml").read_text()
         body = "\n".join(ln for ln in text.splitlines()
                          if not ln.lstrip().startswith("#")
-                         and not ln.lstrip().startswith(("contact_email", "ai_gateway",
-                                                         "name:", "email_domain")))
+                         and not ln.lstrip().startswith(("contact_email", "name:", "email_domain")))
         for word in ("RSE", "research software", "cyberinfrastructure", "HPC"):
             self.assertNotIn(word, body)
 

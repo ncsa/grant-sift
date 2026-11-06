@@ -34,7 +34,7 @@
 #
 # Domain partners: the people who need an RSE and may not know it. YOUR OWN
 # STAFF DO NOT GO HERE. They live in config/ncsa_staff.yaml and are named in
-# `ncsa_contact`; put them in this file and the matcher matches you to
+# `our_contact`; put them in this file and the matcher matches you to
 # yourself.
 #
 # FIELDS
@@ -44,7 +44,7 @@
 #   org           defaults to UIUC in the dashboard; set it for external parties
 #   areas         research areas. Worth filling: a department alone makes
 #                 everyone in it look identical to the matcher.
-#   ncsa_contact  names of YOUR staff who already know this party. Joined
+#   our_contact  names of YOUR staff who already know this party. Joined
 #                 against ncsa_staff.yaml, so spelling must match its
 #                 `as_written`.
 #   kind          omit for a normal partner. `program` marks something YOU run
@@ -57,7 +57,7 @@
 #                 Shown in the dashboard, never sent to the model.
 #
 # Reaching the model: name, areas, unit, org, status, projects, notes.
-# Dashboard and digests only: email, ncsa_contact, review.
+# Dashboard and digests only: email, our_contact, review.
 #
 # Regenerate from an outreach spreadsheet plus this file:
 #   python scripts/build_roster.py
@@ -67,7 +67,7 @@
   email: aresearcher@example.edu
   unit: Example Department
   areas: [remote sensing, crop modelling]
-  ncsa_contact: [Your Staffer]
+  our_contact: [Your Staffer]
   projects:
     - title: Example collaboration, field-scale sensing platform
       years: 2022-present
@@ -80,7 +80,7 @@
   email: bcollab@example.edu
   unit: Another Department
   areas: [science policy]
-  ncsa_contact: []
+  our_contact: []
   projects:
     - title: Past project that ended
       years: 2018-2021
@@ -93,15 +93,15 @@
   email: ccontact@example.edu
   unit: Example Department
   areas: [machine learning, imaging]
-  ncsa_contact: [Your Staffer]
+  our_contact: [Your Staffer]
   outreach: sent
 
 # Something you run yourself. No `email`, because there is nobody outside to
-# write to; `ncsa_contact` is the whole answer, and the card shows only that.
+# write to; `our_contact` is the whole answer, and the card shows only that.
 - name: Example Platform community and framework users
   kind: program
   areas: [research data management, software sustainability]
-  ncsa_contact: [Your Staffer]
+  our_contact: [Your Staffer]
   projects:
     - title: Example Platform, data management for long-tail research data
       years: 2013-present

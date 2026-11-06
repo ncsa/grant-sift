@@ -68,6 +68,7 @@ config:
   # Host the MCP endpoint accepts (DNS-rebinding check).
   GRANT_SIFT_PUBLIC_URL: https://grant-sift.software-dev.ncsa.illinois.edu
   GRANT_SIFT_LLM_BASE_URL: https://lumen.ncsa.illinois.edu/v1
+  GRANT_SIFT_LLM_NAME: NCSA Lumen
   GRANT_SIFT_LLM_MODEL: gemma-4-31b-it
   GRANT_SIFT_FROM: grant-sift@ncsa.illinois.edu
   # Campus outbound relay (Tech Services KB 47888). Needs a campus-recognized

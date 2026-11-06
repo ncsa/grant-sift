@@ -40,6 +40,9 @@ from pathlib import Path
 
 import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from grant_sift import pipeline  # noqa: E402
+
 CONFIG = Path("config")
 
 # --------------------------------------------------------------------------
@@ -156,7 +159,7 @@ PROMOTIONS = [
 #                 better-sourced title (MarginDx is on Boppart from the ARPA-H
 #                 proposal; the placeholder would add a second copy)
 #   kind          "program" where there is genuinely nobody outside to email
-#   ncsa_contact  our people, resolved to addresses via ncsa_staff.yaml
+#   our_contact  our people, resolved to addresses via ncsa_staff.yaml
 SECOND_PASS = {
     "Permafrost Discovery Gateway": {
         "partner": {"name": "Anna Liljedahl",
@@ -169,37 +172,37 @@ SECOND_PASS = {
                     "email": "john.van_de_lindt@colostate.edu",
                     "unit": "Civil Engineering",
                     "org": "Colorado State University"},
-        "ncsa_contact": ["Jong Lee"],
+        "our_contact": ["Jong Lee"],
     },
     "Ergo / MAEviz": {"merge_into": "John W. van de Lindt",
-                      "ncsa_contact": ["Jong Lee"]},
+                      "our_contact": ["Jong Lee"]},
     "MarginDx team": {"merge_into": "Stephen Boppart", "keep_project": False},
-    "SHIELD Illinois": {"merge_into": "Becky Smith", "ncsa_contact": ["Chen Wang"]},
+    "SHIELD Illinois": {"merge_into": "Becky Smith", "our_contact": ["Chen Wang"]},
     "Illinois Cloud Biofoundry": {"merge_into": "Huimin Zhao",
-                                  "ncsa_contact": ["Matt Berry"]},
+                                  "our_contact": ["Matt Berry"]},
     "Illinois Basin DAC Hub": {"merge_into": "Kevin O'Brien",
-                               "ncsa_contact": ["Jong Lee"]},
+                               "our_contact": ["Jong Lee"]},
     # Ours: nobody outside to approach.
-    "XSEDE and LinkSCEEM": {"kind": "program", "ncsa_contact": ["John Towns"]},
-    "Brown Dog / DIBBs": {"kind": "program", "ncsa_contact": ["Kenton McHenry"]},
-    "EarthCube community": {"kind": "program", "ncsa_contact": ["Kenton McHenry"]},
+    "XSEDE and LinkSCEEM": {"kind": "program", "our_contact": ["John Towns"]},
+    "Brown Dog / DIBBs": {"kind": "program", "our_contact": ["Kenton McHenry"]},
+    "EarthCube community": {"kind": "program", "our_contact": ["Kenton McHenry"]},
     # Real outside partners, but the person is not known yet. Left without an
     # address deliberately: the card says so, which is how it gets filled in.
-    "Metropolitan Water Reclamation District": {"ncsa_contact": ["Jong Lee"]},
-    "Great Lakes to Gulf": {"ncsa_contact": ["Jong Lee"]},
+    "Metropolitan Water Reclamation District": {"our_contact": ["Jong Lee"]},
+    "Great Lakes to Gulf": {"our_contact": ["Jong Lee"]},
     "Illinois Department of Public Health": {
-        "ncsa_contact": ["Matt Berry", "Lisa Gatzke"]},
+        "our_contact": ["Matt Berry", "Lisa Gatzke"]},
     "Vector Borne Disease": {"merge_into": "Becky Smith",
-                             "ncsa_contact": ["Max Burnette"]},
+                             "our_contact": ["Max Burnette"]},
     # Ours: Clowder is the case that started this - Luigi is both the person
     # who runs it and our staffer, so there is no outside party to introduce
     # anyone to. The internal row is the whole answer.
     "Clowder open-source community": {
-        "kind": "program", "ncsa_contact": ["Luigi Marini", "Kenton McHenry"]},
+        "kind": "program", "our_contact": ["Luigi Marini", "Kenton McHenry"]},
     # Outside partner still unknown; recorded so the gap is visible.
-    "KnowEnG center team": {"ncsa_contact": ["Matt Berry"]},
-    "TERRA-REF consortium": {"ncsa_contact": ["Rob Kooper", "Max Burnette"]},
-    "LSST / Rubin Observatory": {"ncsa_contact": ["Stephen Pietrowicz"]},
+    "KnowEnG center team": {"our_contact": ["Matt Berry"]},
+    "TERRA-REF consortium": {"our_contact": ["Rob Kooper", "Max Burnette"]},
+    "LSST / Rubin Observatory": {"our_contact": ["Stephen Pietrowicz"]},
     # Platforms and communities we run: no outside party to approach.
     "SEAD and Whole Tale": {"kind": "program"},
     "National Data Service": {"kind": "program"},
@@ -255,10 +258,10 @@ def apply_second_pass(index):
             log.append(f"  - '{fragment}' matched nothing (already merged?)")
             continue
         e = index[k]
-        if spec.get("ncsa_contact"):
-            for n in spec["ncsa_contact"]:
-                if n not in (e.get("ncsa_contact") or []):
-                    e.setdefault("ncsa_contact", []).append(n)
+        if spec.get("our_contact"):
+            for n in spec["our_contact"]:
+                if n not in (e.get("our_contact") or []):
+                    e.setdefault("our_contact", []).append(n)
         if spec.get("kind"):
             e["kind"] = spec["kind"]
             log.append(f"  program   {e['name'][:52]}")
@@ -444,7 +447,7 @@ def from_old_collaboration(e):
         "unit": None,
         "org": None,
         "areas": [a.strip() for a in (e.get("domain") or "").split(",") if a.strip()],
-        "ncsa_contact": internal,
+        "our_contact": internal,
         "projects": [project] if project["title"] else [],
         "status": e.get("status"),
         "notes": e.get("notes"),
@@ -458,7 +461,7 @@ def from_contact(c):
         "unit": c.get("unit"),
         "org": c.get("org"),
         "areas": c.get("areas") or [],
-        "ncsa_contact": c.get("ncsa_contact") or [],
+        "our_contact": c.get("our_contact") or [],
         "projects": [],
         "status": c.get("status") if c.get("status") in
                   ("do-not-contact", "departed") else None,
@@ -487,9 +490,9 @@ def merge_into(index, entry):
     for a in entry.get("areas") or []:
         if a not in (cur.get("areas") or []):
             cur.setdefault("areas", []).append(a)
-    for n in entry.get("ncsa_contact") or []:
-        if n not in (cur.get("ncsa_contact") or []):
-            cur.setdefault("ncsa_contact", []).append(n)
+    for n in entry.get("our_contact") or []:
+        if n not in (cur.get("our_contact") or []):
+            cur.setdefault("our_contact", []).append(n)
     titles = {p.get("title") for p in cur.get("projects") or []}
     for p in entry.get("projects") or []:
         if p.get("title") not in titles:
@@ -523,11 +526,11 @@ HEADER = """\
 #
 # WHO GOES HERE. Domain partners - the people who need an RSE and may not know
 # it. Our own staff belong in config/ncsa_staff.yaml and are referenced by
-# name in `ncsa_contact`, never listed here, or the matcher matches us to
+# name in `our_contact`, never listed here, or the matcher matches us to
 # ourselves.
 #
 # Fields reaching the model: name, areas, unit, org, status, projects, notes.
-# `email`, `ncsa_contact` and `review` are for the dashboard and digests only.
+# `email`, `our_contact` and `review` are for the dashboard and digests only.
 #
 # Entries added through the web UI live in the roster_entries table and are
 # never written back here: an app that rewrites this comment-rich file would
@@ -536,7 +539,7 @@ HEADER = """\
 # Regenerate with: python scripts/build_roster.py
 """
 
-FIELD_ORDER = ["name", "kind", "email", "unit", "org", "areas", "ncsa_contact",
+FIELD_ORDER = ["name", "kind", "email", "unit", "org", "areas", "our_contact",
                "outreach", "status", "projects", "notes", "review"]
 
 
@@ -557,7 +560,8 @@ def main():
 
     index = {}
     if roster_path.is_file():
-        entries = yaml.safe_load(roster_path.read_text()) or []
+        entries = [pipeline.upgrade_entry(e)
+                   for e in yaml.safe_load(roster_path.read_text()) or []]
         if already_new_shape(entries):
             for e in entries:
                 merge_into(index, e)
@@ -566,7 +570,7 @@ def main():
                 merge_into(index, from_old_collaboration(e))
     if contacts_path.is_file():
         for c in yaml.safe_load(contacts_path.read_text()) or []:
-            merge_into(index, from_contact(c))
+            merge_into(index, from_contact(pipeline.upgrade_entry(c)))
 
     promoted = missing = 0
     for p in PROMOTIONS:

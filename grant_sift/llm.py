@@ -31,6 +31,9 @@ DEFAULT_MODEL = "gemma-4-31b-it"
 BASE_URL = os.environ.get("GRANT_SIFT_LLM_BASE_URL", DEFAULT_BASE_URL)
 API_KEY = os.environ.get("GRANT_SIFT_LLM_API_KEY", "")
 MODEL = os.environ.get("GRANT_SIFT_LLM_MODEL") or DEFAULT_MODEL
+# What the page calls the shared gateway ("NCSA Lumen"); its host otherwise.
+GATEWAY_NAME = (os.environ.get("GRANT_SIFT_LLM_NAME") or "").strip() or (
+    BASE_URL.split("//", 1)[-1].split("/", 1)[0])
 TIMEOUT = int(os.environ.get("GRANT_SIFT_LLM_TIMEOUT", "120"))
 
 # Reasoning models (glm-5.2 among them) bill their thinking against max_tokens

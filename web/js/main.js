@@ -101,7 +101,8 @@ const CONFIG = fetch("/api/config")
     if (cfg && cfg.profile) paintProfile(cfg.profile);
     if (cfg && cfg.ai) {
       const org = (cfg.profile && cfg.profile.org) || {};
-      AI = { ...cfg.ai, org: org.name, gateway_name: org.ai_gateway };
+      AI = { ...cfg.ai, org: org.name };
+      addGatewayPreset();
       paintAI();
     }
     // Optional Grafana link: the Ops & signal item in the Data menu.

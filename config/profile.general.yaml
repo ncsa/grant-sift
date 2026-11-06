@@ -15,7 +15,6 @@ org:
   name: NCSA
   email_domain: illinois.edu
   contact_email: rse@ncsa.illinois.edu
-  ai_gateway: NCSA Lumen
 
 group:
   tagline: Open funding calls, ranked for university researchers

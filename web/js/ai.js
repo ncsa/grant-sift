@@ -13,9 +13,24 @@ const CHATS = {};                       // opportunity id -> [{role, content}]
 // their choosing. That key lives in this variable and nowhere else: not in
 // storage, not on the server.
 let AI = { shared: false, model: "", gateway: "" };     // from /api/config
-// Who runs the shared model, from the profile (org.name, org.ai_gateway).
+// Who runs the shared model: org from the profile, gateway from the server
+// (GRANT_SIFT_LLM_NAME / GRANT_SIFT_LLM_BASE_URL).
 const aiOrg = () => AI.org || "this server";
-const aiHost = () => AI.gateway_name || AI.gateway || "the shared model";
+const aiHost = () => AI.name || AI.gateway || "the shared model";
+
+// Offer the server's own gateway as the first own-key provider. A base URL
+// left from an earlier visit wins; otherwise a fresh form starts on it.
+function addGatewayPreset() {
+  if (!AI.base_url) return;
+  const preset = document.getElementById("k-preset");
+  if (![...preset.options].some(o => o.value === AI.base_url)) {
+    preset.insertBefore(new Option(AI.name || AI.gateway, AI.base_url), preset.firstChild);
+  }
+  let saved = {};
+  try { saved = JSON.parse(sessionStorage.getItem("gs.chat") || "{}"); } catch (e) {}
+  if (!saved.base) document.getElementById("k-base").value = AI.base_url;
+  syncPreset();
+}
 // What "Use this model" applied, not what the form says: editing a field must
 // not change the model until the viewer applies it.
 let OWN = null;                                          // { key, model, base }

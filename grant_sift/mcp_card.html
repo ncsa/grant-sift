@@ -195,9 +195,9 @@ function fitHTML(o) {
   if (c.kind !== "program" && (c.email || where)) {
     lines.push(`<div><span class="who">Them</span><span>${person(o.match_name, c.email, where)}</span></div>`);
   }
-  if ((c.ncsa_contact || []).some(p => p.name)) {
+  if ((c.our_contact || []).some(p => p.name)) {
     lines.push(`<div><span class="who">Via us</span><span>${
-      c.ncsa_contact.filter(p => p.name).map(p => person(p.name, p.email)).join(", ")}</span></div>`);
+      c.our_contact.filter(p => p.name).map(p => person(p.name, p.email)).join(", ")}</span></div>`);
   }
   if (c.review) lines.push(`<div><span class="who">Check</span><span class="flag">${esc(c.review)}</span></div>`);
   return `<div class="fit">

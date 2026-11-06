@@ -39,7 +39,7 @@ contain them.
 ### Profile: who this deployment is for
 
 Nothing about the group is written in code. `config/profile.yaml` holds the
-organisation (name, sign-in email domain, crawler contact, AI gateway name),
+organisation (name, sign-in email domain, crawler contact),
 the scoring prompt (who the group is, categories, score guide, axes, and what
 the score is called), the page wording and the Ask prompt's group description,
 the email digests, and the "Call type" chips. The shipped file is the NCSA RSE
@@ -65,6 +65,14 @@ digests:
     category: [ci_program]          # must be a scoring category
     min_score: 60
 ```
+
+Deployment settings stay Helm values (`config:` in `helm/grant-sift/values.yaml`),
+not profile: the AI gateway (`GRANT_SIFT_LLM_BASE_URL`, and `GRANT_SIFT_LLM_NAME`
+for what the page calls it, "NCSA Lumen"; it is also offered first for a
+viewer's own key) and the digest sender (`GRANT_SIFT_FROM`).
+
+Roster entries name the people on our side who know a party in `our_contact`
+(formerly `ncsa_contact`, still read; `scripts/build_roster.py` rewrites it).
 
 Rule keys: `category`, `source`, `exclude_source`, `min_score`,
 `deadline_within_days`, `has_match`. An unknown key, a category the scorer
@@ -334,7 +342,7 @@ aliases for each party's leading personal name and each of its project titles,
 added only where the key is free so a real party name always wins.
 
 **`config/ncsa_staff.yaml`** stays separate on purpose. It is *us*, not
-*them*: it maps the names in `ncsa_contact` to real addresses so the dashboard
+*them*: it maps the names in `our_contact` to real addresses so the dashboard
 shows both ends of an introduction. Put your own staff in the roster and the
 matcher starts matching you to yourself. Take these addresses from your
 directory rather than guessing netids — ours were not guessable.
@@ -414,7 +422,7 @@ Two tables in it carry knowledge no script can derive. `PROMOTIONS` holds
 projects transcribed from `Projects/`. `SECOND_PASS` holds partners supplied by
 someone who knows the work, keyed on a distinctive fragment of the party name,
 and can `merge_into` an existing person, set a `partner`, mark a `kind`, or add
-`ncsa_contact` names. Dedup deliberately refuses to surname-match a compound
+`our_contact` names. Dedup deliberately refuses to surname-match a compound
 name such as `M. S. Poole (PI, Communication), with D. Forsyth and M.
 Hasegawa-Johnson` — its last token is a third person's surname, and keying on
 it merged that collaboration into Mark Hasegawa-Johnson's record. Only the

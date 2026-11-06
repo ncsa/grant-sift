@@ -239,7 +239,7 @@ def header_of(text):
     """Everything before the first top-level list item.
 
     Splitting on "\\n- " is wrong: that sequence also appears inside the list,
-    in `areas` and `ncsa_contact`, and the surrounding comment block is what
+    in `areas` and `our_contact`, and the surrounding comment block is what
     explains the file. Take whole lines and stop at the first one that starts
     a document entry.
     """

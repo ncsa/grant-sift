@@ -31,8 +31,6 @@ org:
   email_domain: illinois.edu
   # Sent in the crawler's User-Agent so a funder's site can reach a person.
   contact_email: rse@ncsa.illinois.edu
-  # What the AI panel calls the shared model's host.
-  ai_gateway: NCSA Lumen
 
 group:
   # The line under "Grant Sift" in the page header.

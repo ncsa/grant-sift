@@ -150,7 +150,7 @@ def parse(raw):
     group = raw.get("group") or {}
     scoring = _scoring(raw.get("scoring"))
     out = {"org": {k: _text(org, k, "org").strip()
-                   for k in ("name", "email_domain", "contact_email", "ai_gateway")},
+                   for k in ("name", "email_domain", "contact_email")},
            "group": {k: _text(group, k, "group").strip()
                      for k in ("tagline", "description", "match_phrase")},
            "scoring": scoring,
@@ -188,7 +188,7 @@ PROFILE = load()
 
 def public():
     """What the page needs: wording and the chips, without the predicates."""
-    return {"org": {k: PROFILE["org"][k] for k in ("name", "ai_gateway")},
+    return {"org": {"name": PROFILE["org"]["name"]},
             "group": PROFILE["group"],
             "score_label": PROFILE["scoring"]["label"],
             "call_types": [{k: c[k] for k in ("id", "label", "title")}

@@ -25,7 +25,7 @@ from grant_sift import db, pipeline, telemetry
 DB_PATH = os.environ.get("GRANT_SIFT_DB", "grant-sift.db")
 SMTP_HOST = os.environ.get("GRANT_SIFT_SMTP_HOST", "localhost")
 SMTP_PORT = int(os.environ.get("GRANT_SIFT_SMTP_PORT", "25"))
-SMTP_FROM = os.environ.get("GRANT_SIFT_FROM", "grant-sift@ncsa.illinois.edu")
+SMTP_FROM = os.environ.get("GRANT_SIFT_FROM", "grant-sift@example.com")  # Helm: config.GRANT_SIFT_FROM
 
 # In-process nightly run. Empty disables the schedule; `python run.py daily`
 # stays available to run by hand or from an external scheduler.

@@ -18,7 +18,7 @@ function reach(o) {
   // Nothing to act on: no address, nobody here who knows them, nothing to
   // check. A row saying "no address on file" under a match that is a team
   // rather than a person is just a line of grey text.
-  const anyInternal = (c.ncsa_contact || []).some(p => p.name);
+  const anyInternal = (c.our_contact || []).some(p => p.name);
   if (!c.email && !anyInternal && !c.review) {
     return `<div class="reach">${ROSTER_LINK}</div>`;
   }
@@ -32,9 +32,9 @@ function reach(o) {
       mailto(o.match_name, c.email, where)}</span></div>`);
   }
 
-  if (c.ncsa_contact && c.ncsa_contact.length) {
+  if (c.our_contact && c.our_contact.length) {
     lines.push(`<div><span class="who">Via us</span><span>${
-      c.ncsa_contact.map(p => mailto(p.name, p.email)).join(", ")}</span></div>`);
+      c.our_contact.map(p => mailto(p.name, p.email)).join(", ")}</span></div>`);
   }
   // Only shown when it changes what you would do: a bad address, or a person
   // who has left. Never sent to the model.

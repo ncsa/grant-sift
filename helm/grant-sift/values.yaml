@@ -88,7 +88,10 @@ persistence:
 # Non-secret env (ConfigMap).
 config:
   GRANT_SIFT_DB: /data/grant-sift.db
+  # The shared model: any OpenAI-compatible gateway. Its name is what the page
+  # calls it ("... on NCSA Lumen"), and it is offered first for viewers' own keys.
   GRANT_SIFT_LLM_BASE_URL: https://lumen.ncsa.illinois.edu/v1
+  GRANT_SIFT_LLM_NAME: NCSA Lumen
   GRANT_SIFT_LLM_MODEL: gemma-4-31b-it
   GRANT_SIFT_LLM_THINKING: "off"
   GRANT_SIFT_LLM_MAX_TOKENS: "4000"
@@ -108,7 +111,7 @@ config:
   # Public origin, e.g. https://grant-sift.example.com. Names the /mcp resource
   # in its OAuth metadata and is the Host the MCP endpoint accepts.
   GRANT_SIFT_PUBLIC_URL: ""
-  GRANT_SIFT_CHAT_ALLOWED_HOSTS: "lumen.ncsa.illinois.edu,api.openai.com,api.groq.com,openrouter.ai,generativelanguage.googleapis.com,api.fireworks.ai,api.together.xyz,api.deepseek.com,api.mistral.ai,api.anthropic.com,.openai.azure.com"
+  GRANT_SIFT_CHAT_ALLOWED_HOSTS: "api.openai.com,api.groq.com,openrouter.ai,generativelanguage.googleapis.com,api.fireworks.ai,api.together.xyz,api.deepseek.com,api.mistral.ai,api.anthropic.com,.openai.azure.com"
   GRANT_SIFT_ACCESS_LOG: "on"
   GRANT_SIFT_DAILY_LIMIT: "400"
   # Nightly pipeline, in the serving process. Empty disables it, in which case
@@ -120,7 +123,7 @@ config:
   GRANT_SIFT_DAILY_CATCHUP: "on"
   GRANT_SIFT_SMTP_HOST: ""
   GRANT_SIFT_SMTP_PORT: "25"
-  GRANT_SIFT_FROM: grant-sift@example.com
+  GRANT_SIFT_FROM: grant-sift@example.com   # sender of the email digests
   # Header-strip link to the public Grafana Ops & Signal board. Empty hides it.
   GRANT_SIFT_GRAFANA_URL: ""
 

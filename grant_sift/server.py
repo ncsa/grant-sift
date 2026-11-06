@@ -59,7 +59,6 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 # response through us. Entries may be exact hostnames or a leading-dot suffix
 # (e.g. .openai.azure.com). Extend with GRANT_SIFT_CHAT_ALLOWED_HOSTS.
 _DEFAULT_CHAT_HOSTS = (
-    "lumen.ncsa.illinois.edu,"
     "api.openai.com,"
     "api.groq.com,"
     "openrouter.ai,"
@@ -75,7 +74,9 @@ ALLOWED_HOSTS = {
     h.strip().lower()
     for h in os.environ.get("GRANT_SIFT_CHAT_ALLOWED_HOSTS", _DEFAULT_CHAT_HOSTS).split(",")
     if h.strip()
-}
+} | {(urlparse(llm.BASE_URL).hostname or "").lower()} - {""}
+# The shared gateway (GRANT_SIFT_LLM_BASE_URL) is always allowed: it is the
+# first provider the page offers for a viewer's own key.
 
 
 # Heavy on feedback because each row feeds the next classification prompt, so
@@ -235,7 +236,9 @@ def public_config():
     return {"grafana_url": url or None,
             # What Ask and Idea match run on when the viewer brings no key.
             "ai": {"shared": bool(llm.API_KEY), "model": llm.MODEL,
-                   "gateway": urlparse(llm.BASE_URL).hostname},
+                   "gateway": urlparse(llm.BASE_URL).hostname,
+                   # Not secret: offered as the first own-key provider.
+                   "base_url": llm.BASE_URL, "name": llm.GATEWAY_NAME},
             # Wording, the score's name and call-type chips (config/profile.yaml).
             "profile": profile.public()}
 
@@ -277,7 +280,7 @@ def roster_list(request: Request):
             {"origin": "file", "name": e["name"], "areas": e.get("areas") or [],
              "unit": e.get("unit"), "org": e.get("org"), "email": e.get("email"),
              "status": e["status"], "projects": e.get("projects") or [],
-             "ncsa_contact": e.get("ncsa_contact") or [],
+             "our_contact": e.get("our_contact") or [],
              "outreach": e.get("outreach"), "review": e.get("review")}
             for e in _roster_entries()
         ]
@@ -286,7 +289,7 @@ def roster_list(request: Request):
                 {"origin": "dashboard", "id": a.get("id"), "name": a["name"],
                  "areas": a.get("areas") or [], "unit": None, "org": None,
                  "email": None, "status": a["status"],
-                 "projects": a.get("projects") or [], "ncsa_contact": [],
+                 "projects": a.get("projects") or [], "our_contact": [],
                  "created_by": a.get("created_by"), "notes": a.get("notes")})
         return {"count": len(entries), "entries": entries}
     finally:
@@ -1110,7 +1113,7 @@ def _opportunity_context(conn, opp_id: str) -> dict:
             lines.append(f"Their address: {c['email']}"
                          + (f" ({c['unit']})" if c.get("unit") else ""))
         via = ", ".join(f"{p['name']}" + (f" <{p['email']}>" if p.get("email") else "")
-                        for p in (c.get("ncsa_contact") or []) if p.get("name"))
+                        for p in (c.get("our_contact") or []) if p.get("name"))
         if via:
             lines.append(f"Our people who already know them: {via}")
     intro = _intro(r, c, due)

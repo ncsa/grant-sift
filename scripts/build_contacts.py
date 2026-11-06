@@ -171,7 +171,7 @@ def build(tsv_path):
             "unit": UNIT_MAP.get(raw_unit, raw_unit),
             "org": "UIUC",
             "areas": [],
-            "ncsa_contact": [],
+            "our_contact": [],
             "outreach": "sent" if sent.lower().startswith("y") else "not-sent",
             "status": "prospect",
         }
@@ -193,8 +193,8 @@ def build(tsv_path):
                 continue
             pp = STAFF_ALIASES.get(pp, pp)
             staff_seen[pp] = staff_seen.get(pp, 0) + 1
-            if pp not in entry["ncsa_contact"]:
-                entry["ncsa_contact"].append(pp)
+            if pp not in entry["our_contact"]:
+                entry["our_contact"].append(pp)
 
         if extra:
             review.append(extra)

@@ -74,7 +74,7 @@ def load_config(config_dir="config"):
 def normalise(entries, d=Path("config")):
     """One roster shape in, the shape the rest of the pipeline wants out.
 
-    Adds the derived status, resolves `ncsa_contact` names to addresses via
+    Adds the derived status, resolves `our_contact` names to addresses via
     ncsa_staff.yaml, and computes `domain`, the field the model copies back
     and the dashboard groups on. `domain` falls back from research areas to
     the unit to the name, because a party with none of the first two still
@@ -82,7 +82,7 @@ def normalise(entries, d=Path("config")):
     """
     staff = load_staff(d)
     out = []
-    for e in entries:
+    for e in map(upgrade_entry, entries):
         status = derive_status(e)
         if status == "do-not-contact":
             continue
@@ -103,17 +103,27 @@ def normalise(entries, d=Path("config")):
             "org": e.get("org") or "",
             # Resolved once here so the catalogue, the digests and the chat all
             # get the same addresses instead of each re-implementing the join.
-            "ncsa_contact": [
+            "our_contact": [
                 {"name": staff.get(n, {}).get("name", n),
                  "email": staff.get(n, {}).get("email")}
-                for n in (e.get("ncsa_contact") or [])
+                for n in (e.get("our_contact") or [])
             ],
         })
     return out
 
 
+def upgrade_entry(e):
+    """A roster entry written before `ncsa_contact` became `our_contact`.
+    Read either, so a roster file or ConfigMap made before the rename keeps
+    resolving; scripts/build_roster.py rewrites it under the new key."""
+    if "ncsa_contact" in e and "our_contact" not in e:
+        e = {k: v for k, v in e.items() if k != "ncsa_contact"} | {
+            "our_contact": e["ncsa_contact"]}
+    return e
+
+
 def load_staff(d=Path("config")):
-    """Our own people, keyed by the spelling `ncsa_contact` uses.
+    """Our own people, keyed by the spelling `our_contact` uses.
 
     Deliberately NOT part of the roster: this is us, and a roster line naming
     our own staff as the domain partner makes the matcher match us to
@@ -642,7 +652,7 @@ def contact_index(roster):
     around for which of our people already knows them. Both are on the roster
     already, so both are exported.
 
-    Takes an ALREADY-NORMALISED roster (load_config output), so ncsa_contact
+    Takes an ALREADY-NORMALISED roster (load_config output), so our_contact
     is resolved to addresses and status is derived.
     """
     idx = {}
@@ -650,7 +660,7 @@ def contact_index(roster):
         name = (e.get("collaborator") or e.get("name") or "").strip()
         if not name:
             continue
-        internal = [c for c in (e.get("ncsa_contact") or []) if c.get("name")]
+        internal = [c for c in (e.get("our_contact") or []) if c.get("name")]
         if not internal and e.get("notes"):
             # Entries carried over from the old roster name our person in
             # prose - "internal contact Jong Lee (task lead)". Name parts must
@@ -673,7 +683,7 @@ def contact_index(roster):
             "unit": e.get("unit"),
             "org": e.get("org"),
             "outreach": e.get("outreach"),
-            "ncsa_contact": internal,
+            "our_contact": internal,
             "review": e.get("review"),
         }
         idx[name.lower()] = entry
@@ -888,7 +898,7 @@ def render_digest(feed, items, stale):
                 lines.append(f"      reach them: {c['email']}")
             via = ", ".join(
                 f"{p['name']}" + (f" <{p['email']}>" if p.get("email") else "")
-                for p in (c.get("ncsa_contact") or []) if p.get("name"))
+                for p in (c.get("our_contact") or []) if p.get("name"))
             if via:
                 lines.append(f"      via us: {via}")
         lines.append(f"    {it['url']}")
