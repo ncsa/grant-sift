@@ -519,10 +519,12 @@ catalogue search; Match again searches the whole catalogue with the new text.
 **From a file:** one file, attached with Upload file or by dropping it on the
 Idea box. `.txt` and `.md` are read as text; `.pdf` with pdf.js and `.docx`
 with mammoth.js, each loaded from cdnjs (exact versions) only when such a file
-is picked. The file is read to text in the tab and only that text is sent, as
+is picked. `.pptx` needs no library: the deck is unzipped with the browser's
+own `DecompressionStream` and its XML read with `DOMParser`, slides in show
+order, hidden slides skipped, speaker notes kept after each slide. The file is read to text in the tab and only that text is sent, as
 `document`; it shows as a chip under the box, and the box then holds the
 person's **notes** (`idea`): what to emphasise or leave out. A second file
-replaces the first. Old `.doc`, scanned PDFs with no text layer, other types
+replaces the first. Old `.doc` and `.ppt`, scanned PDFs with no text layer, other types
 and files over 10 MB each get a plain message instead.
 
 **Budget:** 15,000 characters for document and notes together

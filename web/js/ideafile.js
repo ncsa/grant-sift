@@ -1,4 +1,4 @@
-// Idea match from a file: a white paper or a one-page summary, read to text
+// Idea match from a file: a white paper, a one-page summary or a deck, read to text
 // and attached beside the Idea box, which stays free for the person's notes.
 
 // Read here, in the tab. The file itself is never uploaded: only its text goes
@@ -96,17 +96,140 @@ async function docxText(file) {
   }
 }
 
+// ---- .pptx: a zip of XML, read without a library -------------------------
+// A deck is only text in <a:t> runs, so unzipping a few entries with the
+// browser's own DecompressionStream and reading them with DOMParser is all
+// it needs: nothing more to load from a CDN, and nothing that can change
+// under us.
+const NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main";
+const NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main";
+const NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+// name -> async () => text, from the zip's central directory.
+function zipEntries(buf) {
+  const v = new DataView(buf);
+  let eocd = -1;
+  for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 65557); i--) {
+    if (v.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("not a zip");
+  const count = v.getUint16(eocd + 10, true);
+  let at = v.getUint32(eocd + 16, true);
+  const dec = new TextDecoder();
+  const out = new Map();
+  for (let n = 0; n < count; n++) {
+    if (v.getUint32(at, true) !== 0x02014b50) throw new Error("bad zip");
+    const method = v.getUint16(at + 10, true);
+    const size = v.getUint32(at + 20, true);
+    const nameLen = v.getUint16(at + 28, true);
+    const extra = v.getUint16(at + 30, true), comment = v.getUint16(at + 32, true);
+    const local = v.getUint32(at + 42, true);
+    const name = dec.decode(new Uint8Array(buf, at + 46, nameLen));
+    out.set(name, async () => {
+      const start = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
+      const raw = new Uint8Array(buf, start, size);
+      if (method === 0) return dec.decode(raw);
+      if (method !== 8) throw new Error("unsupported compression");
+      const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+      return new Response(stream).text();
+    });
+    at += 46 + nameLen + extra + comment;
+  }
+  return out;
+}
+
+const xml = s => new DOMParser().parseFromString(s, "application/xml");
+// One line per paragraph, its runs joined.
+const xmlParas = doc => [...doc.getElementsByTagNameNS(NS_A, "p")]
+  .map(p => [...p.getElementsByTagNameNS(NS_A, "t")].map(t => t.textContent).join(""))
+  .filter(t => t.trim()).join("\n");
+
+// "ppt/slides/slide3.xml" from a target relative to the part that names it.
+function partPath(from, target) {
+  if (target.startsWith("/")) return target.slice(1);
+  const parts = from.split("/").slice(0, -1);
+  for (const seg of target.split("/")) {
+    if (seg === "..") parts.pop(); else if (seg !== ".") parts.push(seg);
+  }
+  return parts.join("/");
+}
+
+async function relsOf(zip, part) {
+  const i = part.lastIndexOf("/");
+  const get = zip.get(`${part.slice(0, i)}/_rels/${part.slice(i + 1)}.rels`);
+  const map = new Map();
+  if (!get) return map;
+  for (const r of xml(await get()).getElementsByTagName("Relationship")) {
+    map.set(r.getAttribute("Id"), { type: r.getAttribute("Type") || "",
+                                    path: partPath(part, r.getAttribute("Target") || "") });
+  }
+  return map;
+}
+
+async function pptxText(file) {
+  if (typeof DecompressionStream === "undefined") {
+    throw new IdeaFileError("This browser cannot read .pptx files. Update it, export the deck as PDF, or paste the text.");
+  }
+  let zip;
+  try { zip = zipEntries(await file.arrayBuffer()); } catch (e) {
+    throw new IdeaFileError("This .pptx could not be read; it may be damaged. Export it as PDF, or paste the text.");
+  }
+  try {
+    // Slides in the order the deck shows them (presentation.xml), which is
+    // not the order of their file names once slides have been moved.
+    const pres = "ppt/presentation.xml";
+    const rels = await relsOf(zip, pres);
+    let slides = [...xml(await zip.get(pres)()).getElementsByTagNameNS(NS_P, "sldId")]
+      .map(el => rels.get(el.getAttributeNS(NS_R, "id")))
+      .filter(r => r && zip.has(r.path)).map(r => r.path);
+    if (!slides.length) {
+      slides = [...zip.keys()].filter(k => /^ppt\/slides\/slide\d+\.xml$/.test(k))
+        .sort((a, b) => parseInt(a.match(/\d+/)) - parseInt(b.match(/\d+/)));
+    }
+    const parts = [];
+    let len = 0, read = 0;
+    for (const path of slides) {
+      if (len > IDEA_DOC_MAX_CHARS) break;
+      const doc = xml(await zip.get(path)());
+      // Hidden slides are not part of the talk.
+      if (doc.documentElement.getAttribute("show") === "0") { read++; continue; }
+      let text = xmlParas(doc);
+      // Speaker notes often carry the argument the slide only lists.
+      const notes = [...(await relsOf(zip, path)).values()].find(r => r.type.endsWith("/notesSlide"));
+      if (notes && zip.has(notes.path)) {
+        const nd = xml(await zip.get(notes.path)());
+        // The notes page repeats the slide number and an image of the slide;
+        // only its body placeholder is the notes.
+        const body = [...nd.getElementsByTagNameNS(NS_P, "sp")].filter(sp =>
+          [...sp.getElementsByTagNameNS(NS_P, "ph")].some(ph => ph.getAttribute("type") === "body"));
+        const said = body.map(sp => xmlParas(sp)).filter(Boolean).join("\n");
+        if (said) text += `${text ? "\n" : ""}Notes: ${said}`;
+      }
+      read++;
+      if (text.trim()) { parts.push(text); len += text.length; }
+    }
+    return { text: tidyText(parts.join("\n\n")), more: read < slides.length,
+             slides: slides.length };
+  } catch (e) {
+    throw new IdeaFileError("This .pptx could not be read; it may be damaged. Export it as PDF, or paste the text.");
+  }
+}
+
 // File in; { text, trimmed, detail } out, or an IdeaFileError whose message
 // is for the person.
 async function readIdeaFile(file) {
   const ext = (file.name.match(/\.([^.]+)$/) || [, ""])[1].toLowerCase();
+  if (ext === "ppt") {
+    throw new IdeaFileError("Old PowerPoint (.ppt) files cannot be read here. In PowerPoint, save it as "
+      + ".pptx (File > Save As) and upload that, or paste the text.");
+  }
   if (ext === "doc") {
     throw new IdeaFileError("Old Word (.doc) files cannot be read here. In Word, save it as .docx "
       + "(File > Save As) and upload that, or paste the text.");
   }
-  if (!["txt", "md", "markdown", "pdf", "docx"].includes(ext)) {
+  if (!["txt", "md", "markdown", "pdf", "docx", "pptx"].includes(ext)) {
     throw new IdeaFileError(`${ext ? `.${ext} files` : "Files of this kind"} cannot be read here. `
-      + "Upload a .txt, .md, .pdf or .docx, or paste the text.");
+      + "Upload a .txt, .md, .pdf, .docx or .pptx, or paste the text.");
   }
   if (file.size > IDEA_FILE_MAX_MB * 1024 * 1024) {
     throw new IdeaFileError(`This file is ${(file.size / 1048576).toFixed(1)} MB; the limit is `
@@ -115,6 +238,7 @@ async function readIdeaFile(file) {
   let got;
   if (ext === "pdf") got = await pdfText(file);
   else if (ext === "docx") got = await docxText(file);
+  else if (ext === "pptx") got = await pptxText(file);
   else got = { text: tidyText(await file.text()) };
   if (!got.text) throw new IdeaFileError("This file has no text in it.");
   const trimmed = got.more || got.text.length > IDEA_DOC_MAX_CHARS;
@@ -125,6 +249,7 @@ async function readIdeaFile(file) {
     if (cut > IDEA_DOC_MAX_CHARS * 0.8) text = text.slice(0, cut);
     text = text.trim();
   }
-  const detail = got.pages ? `${got.pages} ${got.pages === 1 ? "page" : "pages"}` : "";
+  const detail = got.pages ? `${got.pages} ${got.pages === 1 ? "page" : "pages"}`
+    : got.slides ? `${got.slides} ${got.slides === 1 ? "slide" : "slides"}` : "";
   return { text, trimmed, detail };
 }
