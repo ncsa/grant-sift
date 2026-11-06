@@ -109,7 +109,6 @@ function openChat(root, id, toggle) {
   box.querySelector("input").focus();
 }
 document.getElementById("list").addEventListener("click", onCardClick);
-document.getElementById("shelf-body").addEventListener("click", onCardClick);
 
 async function sendFeedback(id, root) {
   root = root || document;
@@ -204,7 +203,6 @@ async function onChatTools(e) {
   hint.textContent = "exported";
 }
 document.getElementById("list").addEventListener("click", onChatTools);
-document.getElementById("shelf-body").addEventListener("click", onChatTools);
 
 async function onChatSubmit(e) {
   const form = e.target.closest("[data-chatform]");
@@ -256,4 +254,3 @@ async function onChatSubmit(e) {
   }
 }
 document.getElementById("list").addEventListener("submit", onChatSubmit);
-document.getElementById("shelf-body").addEventListener("submit", onChatSubmit);

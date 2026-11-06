@@ -2,9 +2,9 @@
 
 // Search, filters, sort and paging are the server's (/api/opportunities,
 // grant_sift/catalogue.py): the page, the API and the MCP tools share one
-// implementation. SEEN keeps every row this tab has been sent, so the Idea
-// match shelf can paint a call without asking again.
-let SEEN = new Map(), GONE = new Set(), ACTIVE = new Set(), QUERY = "", SORT = "score", AREA = "", FUNDER = "";
+// implementation. SEEN keeps every row this tab has been sent, so Idea match
+// can name a recommended call that is not on the page being shown.
+let SEEN = new Map(), ACTIVE = new Set(), QUERY = "", SORT = "score", AREA = "", FUNDER = "";
 let SORT_CHOSEN = false;
 const PERSONAL = ["via-me", "my-sources", "my-digests"];
 let DL_FROM = "", DL_TO = "", DL_MIN = "", DL_MAX = "";
@@ -73,9 +73,27 @@ async function render() {
   // Typing fires a query per keystroke; only the newest answer may paint, or
   // a slow early response would overwrite the results for what was typed last.
   const seq = ++RENDER_SEQ;
+  const idea = ideaView();
+  paintIdeaRec(null);
+  if (idea && !idea.items.length) {
+    document.getElementById("tally").innerHTML = "";
+    document.getElementById("list").innerHTML = ideaEmptyHTML();
+    paintPager("pager", 1, 0, PAGE_SIZE);
+    return;
+  }
+  // Idea match asks for its matched calls by id, every one in a single page,
+  // through the same filters: the server narrows, and the ranking by fit to
+  // the idea and the paging happen here, since the server has no idea to
+  // rank by. A shortlist is at most FOCUS_SHORTLIST (50) calls.
+  const params = queryParams();
+  if (idea) {
+    params.set("ids", idea.items.map(i => i.id).join(","));
+    params.set("page", 1);
+    params.set("page_size", 200);
+  }
   let data;
   try {
-    const r = await fetch("api/opportunities?" + queryParams());
+    const r = await fetch("api/opportunities?" + params);
     data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.detail || `search failed (${r.status})`);
   } catch (e) {
@@ -85,11 +103,27 @@ async function render() {
     return;
   }
   if (seq !== RENDER_SEQ) return;
-  PAGE = data.page;
   data.opportunities.forEach(o => SEEN.set(o.id, o));
+  if (idea) {
+    let hits = data.opportunities;
+    if (SORT === "score") {
+      const rank = new Map(idea.items.map((it, n) => [it.id, n]));
+      hits = [...hits].sort((a, b) => rank.get(a.id) - rank.get(b.id));
+    }
+    const pages = Math.max(1, Math.ceil(hits.length / PAGE_SIZE));
+    PAGE = Math.max(1, Math.min(PAGE, pages));
+    data = { ...data, total: hits.length, page: PAGE, pages,
+             opportunities: hits.slice((PAGE - 1) * PAGE_SIZE, PAGE * PAGE_SIZE) };
+  } else {
+    PAGE = data.page;
+  }
 
+  // In Idea match the count is the matched set against the whole catalogue;
+  // filters then say how many of the matches they leave.
+  const narrowed = idea && data.total !== idea.items.length;
   const ctx = [
-    data.total !== data.of ? `of ${data.of} open` : "",
+    idea ? (narrowed ? `${data.total} with these filters` : "")
+      : data.total !== data.of ? `of ${data.of} open` : "",
     AREA ? `in "${shortArea(AREA)}"` : "",
     deadlineRangeLabel().trim(),
     MIN_FIT ? `fit ${MIN_FIT}+` : "",
@@ -97,14 +131,21 @@ async function render() {
     POSTED_DAYS ? `added in the past ${POSTED_DAYS} days` : "",
     data.total ? `Page ${data.page} of ${data.pages}` : "",
   ].filter(Boolean).join(" · ");
+  const cnt = idea
+    ? `${idea.items.length} of ${data.of} open ${data.of === 1 ? "call fits" : "calls fit"} your idea`
+    : `${data.total} ${data.total === 1 ? "call" : "calls"}`;
   document.getElementById("tally").innerHTML =
-    `<span class="cnt">${data.total} ${data.total === 1 ? "call" : "calls"}</span>` +
-    (ctx ? `<span class="ctx">${esc(ctx)}</span>` : "");
+    `<span class="cnt">${esc(cnt)}</span>` + (ctx ? `<span class="ctx">${esc(ctx)}</span>` : "");
 
+  const byId = idea ? new Map(idea.items.map(it => [it.id, it])) : null;
   document.getElementById("list").innerHTML = data.opportunities.length
-    ? data.opportunities.map(o => rowHTML(o)).join("")
-    : `<li class="empty"><b>Nothing matches those filters.</b>
-         Clear a filter, or widen the search.</li>`;
+    ? data.opportunities.map(o => rowHTML(o, idea ? { idea: byId.get(o.id) } : {})).join("")
+    : idea
+      ? `<li class="empty"><b>None of the matches pass those filters.</b>
+           Clear a filter to see the rest of the ${idea.items.length}.</li>`
+      : `<li class="empty"><b>Nothing matches those filters.</b>
+           Clear a filter, or widen the search.</li>`;
+  if (idea) paintIdeaRec(new Set(data.opportunities.map(o => o.id)));
 
   paintPager("pager", PAGE, data.total, PAGE_SIZE);
 

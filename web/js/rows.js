@@ -56,8 +56,6 @@ function introBtn(o) {
       title="${esc(how)}">${ICON_MAIL}<span>Draft intro to ${esc(o.match_name)}</span></button>`;
 }
 const ROSTER_LINK = `<button type="button" class="linkbtn rosterlink" data-open-roster>Who we know →</button>`;
-const trashBtn = id => `<button class="vote thumb trash" data-shrm="${esc(id)}"
-    aria-label="Remove from shortlist" title="Remove from shortlist">${ICON_TRASH}</button>`;
 
 // Bands carry the meaning: the score is a model estimate, so the word
 // ("Strong fit") is the real resolution and the number sits beside it.
@@ -68,9 +66,15 @@ const SCORE_BANDS = [
   [0, "min", "Weak fit"],
 ];
 const band = score => SCORE_BANDS.find(([min]) => score >= min) || SCORE_BANDS[3];
-function scoreSignal(score) {
-  return `<div class="score ${band(score)[1]}" title="How well this matches the group's work, scored 0 to 100 by the model">
-      <div class="eyebrow">Fit</div>
+// In Idea match the lead is fit to the idea instead: a different question on
+// the same 0-100 scale, so it gets its own label and is never mixed with the
+// group's score.
+function scoreSignal(score, idea = false) {
+  const what = idea
+    ? "How well this call fits your idea, scored 0 to 100 by the model. Not the group's relevance score."
+    : "How well this matches the group's work, scored 0 to 100 by the model";
+  return `<div class="score ${band(score)[1]}" title="${what}">
+      <div class="eyebrow">${idea ? "Idea fit" : "Fit"}</div>
       <div class="num" aria-label="Fit score ${score} of 100"><b>${score}</b><span>/100</span></div>
       <span class="fitpill ${band(score)[1]}">${band(score)[2]}</span>
     </div>`;
@@ -124,8 +128,9 @@ function canIntro(o) {
 function rowHTML(o, opts = {}) {
   const away = daysAway(o.deadline);
   const soon = away !== null && away >= 0 && away <= 30;
-  // Idea match is narrower, so award and fit ride in the meta line there.
-  const compact = !!opts.shelf;
+  // In Idea match the row leads with fit to the idea, and says why it fits
+  // the idea in place of why it fits the group.
+  const idea = opts.idea;
   const title = decode(o.title);
 
   const award = awardParts(o.award_ceiling);
@@ -139,18 +144,12 @@ function rowHTML(o, opts = {}) {
           ? "not for us" + (hv.aspect && hv.aspect !== "score" ? ` (${esc(hv.aspect)})` : "")
           : "useful"}</span>`
     : "";
-  const kept = !opts.shelf && shelfHas(o.id) ? `<span class="kept">In Idea match</span>` : "";
 
   const funder = o.funder || o.agency || "";
   const meta = [];
   if (funder) meta.push(`<span class="funder">${esc(funder)}</span>`);
   if (o.source && o.source !== funder) meta.push(`<span class="via">${esc(o.source)}</span>`);
   if (!meta.length) meta.push(`<span class="funder">Unknown</span>`);
-  if (compact) {
-    meta.push(award ? `<span>${esc(award.head)}</span>` : `<span>Award not stated</span>`);
-    meta.push(`<span class="mininum" aria-label="Fit score ${o.score} of 100"><b>${o.score}</b>/100</span>`);
-    meta.push(`<span class="fitpill ${band(o.score)[1]}">${band(o.score)[2]}</span>`);
-  }
   // Other listings of this same call, folded in server-side. Worth a link:
   // the Research Board's copy is where a campus limited submission shows.
   const alsoOn = new Map();
@@ -162,7 +161,6 @@ function rowHTML(o, opts = {}) {
       ? `<a href="${esc(url)}" target="_blank" rel="noopener" title="This call's listing on ${esc(src)}">${esc(src)}</a>`
       : esc(src)).join(", ")}</span>`);
   }
-  if (kept) meta.push(kept);
   if (verdict) meta.push(verdict);
   if (cap) meta.push(cap);
 
@@ -189,10 +187,8 @@ function rowHTML(o, opts = {}) {
 
   // Fit leads the row, since it is what the list is ranked by; the deadline
   // and award sit together on the right.
-  const lead = compact
-    ? `<div class="when">${whenHTML(o)}</div>`
-    : `<div class="lead">${scoreSignal(o.score)}</div>`;
-  const side = compact ? "" : `
+  const lead = `<div class="lead">${idea ? scoreSignal(idea.affinity ?? 0, true) : scoreSignal(o.score)}</div>`;
+  const side = `
     <aside class="side">
       <div>
         <div class="eyebrow">Deadline</div>
@@ -206,14 +202,18 @@ function rowHTML(o, opts = {}) {
       </div>
     </aside>`;
 
-  return `<li class="row${soon ? " soon" : ""}" id="${opts.shelf ? "sh-" : "c-"}${esc(o.id)}">
+  const why = idea
+    ? (idea.why ? `<p class="why"><span class="tag">Fits your idea</span>${esc(idea.why)}</p>` : "")
+    : (o.rationale ? `<p class="why"><span class="tag">Why it fits</span>${esc(o.rationale)}</p>` : "");
+
+  return `<li class="row${soon ? " soon" : ""}" id="c-${esc(o.id)}">
     ${lead}
     <div class="body">
       <div class="meta">${meta.join("")}</div>
       <h2 class="title">${o.url
         ? `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(title)}</a>`
         : esc(title)}</h2>
-      ${o.rationale ? `<p class="why"><span class="tag">Why it fits</span>${esc(o.rationale)}</p>` : ""}
+      ${why}
       ${o.summary ? `<p class="sumry">${esc(o.summary)}</p>` : ""}
       ${fit}
       <div class="acts">
@@ -222,7 +222,6 @@ function rowHTML(o, opts = {}) {
         <span class="spacer"></span>
         <span class="votenote" data-fb="${esc(o.id)}"></span>
         <span class="votes">
-          ${opts.shelf ? trashBtn(o.id) : ""}
           <button class="vote thumb" data-vote="up"   data-id="${esc(o.id)}" aria-pressed="false" aria-label="Useful" title="Useful: score calls like this higher">${ICON_UP}</button>
           <button class="vote thumb" data-vote="down" data-id="${esc(o.id)}" aria-pressed="false" aria-label="Not for us" title="Not for us: score calls like this lower">${ICON_DOWN}</button>
         </span>

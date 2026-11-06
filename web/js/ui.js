@@ -96,7 +96,7 @@ document.getElementById("newsbar-close").addEventListener("click", () => {
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") {
     closeMenus();
-    const close = { "shelf-modal": closeShelf, "roster-modal": closeRoster,
+    const close = { "roster-modal": closeRoster,
                     "sources-modal": closeSources, "chat-modal": closeChatPanel,
                     "digest-modal": closeDigests }[topModal()?.id];
     if (close) close();

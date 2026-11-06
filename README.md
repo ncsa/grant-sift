@@ -486,15 +486,19 @@ rather than anonymous.
 
 ## Idea match
 
-**Idea match** is the dashboard panel for “I have a project idea — which open
-calls fit it?” It combines reverse lookup (#6) and a browser-local shortlist
-(#7) in one place. The homepage list is left alone; matches never filter it.
+**Idea match** is a mode of the dashboard for “I have a project idea — which
+open calls fit it?” The Idea box sits under Search with an on/off switch. On,
+the main list becomes the calls that fit the idea, best fit first, each with
+why it fits; the recommendation (the call to go for, and the runner-up) sits
+above the list. Funder, deadline, award and the other filters narrow the
+matched set, and “Highest relevance” becomes “Best fit to idea”. Off, the
+dashboard is as it was, with its filters and sort.
 
 ```
-idea ──► Match with all open calls ──► prune ──► edit idea ──► auto re-rank
+idea ──► Match ──► matches in the list ──► filter / sort ──► edit idea ──► auto re-rank
 ```
 
-**Nothing about the idea is stored on the server.** The paragraph, the kept
+**Nothing about the idea is stored on the server.** The paragraph, the matched
 calls and the recommendation live in `localStorage` / the tab only — the same
 posture as the chat transcript. Clear browser data and they are gone; they do not
 follow you to another device.
@@ -508,9 +512,9 @@ follow you to another device.
 | `POST /api/rescore` | Re-score kept calls against the idea as now written; pick one | ~2k tokens, seconds |
 
 Matching shows elapsed time and staged status while `/api/focus` runs. When it
-finishes, the panel opens with the hits and automatically generates a
-recommendation. Editing the idea and leaving the field re-ranks the kept calls
-without another full catalogue search.
+finishes, the list fills with the hits and a recommendation follows. Editing
+the idea and leaving the field re-ranks the matches without another full
+catalogue search; Match again searches the whole catalogue with the new text.
 
 Closed calls are excluded from both prompts and from the catalogue
 (`db.LIVE`). Affinity is **fit to this idea**, not the group’s relevance score,
