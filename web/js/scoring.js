@@ -47,6 +47,15 @@ async function loadScoring() {
     (backups.length ? ` If it is unavailable, ${backups.map(m => `<b>${esc(m)}</b>`).join(" or ")}` +
       " scores instead, and those calls say so on their card." : "");
 
+  // The profile's score guide ("80-100  we should almost certainly pursue"),
+  // as a two-column table. A line that is not "range  meaning" is skipped.
+  const guide = (d.guide || "").split("\n")
+    .map(l => l.trim().match(/^(\d+\s*[-–]\s*\d+)\s+(.+)$/)).filter(Boolean);
+  const gt = document.getElementById("sc-guide");
+  gt.querySelector("tbody").innerHTML = guide.map(([, r, m]) =>
+    `<tr><td>${esc(r.replace(/\s*[-–]\s*/, "–"))}</td><td>${esc(m)}</td></tr>`).join("");
+  gt.hidden = !guide.length;
+
   document.querySelectorAll(".scoring .sc-label").forEach(el => {
     el.textContent = d.label || "relevance";
   });

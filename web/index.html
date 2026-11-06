@@ -41,6 +41,7 @@
             <button type="button" class="mitem" role="menuitem" id="open-scoring" data-open-scoring>
               <svg class="ico ic ic-blue" width="18" height="18" aria-hidden="true"><use href="icons.svg#info"/></svg>
               <span class="mtxt"><b>How scoring works</b><small>The model behind each score</small></span>
+              <span class="status" id="backup-n" hidden></span>
             </button>
           </div>
           <div class="mgrp" id="grafana-grp" hidden>
@@ -425,6 +426,11 @@
       <p>An AI model reads each open call (its title, funder, deadline, award and
         description) and scores it 0 to 100 for <b class="sc-label">relevance</b>: how much
         this group should look at it. It also writes the one-line reason on the card.</p>
+      <table class="scguide" id="sc-guide" hidden>
+        <caption class="sr">What the score means</caption>
+        <thead><tr><th scope="col">Score</th><th scope="col">Means</th></tr></thead>
+        <tbody></tbody>
+      </table>
       <p>It suggests the closest person on the roster too. A <b>lead</b> is someone we
         have only emailed, not someone we have worked with.</p>
       <p>Your thumbs up or down on a card count right away, and teach the model when it
@@ -500,7 +506,7 @@
 <script src="js/panels.js?v=11"></script>
 <script src="js/account.js?v=11"></script>
 <script src="js/cards.js?v=13"></script>
-<script src="js/scoring.js?v=2"></script>
-<script src="js/main.js?v=17"></script>
+<script src="js/scoring.js?v=3"></script>
+<script src="js/main.js?v=18"></script>
 </body>
 </html>

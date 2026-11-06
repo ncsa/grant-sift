@@ -136,6 +136,12 @@ a:hover { color: var(--c-primary); text-decoration: underline; }
 .scorebody .scnow { padding: 12px 14px; border-radius: 10px; background: var(--surface-2);
                     color: var(--c-primary); }
 .scorebody .help { margin-top: 4px; }
+.scguide { width: 100%; margin: 4px 0 14px; border-collapse: collapse; font-size: 13.5px; }
+.scguide th, .scguide td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--rule); }
+.scguide th { font-size: 12px; font-weight: 600; color: var(--text-3); }
+.scguide td:first-child { width: 1%; white-space: nowrap; font-weight: 600;
+                          font-variant-numeric: tabular-nums; color: var(--c-primary); }
+.scguide td:last-child { color: var(--text-2); }
 .scbd { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--rule); }
 .scbd ul { margin: 0; padding: 0; list-style: none; font-size: 13.5px; color: var(--text-2); }
 .scbd li { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; }

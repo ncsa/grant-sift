@@ -108,6 +108,13 @@ class Panel(unittest.TestCase):
         self.assertIsNone(rows["c1"]["scoring_version"])
         self.assertTrue(rows["c1"]["assessed_at"])
 
+    def test_catalogue_counts_backup_scored_for_the_pill(self):
+        from grant_sift import catalogue
+        conn = db.connect(self.path)
+        f = catalogue.facets(conn, catalogue.load(conn, {}))
+        conn.close()
+        self.assertEqual(f["backup_scored"], 1)
+
     def test_rollup_counts_by_version(self):
         conn = db.connect(self.path)
         telemetry.record_daily(conn)

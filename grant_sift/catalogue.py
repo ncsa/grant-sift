@@ -519,4 +519,6 @@ def facets(conn, rows):
         "filters": list(FILTERS),
         "sorts": list(SORTS),
         "stale_sources": [dict(r) for r in db.stale_sources(conn)],
+        # Open calls a backup model scored (#67): a pill in the Data menu.
+        "backup_scored": db.fallback_scored(conn)["count"],
     }
