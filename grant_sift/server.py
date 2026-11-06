@@ -273,6 +273,8 @@ def scoring(request: Request):
         "live_total": sum(b["count"] for b in breakdown),
         "fallback_scored": fallback,
         "label": sc["label"],
+        # What "fits" means here: the group this deployment is configured for.
+        "group": profile.PROFILE["group"]["description"],
         "categories": [c["id"] for c in sc["categories"]],
         "axes": [a["id"] for a in sc["axes"]],
         "guide": sc["guide"].strip(),

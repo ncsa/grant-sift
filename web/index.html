@@ -252,7 +252,7 @@
               <option value="">Any</option>
               <option value="collaboration">Past collaborator</option>
               <option value="program">Program</option>
-              <option value="contact" title="An outreach lead, not a past collaboration">Outreach contact</option>
+              <option value="contact" title="Their work lines up, but we have not worked with them yet">Potential collaborator</option>
             </select>
           </label>
           <label class="field pick-f" data-roster>
@@ -424,15 +424,18 @@
     <div class="scorebody">
       <p id="sc-now" class="scnow">Loading…</p>
       <p>An AI model reads each open call (its title, funder, deadline, award and
-        description) and scores it 0 to 100 for <b class="sc-label">relevance</b>: how much
-        this group should look at it. It also writes the one-line reason on the card.</p>
+        description) and scores it 0 to 100 for <b class="sc-label">relevance</b>: how well
+        it fits what this site is set up for<span id="sc-group"></span>. It also writes the
+        one-line reason on the card.</p>
       <table class="scguide" id="sc-guide" hidden>
         <caption class="sr">What the score means</caption>
         <thead><tr><th scope="col">Score</th><th scope="col">Means</th></tr></thead>
         <tbody></tbody>
       </table>
-      <p>It suggests the closest person on the roster too. A <b>lead</b> is someone we
-        have only emailed, not someone we have worked with.</p>
+      <p>When roster matching is on (see <a href="#" data-open-roster>Who we know</a>),
+        it also suggests the closest person on the roster. A <b>potential
+        collaborator</b> is someone whose work lines up with the call, but who we have
+        not worked with yet.</p>
       <p>Your thumbs up or down on a card count right away, and teach the model when it
         scores other calls.</p>
       <p class="help">Scores are a first pass, not a decision.</p>
@@ -497,7 +500,7 @@
 <!-- Plain scripts, not modules: they share top-level state, so order matters. -->
 <script src="js/format.js?v=13"></script>
 <script src="js/icons.js?v=11"></script>
-<script src="js/rows.js?v=15"></script>
+<script src="js/rows.js?v=16"></script>
 <script src="js/list.js?v=14"></script>
 <script src="js/ai.js?v=13"></script>
 <script src="js/ui.js?v=12"></script>
@@ -506,7 +509,7 @@
 <script src="js/panels.js?v=11"></script>
 <script src="js/account.js?v=11"></script>
 <script src="js/cards.js?v=13"></script>
-<script src="js/scoring.js?v=3"></script>
+<script src="js/scoring.js?v=4"></script>
 <script src="js/main.js?v=18"></script>
 </body>
 </html>

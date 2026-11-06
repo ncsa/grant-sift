@@ -24,7 +24,12 @@ function openScoringFromHash() {
 }
 window.addEventListener("hashchange", openScoringFromHash);
 document.getElementById("scoring-close").addEventListener("click", closeScoring);
-scoringModal().addEventListener("click", e => { if (e.target === e.currentTarget) closeScoring(); });
+scoringModal().addEventListener("click", e => {
+  if (e.target === e.currentTarget) closeScoring();
+  // "Who we know" opens under this panel in paint order, so step out first;
+  // ui.js opens the roster as the click reaches the document.
+  else if (e.target.closest("[data-open-roster]")) { e.preventDefault(); closeScoring(); }
+});
 
 async function loadScoring() {
   const now = document.getElementById("sc-now");
@@ -55,6 +60,8 @@ async function loadScoring() {
   gt.querySelector("tbody").innerHTML = guide.map(([, r, m]) =>
     `<tr><td>${esc(r.replace(/\s*[-–]\s*/, "–"))}</td><td>${esc(m)}</td></tr>`).join("");
   gt.hidden = !guide.length;
+
+  document.getElementById("sc-group").textContent = d.group ? ` (${d.group})` : "";
 
   document.querySelectorAll(".scoring .sc-label").forEach(el => {
     el.textContent = d.label || "relevance";

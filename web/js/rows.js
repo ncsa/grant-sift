@@ -182,7 +182,7 @@ function rowHTML(o, opts = {}) {
   const flags = [
     o.match_status && o.match_status !== "warm" ? esc(o.match_status) : "",
     o.match_kind === "contact"
-      ? `<span title="On the outreach list. We have emailed them; we have not worked with them.">lead, not a past project</span>` : "",
+      ? `<span title="Their work lines up with this call, but we have not worked with them yet.">potential collaborator</span>` : "",
     o.match_kind === "program"
       ? `<span title="Something we run. There is no outside partner to approach; this call could fund work on it.">our own program</span>` : "",
   ].filter(Boolean).map(f => `<span class="cold"> · ${f}</span>`).join("");

@@ -301,7 +301,7 @@ matched in `match_kind`:
 | --- | --- | --- | --- |
 | PAST COLLABORATIONS | *(default)* | `collaboration` | them + via us |
 | PROGRAMS WE RUN | `program` | `program` | via us only, badged *our own program* |
-| KNOWN CONTACTS | *(default, no projects)* | `contact` | them + via us, badged *lead, not a past project* |
+| KNOWN CONTACTS | *(default, no projects)* | `contact` | them + via us, badged *potential collaborator* |
 
 `kind: program` exists because roughly a third of the roster is not a partner
 at all: Clowder, Ergo, Brown Dog, EarthCube, the NDS Labs Workbench. There is
