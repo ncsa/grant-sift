@@ -3,10 +3,12 @@
 Stdlib only:  python -m unittest discover tests
 """
 
+import os
+import tempfile
 import unittest
 from datetime import date, timedelta
 
-from grant_sift import server
+from grant_sift import db, server
 
 SOON = (date.today() + timedelta(days=10)).isoformat()
 LATER = (date.today() + timedelta(days=60)).isoformat()
@@ -49,6 +51,40 @@ class Eligibility(unittest.TestCase):
         i = server._intro(match("collaboration"), {}, None)
         self.assertTrue(i["eligible"])
         self.assertIsNone(i["days_to_deadline"])
+
+
+class RosterOff(unittest.TestCase):
+    """A viewer who turned roster matches off: the chat context leaves the
+    match out, so the model does not bring up a person the page hides."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        path = os.path.join(self.dir.name, "t.db")
+        db.init(path)
+        self.conn = db.connect(path)
+        db.upsert_opportunity(self.conn, {
+            "id": "c1", "source": "grants.gov", "title": "Data pipelines", "agency": "NSF",
+            "url": "https://example.org/c1", "deadline": LATER, "synopsis": "Build one.",
+            "raw": {}})
+        db.save_assessment(self.conn, "c1", {
+            "score": 80, "category": "ci_program", "rationale": "fits",
+            **match("collaboration"), "match_domain": "math",
+            "match_rationale": "wrote the notes"}, "m", "h")
+
+    def tearDown(self):
+        self.conn.close()
+        self.dir.cleanup()
+
+    def test_match_in_context_by_default(self):
+        text = server._opportunity_context(self.conn, "c1")["text"]
+        self.assertIn("Ada Lovelace", text)
+        self.assertIn("PAST COLLABORATOR", text)
+
+    def test_roster_off_leaves_the_match_out(self):
+        text = server._opportunity_context(self.conn, "c1", roster=False)["text"]
+        self.assertNotIn("Ada Lovelace", text)
+        self.assertNotIn("Analytical Engine", text)
+        self.assertIn("Pipeline score: 80/100", text)
 
 
 class Quotes(unittest.TestCase):

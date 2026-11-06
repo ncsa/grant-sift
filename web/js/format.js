@@ -5,6 +5,12 @@
 let SCORE_LABEL = "Score";
 // Our own institution as the roster writes it (profile org.home): not shown.
 let HOME_ORG = "";
+// Roster matches on or off, the viewer's choice (Who we know), kept in this
+// browser. Off: no match on any card, no roster filters. Display only: the
+// matches are still stored and still come back from the API.
+const ROSTER_KEY = "gs.roster";
+let ROSTER_ON = true;
+try { ROSTER_ON = localStorage.getItem(ROSTER_KEY) !== "off"; } catch (e) {}
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 

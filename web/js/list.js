@@ -285,6 +285,31 @@ document.getElementById("list").addEventListener("click", e => {
   PAGE = 1;
   render();
 });
+// Roster matches on or off for this viewer. Turning off also drops any roster
+// filter in force: a filter whose control is hidden would narrow the list with
+// no way to see why, or to undo it.
+function paintRoster() {
+  document.documentElement.classList.toggle("noroster", !ROSTER_ON);
+  document.getElementById("roster-show").checked = ROSTER_ON;
+}
+function setRoster(on) {
+  ROSTER_ON = on;
+  try { localStorage.setItem(ROSTER_KEY, on ? "on" : "off"); } catch (e) {}
+  if (!on) {
+    for (const f of ["match", "via-me"]) {
+      ACTIVE.delete(f);
+      document.querySelector(`.chip[data-filter="${f}"]`)?.setAttribute("aria-pressed", "false");
+    }
+    AREA = M_KIND = M_STATUS = "";
+    for (const id of ["area", "match-kind", "match-status"]) document.getElementById(id).value = "";
+  }
+  paintRoster();
+  PAGE = 1;
+  render();
+}
+paintRoster();
+document.getElementById("roster-show").addEventListener("change", e => setRoster(e.target.checked));
+
 // Delegated: the Call type chips are painted from the profile after load.
 document.addEventListener("click", e => {
   const btn = e.target.closest(".chip[data-filter]");

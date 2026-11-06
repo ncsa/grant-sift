@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=14">
+<link rel="stylesheet" href="styles.css?v=16">
 </head>
 <body>
 <header class="strip">
@@ -96,7 +96,7 @@
     <p class="statline">
       <span><b id="n-open">..</b> open</span>
       <span><b class="warn" id="n-soon">..</b> close within 30 days</span>
-      <span><b id="n-match">..</b> <span id="match-phrase">roster matches</span></span>
+      <span data-roster><b id="n-match">..</b> <span id="match-phrase">roster matches</span></span>
       <span id="asof"></span>
     </p>
   </section>
@@ -159,7 +159,7 @@
         <span class="sr">Funder</span>
         <select id="funder" class="sortsel"><option value="">All funders</option></select>
       </label>
-      <label class="field area-f">
+      <label class="field area-f" data-roster>
         <span class="sr">Roster area</span>
         <select id="area" class="sortsel"><option value="">All roster areas</option></select>
       </label>
@@ -168,11 +168,11 @@
       <div class="chipgroup" role="group" aria-labelledby="g-priority">
         <span class="glbl" id="g-priority">Priority</span>
         <button class="chip" data-filter="soon" aria-pressed="false">Closing soon</button>
-        <button class="chip" data-filter="match" aria-pressed="false">Roster match</button>
+        <button class="chip" data-filter="match" aria-pressed="false" data-roster>Roster match</button>
       </div>
       <div class="chipgroup" role="group" aria-labelledby="g-mine" id="grp-mine" hidden>
         <span class="glbl" id="g-mine">Mine</span>
-        <button class="chip" data-filter="via-me" aria-pressed="false" hidden
+        <button class="chip" data-filter="via-me" aria-pressed="false" hidden data-roster
                 title="Calls where you are the contact to introduce">Via me</button>
         <button class="chip" data-filter="my-sources" aria-pressed="false" hidden
                 title="Calls from funder pages or feeds you added">My sources</button>
@@ -241,7 +241,7 @@
               <option value="90">Past 90 days</option>
             </select>
           </label>
-          <label class="field pick-f">
+          <label class="field pick-f" data-roster>
             <span class="flbl">Match kind</span>
             <select id="match-kind" class="sortsel">
               <option value="">Any</option>
@@ -250,7 +250,7 @@
               <option value="contact" title="An outreach lead, not a past collaboration">Outreach contact</option>
             </select>
           </label>
-          <label class="field pick-f">
+          <label class="field pick-f" data-roster>
             <span class="flbl">Match status</span>
             <select id="match-status" class="sortsel">
               <option value="">Any</option>
@@ -372,6 +372,13 @@
               title="Everyone the matcher can suggest: people we have worked with, and people we have only emailed. Search before adding — most names are already here."><svg class="ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#info"/></svg></span></h2>
       <button type="button" class="x" id="roster-close" aria-label="Close"><svg class="ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#x"/></svg></button>
     </header>
+    <!-- The viewer's choice, kept in this browser. Lives with the roster it
+         switches, so a roster of their own can sit here later. -->
+    <label class="rostershow">
+      <input type="checkbox" id="roster-show" checked>
+      <span><b>Match calls to this roster</b>
+        <small>Shows the closest fit on each call and the roster filters. Only for you, in this browser.</small></span>
+    </label>
     <details class="addbox">
       <summary>Add a collaborator who is not listed above</summary>
     <form id="rform">
@@ -455,17 +462,17 @@
 </div>
 
 <!-- Plain scripts, not modules: they share top-level state, so order matters. -->
-<script src="js/format.js?v=12"></script>
+<script src="js/format.js?v=13"></script>
 <script src="js/icons.js?v=11"></script>
-<script src="js/rows.js?v=13"></script>
-<script src="js/list.js?v=12"></script>
+<script src="js/rows.js?v=14"></script>
+<script src="js/list.js?v=14"></script>
 <script src="js/ai.js?v=13"></script>
 <script src="js/ui.js?v=11"></script>
 <script src="js/ideafile.js?v=14"></script>
 <script src="js/idea.js?v=15"></script>
 <script src="js/panels.js?v=11"></script>
 <script src="js/account.js?v=11"></script>
-<script src="js/cards.js?v=11"></script>
-<script src="js/main.js?v=14"></script>
+<script src="js/cards.js?v=12"></script>
+<script src="js/main.js?v=15"></script>
 </body>
 </html>

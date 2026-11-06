@@ -235,7 +235,7 @@ async function onChatSubmit(e) {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         opportunity_id: id, api_key: key, model, base_url: base,
-        messages: CHATS[id],
+        messages: CHATS[id], roster: ROSTER_ON,
       }),
     });
     const d = await r.json().catch(() => ({}));
