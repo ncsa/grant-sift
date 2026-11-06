@@ -48,7 +48,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import adapters, auth, catalogue, db, llm, mcp_server, pipeline, telemetry
+from . import adapters, auth, catalogue, db, llm, mcp_server, pipeline, profile, telemetry
 
 DB_PATH = os.environ.get("GRANT_SIFT_DB", "grant-sift.db")
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -59,7 +59,6 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 # response through us. Entries may be exact hostnames or a leading-dot suffix
 # (e.g. .openai.azure.com). Extend with GRANT_SIFT_CHAT_ALLOWED_HOSTS.
 _DEFAULT_CHAT_HOSTS = (
-    "lumen.ncsa.illinois.edu,"
     "api.openai.com,"
     "api.groq.com,"
     "openrouter.ai,"
@@ -75,7 +74,9 @@ ALLOWED_HOSTS = {
     h.strip().lower()
     for h in os.environ.get("GRANT_SIFT_CHAT_ALLOWED_HOSTS", _DEFAULT_CHAT_HOSTS).split(",")
     if h.strip()
-}
+} | {(urlparse(llm.BASE_URL).hostname or "").lower()} - {""}
+# The shared gateway (GRANT_SIFT_LLM_BASE_URL) is always allowed: it is the
+# first provider the page offers for a viewer's own key.
 
 
 # Heavy on feedback because each row feeds the next classification prompt, so
@@ -235,7 +236,11 @@ def public_config():
     return {"grafana_url": url or None,
             # What Ask and Idea match run on when the viewer brings no key.
             "ai": {"shared": bool(llm.API_KEY), "model": llm.MODEL,
-                   "gateway": urlparse(llm.BASE_URL).hostname}}
+                   "gateway": urlparse(llm.BASE_URL).hostname,
+                   # Not secret: offered as the first own-key provider.
+                   "base_url": llm.BASE_URL, "name": llm.GATEWAY_NAME},
+            # Wording, the score's name and call-type chips (config/profile.yaml).
+            "profile": profile.public()}
 
 
 @app.get("/api/whoami")
@@ -275,7 +280,7 @@ def roster_list(request: Request):
             {"origin": "file", "name": e["name"], "areas": e.get("areas") or [],
              "unit": e.get("unit"), "org": e.get("org"), "email": e.get("email"),
              "status": e["status"], "projects": e.get("projects") or [],
-             "ncsa_contact": e.get("ncsa_contact") or [],
+             "our_contact": e.get("our_contact") or [],
              "outreach": e.get("outreach"), "review": e.get("review")}
             for e in _roster_entries()
         ]
@@ -284,7 +289,7 @@ def roster_list(request: Request):
                 {"origin": "dashboard", "id": a.get("id"), "name": a["name"],
                  "areas": a.get("areas") or [], "unit": None, "org": None,
                  "email": None, "status": a["status"],
-                 "projects": a.get("projects") or [], "ncsa_contact": [],
+                 "projects": a.get("projects") or [], "our_contact": [],
                  "created_by": a.get("created_by"), "notes": a.get("notes")})
         return {"count": len(entries), "entries": entries}
     finally:
@@ -366,7 +371,7 @@ def _normalize_email(raw: str) -> str:
         raise HTTPException(400, "email required")
     if "@" not in email:
         # Keycloak sometimes puts NetID in the email claim.
-        email = f"{email}@illinois.edu"
+        email = f"{email}@{profile.PROFILE['org']['email_domain']}"
     if not _EMAIL_RE.match(email) or len(email) > 200:
         raise HTTPException(400, "invalid email address")
     return email
@@ -390,7 +395,7 @@ def _config_stamp():
     cheap next to parsing the YAML, and lets an edit - a ConfigMap update in
     Kubernetes - reach the next request without a restart."""
     d = Path("config")
-    paths = (d / "sources.yaml", d / "ncsa_staff.yaml",
+    paths = (d / "sources.yaml", d / "staff.yaml", d / "ncsa_staff.yaml",
              Path(os.environ.get("GRANT_SIFT_ROSTER") or (d / "roster.yaml")))
     out = []
     for p in paths:
@@ -919,8 +924,10 @@ def _complete(gw: dict, messages: list, max_tokens: int, temperature: float = 0)
             "temperature": temperature, "messages": messages}
     # Lumen / some vLLM stacks bill reasoning as output; OpenAI-compatible
     # cloud APIs reject this unknown field, so only send it there.
+    # Only to the configured gateway (GRANT_SIFT_LLM_BASE_URL), and only when
+    # GRANT_SIFT_LLM_THINKING is off, as for scoring.
     host = (urlparse(gw["base_url"]).hostname or "").lower()
-    if host == "lumen.ncsa.illinois.edu" or host.endswith(".ncsa.illinois.edu"):
+    if host == (urlparse(llm.BASE_URL).hostname or "").lower() and not llm.THINKING:
         body["chat_template_kwargs"] = {"enable_thinking": False}
     try:
         r = requests.post(f"{gw['base_url']}/chat/completions",
@@ -942,9 +949,9 @@ def _complete(gw: dict, messages: list, max_tokens: int, temperature: float = 0)
     return content, (data.get("usage") or {})
 
 
-CHAT_SYSTEM = """You are helping a research software engineering group at a
-supercomputing centre decide whether to pursue one specific funding call, and
-how to approach it.
+# Who the group is comes from config/profile.yaml; the rest is how to answer.
+CHAT_SYSTEM = f"""You are helping {profile.PROFILE["group"]["description"]} decide
+whether to pursue one specific funding call, and how to approach it.
 
 You are given what the pipeline holds about that call: its title, funder,
 deadline, award figures, the relevance score and rationale, and the closest
@@ -1108,7 +1115,7 @@ def _opportunity_context(conn, opp_id: str) -> dict:
             lines.append(f"Their address: {c['email']}"
                          + (f" ({c['unit']})" if c.get("unit") else ""))
         via = ", ".join(f"{p['name']}" + (f" <{p['email']}>" if p.get("email") else "")
-                        for p in (c.get("ncsa_contact") or []) if p.get("name"))
+                        for p in (c.get("our_contact") or []) if p.get("name"))
         if via:
             lines.append(f"Our people who already know them: {via}")
     intro = _intro(r, c, due)

@@ -18,11 +18,11 @@ function reach(o) {
   // Nothing to act on: no address, nobody here who knows them, nothing to
   // check. A row saying "no address on file" under a match that is a team
   // rather than a person is just a line of grey text.
-  const anyInternal = (c.ncsa_contact || []).some(p => p.name);
+  const anyInternal = (c.our_contact || []).some(p => p.name);
   if (!c.email && !anyInternal && !c.review) {
     return `<div class="reach">${ROSTER_LINK}</div>`;
   }
-  const where = [c.unit, c.org && c.org !== "UIUC" ? c.org : null]
+  const where = [c.unit, c.org && c.org !== HOME_ORG ? c.org : null]
     .filter(Boolean).join(", ");
   // A program is something we run, so there is no "them" to write to. Showing
   // one anyway produced "reach out to Luigi Marini, via us: Luigi Marini".
@@ -32,9 +32,9 @@ function reach(o) {
       mailto(o.match_name, c.email, where)}</span></div>`);
   }
 
-  if (c.ncsa_contact && c.ncsa_contact.length) {
+  if (c.our_contact && c.our_contact.length) {
     lines.push(`<div><span class="who">Via us</span><span>${
-      c.ncsa_contact.map(p => mailto(p.name, p.email)).join(", ")}</span></div>`);
+      c.our_contact.map(p => mailto(p.name, p.email)).join(", ")}</span></div>`);
   }
   // Only shown when it changes what you would do: a bad address, or a person
   // who has left. Never sent to the model.
@@ -70,13 +70,13 @@ const band = score => SCORE_BANDS.find(([min]) => score >= min) || SCORE_BANDS[3
 // the same 0-100 scale, so it gets its own label and is never mixed with the
 // group's score.
 function scoreSignal(score, idea = false) {
-  const label = idea ? "Idea fit" : "Overall fit";
+  const label = idea ? "Idea fit" : SCORE_LABEL;
   const what = idea
     ? "Idea fit: how well this call fits the idea you described (your file and notes), "
-      + "scored 0 to 100 by the model. It changes when the idea does. Separate from Overall fit; "
+      + `scored 0 to 100 by the model. It changes when the idea does. Separate from ${SCORE_LABEL}; `
       + "the two are never averaged."
-    : "Overall fit: how well this call fits the group's research software work, scored 0 to 100 "
-      + "by the model from the call's text. The same for everyone, and not about any one idea.";
+    : `${SCORE_LABEL}: scored 0 to 100 by the model from the call's text. `
+      + "The same for everyone, and not about any one idea.";
   return `<div class="score ${band(score)[1]}" title="${what}">
       <div class="eyebrow">${label}</div>
       <div class="num" aria-label="${label} ${score} of 100"><b>${score}</b><span>/100</span></div>

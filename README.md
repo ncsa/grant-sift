@@ -16,7 +16,7 @@ will need a partner and does not yet know it.
 pip install -r requirements.txt
 cp .env.example .env          # then add your Lumen project key
 cp config/roster.example.yaml config/roster.yaml            # collaborators and leads (gitignored)
-cp config/ncsa_staff.example.yaml config/ncsa_staff.yaml   # optional: your staff's addresses
+cp config/staff.example.yaml config/staff.yaml   # optional: your staff's addresses
 set -a; source .env; set +a
 
 python run.py daily           # ingest, assess, digest
@@ -27,7 +27,7 @@ The gateway defaults to NCSA Lumen with `gemma-4-31b-it`, so the key is the
 only required secret. Override `GRANT_SIFT_LLM_BASE_URL` for any other
 OpenAI-compatible gateway.
 
-`config/roster.yaml` and `config/ncsa_staff.yaml` are **not in git** — between
+`config/roster.yaml` and `config/staff.yaml` are **not in git** — between
 them they name real collaborators, their relationship status, and colleagues'
 email addresses. `Projects/` is ignored too: it holds real proposal text and
 must never reach a commit or a container image. Only the `.example.yaml` files
@@ -35,6 +35,69 @@ are tracked. Copy them, edit them, and keep them local (or mount them in Kuberne
 as ConfigMaps). If this repo was ever public or shared with the real files
 committed, scrub history before relying on “gitignored now” — old commits still
 contain them.
+
+### Profile: who this deployment is for
+
+Nothing about the group is written in code. `config/profile.yaml` holds the
+organisation (name, sign-in email domain, crawler contact),
+the scoring prompt (who the group is, categories, score guide, axes, and what
+the score is called), the page wording and the Ask prompt's group description,
+the email digests, and the "Call type" chips. The shipped file is the NCSA RSE
+group; `config/profile.general.yaml` is a field-neutral one for any university
+researcher.
+
+Two kinds of setting, with different costs:
+
+- **`scoring:`** is what the model judges each call on. Score, category and
+  axes are stored per call, so changing it means re-scoring:
+  `python run.py assess --rescore-all` requeues every open call (old scores
+  stay visible until replaced), then each `assess` or nightly run works through
+  `--limit` of them. The default profile rebuilds the RSE prompt byte for byte
+  (`tests/fixtures/assess_system_rse.txt`), so that instance's scores stay valid.
+- **Everything else** is rules and wording over what is already stored. Change
+  freely; no re-scoring and no database change. Digests and chips are rules
+  over `category`, `score`, `source`, `deadline` and `match_name`:
+
+```yaml
+digests:
+  - id: ci-programs                 # subscriptions are stored under this id
+    label: CI / research-software programs
+    category: [ci_program]          # must be a scoring category
+    min_score: 60
+```
+
+Deployment settings stay Helm values (`config:` in `helm/grant-sift/values.yaml`),
+not profile: the AI gateway (`GRANT_SIFT_LLM_BASE_URL`, and `GRANT_SIFT_LLM_NAME`
+for what the page calls it, "NCSA Lumen"; it is also offered first for a
+viewer's own key) and the digest sender (`GRANT_SIFT_FROM`).
+
+Roster entries name the people on our side who know a party in `our_contact`
+(formerly `ncsa_contact`, still read; `scripts/build_roster.py` rewrites it).
+
+Rule keys: `category`, `source`, `exclude_source`, `min_score`,
+`deadline_within_days`, `has_match`. An unknown key, a category the scorer
+never assigns, or a duplicate id stops the app at start-up rather than
+silently matching everything or nothing. Set `GRANT_SIFT_PROFILE` to use
+another file; restart to pick up an edit.
+
+**A sibling instance** (another department, or no field at all) is a separate
+Helm release with its own database, roster and profile:
+
+```bash
+kubectl create namespace grant-sift-general
+kubectl -n grant-sift-general create configmap grant-sift-profile \
+  --from-file=profile.yaml=config/profile.general.yaml
+# values: profile.existingConfigMap: grant-sift-profile, its own ingress host,
+# roster ConfigMap and secrets; then helm upgrade --install as below.
+```
+
+To skip re-crawling, seed its database from a copy of an existing one with the
+group's own state removed, then re-score:
+
+```sql
+DELETE FROM assessments; DELETE FROM feedback; DELETE FROM roster_entries;
+DELETE FROM subscribers; DELETE FROM sent_log;
+```
 
 ## Commands
 
@@ -81,7 +144,7 @@ flowchart TD
     S --> AS["ASSESS<br/>one call per record:<br/>score, category, roster match"]
     R1["config/roster.yaml<br/>parties, projects optional"] --> AS
     R2["roster_entries<br/>added in the dashboard"] --> AS
-    R3["config/ncsa_staff.yaml<br/>our addresses"] --> R1
+    R3["config/staff.yaml<br/>our addresses"] --> R1
     P["Projects/<br/>proposals, gitignored"] -.->|"build_roster.py"| R1
     AS --> S
     S --> J["/api/opportunities<br/>search, filters, paging<br/>(catalogue.py)"] --> D["dashboard"]
@@ -260,7 +323,7 @@ are not parties — needed enforcing in code, not just in a comment.
 Neither is stored. `assessments` holds no address of any kind — only
 `match_name` and the other `match_*` fields. Contact details are joined on at
 **read time**: `pipeline.contact_index()` builds a lookup from the roster plus
-`ncsa_staff.yaml`, and `pipeline.catalogue_rows` attaches the matching record
+`staff.yaml`, and `pipeline.catalogue_rows` attaches the matching record
 to each opportunity as `contact`, which is what the dashboard, MCP and the
 digests render.
 
@@ -278,8 +341,8 @@ a match and no way to act on it. `contact_index` therefore also registers
 aliases for each party's leading personal name and each of its project titles,
 added only where the key is free so a real party name always wins.
 
-**`config/ncsa_staff.yaml`** stays separate on purpose. It is *us*, not
-*them*: it maps the names in `ncsa_contact` to real addresses so the dashboard
+**`config/staff.yaml`** stays separate on purpose. It is *us*, not
+*them*: it maps the names in `our_contact` to real addresses so the dashboard
 shows both ends of an introduction. Put your own staff in the roster and the
 matcher starts matching you to yourself. Take these addresses from your
 directory rather than guessing netids — ours were not guessable.
@@ -359,7 +422,7 @@ Two tables in it carry knowledge no script can derive. `PROMOTIONS` holds
 projects transcribed from `Projects/`. `SECOND_PASS` holds partners supplied by
 someone who knows the work, keyed on a distinctive fragment of the party name,
 and can `merge_into` an existing person, set a `partner`, mark a `kind`, or add
-`ncsa_contact` names. Dedup deliberately refuses to surname-match a compound
+`our_contact` names. Dedup deliberately refuses to surname-match a compound
 name such as `M. S. Poole (PI, Communication), with D. Forsyth and M.
 Hasegawa-Johnson` — its last token is a third person's surname, and keying on
 it merged that collaboration into Mark Hasegawa-Johnson's record. Only the
@@ -491,11 +554,11 @@ open calls fit it?” The Idea box sits under Search with an on/off switch. On,
 the main list becomes the calls that fit the idea, best fit first, each with
 why it fits; the recommendation (the call to go for, and the runner-up) sits
 above the list. Funder, deadline, award and the other filters narrow the
-matched set, and the sort “Best overall fit” becomes “Best idea fit”. Off, the
+matched set, and the sort “Highest <score label>” becomes “Best idea fit”. Off, the
 dashboard is as it was, with its filters and sort.
 
 Each row leads with one of two scores, labelled so they are never confused:
-**Overall fit** (the group’s 0–100 relevance score, the same for everyone) or,
+the profile’s score (“RSE relevance” by default: the 0–100 score, the same for everyone) or,
 in Idea match, **Idea fit** (fit to this idea, from `/api/focus` and
 `/api/rescore`). Hovering either label explains it. The two are never averaged.
 

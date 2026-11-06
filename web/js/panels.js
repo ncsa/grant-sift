@@ -81,7 +81,7 @@ function renderRoster() {
         const areas = (e.areas || []).slice(0, 4).join(", ");
         const projects = (e.projects || []).map(p =>
           esc(p.title) + (p.years ? ` <span class="pill">${esc(p.years)}</span>` : "")).join(" · ");
-        const via = (e.ncsa_contact || []).filter(c => c.name).map(c =>
+        const via = (e.our_contact || []).filter(c => c.name).map(c =>
           c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.name)}</a>` : esc(c.name)).join(", ");
         return `<div class="rrow">
           <span class="nm">${esc(e.name)}</span>

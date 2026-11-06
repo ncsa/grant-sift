@@ -1,0 +1,152 @@
+# Who this deployment is for: its organisation, how calls are scored, the
+# wording on the page, the email digests and the call-type chips. Nothing
+# about the group is written in code; a sibling instance for another
+# department is this file, mounted in place of the default
+# (see helm/grant-sift values: profile.existingConfigMap).
+#
+# Two kinds of setting, with different costs:
+#   scoring:   what the model judges each call on. The score, category and
+#              axes are stored per call, so changing these means re-scoring
+#              (python run.py assess --rescore-all). The default rebuilds the
+#              RSE group's prompt exactly, so existing scores stay valid.
+#   the rest:  rules and wording over what is already stored. Change freely;
+#              no re-scoring and no database change.
+#
+# Point GRANT_SIFT_PROFILE at another file to use a different profile. The
+# app reads it at start-up; restart to pick up an edit.
+#
+# Rule keys for digests and call_types, all optional; every key given must hold:
+#   category: [..]             the call's category is one of these (must be a
+#                              scoring category)
+#   source: [..]               the call was listed by one of these sources
+#   exclude_source: [..]       ...and by none of these
+#   min_score: N               score >= N (an unscored call counts as 0)
+#   deadline_within_days: N    deadline on or before today + N days
+#   has_match: true|false      the call matched someone on the roster
+
+org:
+  # Short name of the organisation: "the NCSA contact", "your text stays at NCSA".
+  name: NCSA
+  # A sign-in that carries a bare username (no @) becomes username@<this>.
+  email_domain: illinois.edu
+  # Sent in the crawler's User-Agent so a funder's site can reach a person.
+  contact_email: rse@ncsa.illinois.edu
+  # The `org` roster entries carry when they are at our own institution. Not
+  # shown on cards or to the scorer: it says nothing about the person.
+  home: UIUC
+
+# Page colours, as CSS hex. Optional; the Illinois palette when left out.
+theme:
+  primary: "#13294B"       # header, headings, body text
+  accent: "#FF5F05"        # marks only, never text
+  accent_text: "#C84113"   # the accent where it is text
+  link: "#1D58A7"
+
+group:
+  # The line under "Grant Sift" in the page header.
+  tagline: Open funding calls, ranked for NCSA’s Research Software Engineering group
+  # Completes "You are helping ... decide whether to pursue one specific
+  # funding call" in the Ask chat prompt.
+  description: a research software engineering group at a supercomputing centre
+  # The overview count: "<n> match a past collaborator".
+  match_phrase: match a past collaborator
+
+scoring:
+  # What the dashboard calls the 0-100 score. Name what the prompt measures.
+  label: RSE relevance
+  # Who the group is and what is worth its attention: the opening of the
+  # scoring prompt.
+  prompt: |
+    You screen funding opportunities for a university research software
+    engineering (RSE) group at a supercomputing centre. The group builds and sustains
+    research software: data pipelines, scientific workflows, HPC and GPU computing,
+    data management and curation, geospatial and imaging systems, web platforms and
+    APIs for research, reproducibility and software sustainability.
+
+    Score each opportunity 0-100 on whether this group should look at it.
+
+    The valuable finds are NOT the obvious cyberinfrastructure calls, which everyone
+    already sees. They are domain solicitations that carry a software, data-management,
+    computational, or sustainability requirement inside them, where a domain PI will
+    need an RSE partner and may not realise it yet.
+  # The category each call is put in. The last one is the catch-all.
+  categories:
+    - id: ci_program
+      description: explicit cyberinfrastructure / research software programme
+    - id: embedded_software
+      description: domain call with a software, data, or computational requirement
+    - id: domain_subaward
+      description: domain call where we would plausibly join a PI as a subaward
+    - id: sustainability
+      description: maintenance, reproducibility, open source, infrastructure
+    - id: not_relevant
+      description: none of the above
+  # Score bands, as the model is told them.
+  guide: |
+    80-100  we should almost certainly pursue or bring to a PI
+    60-79   worth a look; real but partial fit
+    40-59   marginal
+    0-39    not for us
+  # Independent 0-100 subscores, for ranking and the MCP min_axes filter.
+  # Optional: leave the list empty for none.
+  axes:
+    - id: software_depth
+      description: |
+        how much software actually has to be BUILT. 0 = no
+        engineering, a science proposal with a data sentence.
+        100 = the deliverable is a system, pipeline or platform.
+    - id: data_management
+      description: |
+        volume, curation, sharing mandates, DMP weight. 0 = data
+        is not discussed. 100 = data stewardship IS the call.
+    - id: compute_intensity
+      description: |
+        HPC, GPU, simulation, large-scale training. 0 = runs on a
+        laptop. 100 = only runs at a centre.
+    - id: sustainability
+      description: |
+        maintenance, reproducibility, open source, keeping
+        existing software alive. 0 = pure new work. 100 = the call
+        is about upkeep and reuse.
+    - id: partner_need
+      description: |
+        does this STRUCTURALLY require a partner outside the
+        domain? 0 = a domain lab does all of it alone. 100 = the
+        PI cannot staff this without a software or data partner.
+
+# Email digests, sent nightly in this order. The id is what subscriptions are
+# stored under: renaming one drops its subscribers.
+digests:
+  - id: ci-programs
+    label: CI / research-software programs
+    category: [ci_program]
+    min_score: 60
+  - id: embedded
+    label: Domain / embedded calls
+    category: [embedded_software, domain_subaward]
+    min_score: 65
+  - id: foundations
+    label: Foundations (non-NSF / non-grants.gov)
+    exclude_source: [grants.gov]
+    min_score: 60
+  - id: closing-soon
+    label: Closing within 30 days
+    deadline_within_days: 30
+    min_score: 60
+  - id: roster-match
+    label: Matches a past collaborator
+    has_match: true
+    min_score: 60
+
+# The dashboard's "Call type" chips. The id is the filter name in URLs, the
+# API (filters=ci) and the MCP search tool.
+call_types:
+  - id: embedded
+    label: Domain calls
+    category: [embedded_software, domain_subaward]
+  - id: ci
+    label: CI programs
+    category: [ci_program]
+  - id: foundation
+    label: Foundations
+    exclude_source: [grants.gov]

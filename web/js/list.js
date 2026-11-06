@@ -285,12 +285,13 @@ document.getElementById("list").addEventListener("click", e => {
   PAGE = 1;
   render();
 });
-document.querySelectorAll(".chip").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const f = btn.dataset.filter;
-    ACTIVE.has(f) ? ACTIVE.delete(f) : ACTIVE.add(f);
-    btn.setAttribute("aria-pressed", ACTIVE.has(f));
-    PAGE = 1;
-    render();
-  });
+// Delegated: the Call type chips are painted from the profile after load.
+document.addEventListener("click", e => {
+  const btn = e.target.closest(".chip[data-filter]");
+  if (!btn) return;
+  const f = btn.dataset.filter;
+  ACTIVE.has(f) ? ACTIVE.delete(f) : ACTIVE.add(f);
+  btn.setAttribute("aria-pressed", ACTIVE.has(f));
+  PAGE = 1;
+  render();
 });

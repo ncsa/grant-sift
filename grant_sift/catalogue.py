@@ -15,7 +15,7 @@ from datetime import date
 
 from rapidfuzz import fuzz, process
 
-from . import db, llm, pipeline
+from . import db, llm, pipeline, profile
 
 # ---------------------------------------------------------------------------
 # Derived fields
@@ -156,7 +156,7 @@ def is_me(person_email, principal):
 
 
 def _via_me(o, principal):
-    people = (o.get("contact") or {}).get("ncsa_contact") or []
+    people = (o.get("contact") or {}).get("our_contact") or []
     return any(is_me(p.get("email"), principal) for p in people)
 
 
@@ -169,7 +169,7 @@ def mine(conn, principal):
                if s.get("created_by") == principal.label}
     email = (principal.email or principal.username).strip().lower()
     if "@" not in email:
-        email += "@illinois.edu"
+        email += "@" + profile.PROFILE["org"]["email_domain"]
     feeds = [pipeline.FEEDS[f] for f in db.list_feeds_for_email(conn, email)
              if f in pipeline.FEEDS]
     return sources, feeds
@@ -184,9 +184,6 @@ def mine(conn, principal):
 FILTERS = {
     "soon": lambda o, ctx: (o["_days"] is not None and o["_days"] <= 30),
     "match": lambda o, ctx: bool(o["match_name"]),
-    "embedded": lambda o, ctx: o["category"] in ("embedded_software", "domain_subaward"),
-    "ci": lambda o, ctx: o["category"] == "ci_program",
-    "foundation": lambda o, ctx: o["source"] != "grants.gov",
     # No deadline: rolling, or none stated. A deadline range drops these, so
     # this is the only way to ask for them.
     "rolling": lambda o, ctx: not o["deadline"],
@@ -204,6 +201,15 @@ FILTERS = {
         not (o["human"] and o["human"]["verdict"] == "down")
         and any(t(o) for t in ctx["my_feeds"])),
 }
+
+
+# The "Call type" chips come from config/profile.yaml. Their ids share the
+# filter namespace, so one may not shadow a built-in chip.
+for _ct in profile.PROFILE["call_types"]:
+    if _ct["id"] in FILTERS or _ct["id"].removeprefix("-") != _ct["id"]:
+        raise profile.ProfileError(
+            f"call_types id {_ct['id']!r} clashes with a built-in filter")
+    FILTERS[_ct["id"]] = lambda o, ctx, t=_ct["test"]: t(o)
 
 
 def _filter(name):
@@ -277,7 +283,7 @@ def _short_text(o):
         o["match_domain"], o["match_project"], c.get("email"), c.get("unit"),
         # Our own people are searchable too: "kooper" should answer "what is
         # on Rob's plate this month" without him reading all of it.
-        *[v for p in c.get("ncsa_contact") or [] for v in (p.get("name"), p.get("email"))],
+        *[v for p in c.get("our_contact") or [] for v in (p.get("name"), p.get("email"))],
     ) if x).lower()
 
 

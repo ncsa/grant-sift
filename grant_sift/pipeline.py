@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from . import adapters, db, llm
+from . import adapters, db, llm, profile
 
 
 WARM_WINDOW_YEARS = 4
@@ -74,15 +74,15 @@ def load_config(config_dir="config"):
 def normalise(entries, d=Path("config")):
     """One roster shape in, the shape the rest of the pipeline wants out.
 
-    Adds the derived status, resolves `ncsa_contact` names to addresses via
-    ncsa_staff.yaml, and computes `domain`, the field the model copies back
+    Adds the derived status, resolves `our_contact` names to addresses via
+    staff.yaml, and computes `domain`, the field the model copies back
     and the dashboard groups on. `domain` falls back from research areas to
     the unit to the name, because a party with none of the first two still
     has to land in some bucket.
     """
     staff = load_staff(d)
     out = []
-    for e in entries:
+    for e in map(upgrade_entry, entries):
         status = derive_status(e)
         if status == "do-not-contact":
             continue
@@ -103,23 +103,41 @@ def normalise(entries, d=Path("config")):
             "org": e.get("org") or "",
             # Resolved once here so the catalogue, the digests and the chat all
             # get the same addresses instead of each re-implementing the join.
-            "ncsa_contact": [
+            "our_contact": [
                 {"name": staff.get(n, {}).get("name", n),
                  "email": staff.get(n, {}).get("email")}
-                for n in (e.get("ncsa_contact") or [])
+                for n in (e.get("our_contact") or [])
             ],
         })
     return out
 
 
+def upgrade_entry(e):
+    """A roster entry written before `ncsa_contact` became `our_contact`.
+    Read either, so a roster file or ConfigMap made before the rename keeps
+    resolving; scripts/build_roster.py rewrites it under the new key."""
+    if "ncsa_contact" in e and "our_contact" not in e:
+        e = {k: v for k, v in e.items() if k != "ncsa_contact"} | {
+            "our_contact": e["ncsa_contact"]}
+    return e
+
+
+def staff_path(d=Path("config")):
+    """config/staff.yaml, or ncsa_staff.yaml, its name before the rename, so a
+    checkout or a pod that still mounts the old name keeps resolving."""
+    new = Path(d) / "staff.yaml"
+    old = Path(d) / "ncsa_staff.yaml"
+    return old if not new.is_file() and old.is_file() else new
+
+
 def load_staff(d=Path("config")):
-    """Our own people, keyed by the spelling `ncsa_contact` uses.
+    """Our own people, keyed by the spelling `our_contact` uses.
 
     Deliberately NOT part of the roster: this is us, and a roster line naming
     our own staff as the domain partner makes the matcher match us to
     ourselves.
     """
-    path = Path(d) / "ncsa_staff.yaml"
+    path = staff_path(d)
     if not path.is_file():
         return {}
     return {s["as_written"]: s for s in (yaml.safe_load(path.read_text()) or [])}
@@ -515,7 +533,8 @@ def roster_block(roster):
         for e in contacts:
             unit = (f" | {e['unit']}"
                     if e.get("unit") and e["unit"] != e.get("domain") else "")
-            org = f" | {e['org']}" if e.get("org") and e["org"] != "UIUC" else ""
+            org = (f" | {e['org']}" if e.get("org")
+                   and e["org"] != profile.PROFILE["org"]["home"] else "")
             lines.append(
                 f"- {e['domain']} | {e['collaborator']}{unit}{org} "
                 f"| status: {e.get('status', 'prospect')}"
@@ -642,7 +661,7 @@ def contact_index(roster):
     around for which of our people already knows them. Both are on the roster
     already, so both are exported.
 
-    Takes an ALREADY-NORMALISED roster (load_config output), so ncsa_contact
+    Takes an ALREADY-NORMALISED roster (load_config output), so our_contact
     is resolved to addresses and status is derived.
     """
     idx = {}
@@ -650,7 +669,7 @@ def contact_index(roster):
         name = (e.get("collaborator") or e.get("name") or "").strip()
         if not name:
             continue
-        internal = [c for c in (e.get("ncsa_contact") or []) if c.get("name")]
+        internal = [c for c in (e.get("our_contact") or []) if c.get("name")]
         if not internal and e.get("notes"):
             # Entries carried over from the old roster name our person in
             # prose - "internal contact Jong Lee (task lead)". Name parts must
@@ -673,7 +692,7 @@ def contact_index(roster):
             "unit": e.get("unit"),
             "org": e.get("org"),
             "outreach": e.get("outreach"),
-            "ncsa_contact": internal,
+            "our_contact": internal,
             "review": e.get("review"),
         }
         idx[name.lower()] = entry
@@ -819,39 +838,10 @@ def _suppressed(r, verdicts):
     return bool(v and v["verdict"] == "down")
 
 
-def _score(r):
-    """Rows assessed before the NULL-score fix, or by a model that returned no
-    parseable score, still sit in the database. Treat a missing score as 0 so a
-    digest degrades to omitting the row instead of raising TypeError."""
-    s = r["score"]
-    return s if isinstance(s, (int, float)) else 0
-
-
-FEEDS = {
-    "ci-programs":  lambda r: r["category"] == "ci_program" and _score(r) >= 60,
-    "embedded":     lambda r: r["category"] in ("embedded_software", "domain_subaward") and _score(r) >= 65,
-    "foundations":  lambda r: r["source"] != "grants.gov" and _score(r) >= 60,
-    "closing-soon": lambda r: _within(r["deadline"], 30) and _score(r) >= 60,
-    "roster-match": lambda r: r["match_name"] and _score(r) >= 60,
-}
-
-# Human labels for the subscribe UI (keys must match FEEDS).
-FEED_LABELS = {
-    "closing-soon": "Closing within 30 days",
-    "roster-match": "Matches a past collaborator",
-    "ci-programs": "CI / research-software programs",
-    "embedded": "Domain / embedded calls",
-    "foundations": "Foundations (non-NSF / non-grants.gov)",
-}
-
-
-def _within(deadline, days):
-    if not deadline:
-        return False
-    try:
-        return date.fromisoformat(deadline) <= date.today() + timedelta(days=days)
-    except ValueError:
-        return False
+# The digests are rules in config/profile.yaml; see grant_sift/profile.py.
+# Ordered as in the file, which is the order they are listed and sent.
+FEEDS = {d["id"]: d["test"] for d in profile.PROFILE["digests"]}
+FEED_LABELS = {d["id"]: d["label"] for d in profile.PROFILE["digests"]}
 
 
 def build_digest(conn, feed, since_days=7, respect_sent_log=True, roster=None):
@@ -917,7 +907,7 @@ def render_digest(feed, items, stale):
                 lines.append(f"      reach them: {c['email']}")
             via = ", ".join(
                 f"{p['name']}" + (f" <{p['email']}>" if p.get("email") else "")
-                for p in (c.get("ncsa_contact") or []) if p.get("name"))
+                for p in (c.get("our_contact") or []) if p.get("name"))
             if via:
                 lines.append(f"      via us: {via}")
         lines.append(f"    {it['url']}")

@@ -88,7 +88,10 @@ persistence:
 # Non-secret env (ConfigMap).
 config:
   GRANT_SIFT_DB: /data/grant-sift.db
+  # The shared model: any OpenAI-compatible gateway. Its name is what the page
+  # calls it ("... on NCSA Lumen"), and it is offered first for viewers' own keys.
   GRANT_SIFT_LLM_BASE_URL: https://lumen.ncsa.illinois.edu/v1
+  GRANT_SIFT_LLM_NAME: NCSA Lumen
   GRANT_SIFT_LLM_MODEL: gemma-4-31b-it
   GRANT_SIFT_LLM_THINKING: "off"
   GRANT_SIFT_LLM_MAX_TOKENS: "4000"
@@ -108,7 +111,7 @@ config:
   # Public origin, e.g. https://grant-sift.example.com. Names the /mcp resource
   # in its OAuth metadata and is the Host the MCP endpoint accepts.
   GRANT_SIFT_PUBLIC_URL: ""
-  GRANT_SIFT_CHAT_ALLOWED_HOSTS: "lumen.ncsa.illinois.edu,api.openai.com,api.groq.com,openrouter.ai,generativelanguage.googleapis.com,api.fireworks.ai,api.together.xyz,api.deepseek.com,api.mistral.ai,api.anthropic.com,.openai.azure.com"
+  GRANT_SIFT_CHAT_ALLOWED_HOSTS: "api.openai.com,api.groq.com,openrouter.ai,generativelanguage.googleapis.com,api.fireworks.ai,api.together.xyz,api.deepseek.com,api.mistral.ai,api.anthropic.com,.openai.azure.com"
   GRANT_SIFT_ACCESS_LOG: "on"
   GRANT_SIFT_DAILY_LIMIT: "400"
   # Nightly pipeline, in the serving process. Empty disables it, in which case
@@ -120,7 +123,7 @@ config:
   GRANT_SIFT_DAILY_CATCHUP: "on"
   GRANT_SIFT_SMTP_HOST: ""
   GRANT_SIFT_SMTP_PORT: "25"
-  GRANT_SIFT_FROM: grant-sift@example.com
+  GRANT_SIFT_FROM: grant-sift@example.com   # sender of the email digests
   # Header-strip link to the public Grafana Ops & Signal board. Empty hides it.
   GRANT_SIFT_GRAFANA_URL: ""
 
@@ -138,10 +141,30 @@ roster:
   existingConfigMap: ""
   key: roster.yaml
   mountPath: /app/config/roster.yaml
-  # Optional second key in the same ConfigMap (ncsa_staff.yaml). Resolves
+  # Optional second key in the same ConfigMap (staff.yaml). Resolves
   # "via us" names on the dashboard.
   staffKey: ""
-  staffMountPath: /app/config/ncsa_staff.yaml
+  staffMountPath: /app/config/staff.yaml
+
+# Who this instance is for: org, scoring prompt, wording, digests, chips.
+# Empty uses config/profile.yaml baked into the image (the NCSA RSE group).
+# For a sibling instance, create a ConfigMap from your own profile and name it
+# here; it is mounted over the default. Restart the pod after editing it.
+#   kubectl -n grant-sift-x create configmap grant-sift-profile \
+#     --from-file=profile.yaml=config/profile.general.yaml
+# Changing its scoring: block means re-scoring:
+#   kubectl -n grant-sift-x exec deploy/grant-sift -- python run.py assess --rescore-all
+profile:
+  existingConfigMap: ""
+  key: profile.yaml
+
+# Which funder pages, feeds and APIs to read. Empty uses config/sources.yaml
+# baked into the image. A sibling that wants other funders mounts its own:
+#   kubectl -n grant-sift-x create configmap grant-sift-sources \
+#     --from-file=sources.yaml=my-sources.yaml
+sources:
+  existingConfigMap: ""
+  key: sources.yaml
 
 # Secret env. Leave empty in git; supply via --set, --set-file, or values-secrets.yaml.
 secrets:

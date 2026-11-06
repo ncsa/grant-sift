@@ -1,14 +1,14 @@
 # Your own staff, the internal half of every introduction.
 #
-# NOT committed with real data. Copy to config/ncsa_staff.yaml (gitignored).
+# NOT committed with real data. Copy to config/staff.yaml (gitignored).
 #
 # Optional, and only useful alongside config/contacts.yaml: it turns the
-# `ncsa_contact` names there into addresses, so the dashboard can show who
+# `our_contact` names there into addresses, so the dashboard can show who
 # here already knows a researcher AND how to reach them, rather than a bare
 # name the reader then has to go and look up.
 #
 # `as_written` is the JOIN KEY: it must match the spelling used in
-# contacts.yaml's `ncsa_contact` (which is whatever the source spreadsheet
+# contacts.yaml's `our_contact` (which is whatever the source spreadsheet
 # said, typos included). `name` and `email` are the truth.
 #
 # Do not guess addresses. A guessed netid becomes a mailto link that silently

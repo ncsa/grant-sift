@@ -1,4 +1,4 @@
-// The AI model: shared NCSA default or the viewer's own key, and its panel.
+// The AI model: the server's shared default or the viewer's own key, and its panel.
 
 // ---------------------------------------------------------------------------
 // Writes and chat. The list above already needs `run.py serve`; these also
@@ -8,11 +8,29 @@
 let API = false;
 const CHATS = {};                       // opportunity id -> [{role, content}]
 
-// Ask and Idea match run on the server's shared NCSA model by default, so
+// Ask and Idea match run on the server's shared model by default, so
 // they need no setup. A key of the viewer's own switches both to a model of
 // their choosing. That key lives in this variable and nowhere else: not in
 // storage, not on the server.
 let AI = { shared: false, model: "", gateway: "" };     // from /api/config
+// Who runs the shared model: org from the profile, gateway from the server
+// (GRANT_SIFT_LLM_NAME / GRANT_SIFT_LLM_BASE_URL).
+const aiOrg = () => AI.org || "this server";
+const aiHost = () => AI.name || AI.gateway || "the shared model";
+
+// Offer the server's own gateway as the first own-key provider. A base URL
+// left from an earlier visit wins; otherwise a fresh form starts on it.
+function addGatewayPreset() {
+  if (!AI.base_url) return;
+  const preset = document.getElementById("k-preset");
+  if (![...preset.options].some(o => o.value === AI.base_url)) {
+    preset.insertBefore(new Option(AI.name || AI.gateway, AI.base_url), preset.firstChild);
+  }
+  let saved = {};
+  try { saved = JSON.parse(sessionStorage.getItem("gs.chat") || "{}"); } catch (e) {}
+  if (!saved.base) document.getElementById("k-base").value = AI.base_url;
+  syncPreset();
+}
 // What "Use this model" applied, not what the form says: editing a field must
 // not change the model until the viewer applies it.
 let OWN = null;                                          // { key, model, base }
@@ -32,7 +50,7 @@ function aiBarHTML() {
   const own = !aiReady()
     ? `<button type="button" class="linkbtn" data-aimodel>Add your key</button>`
     : `<button type="button" class="linkbtn" data-aimodel title="Now: ${
-        esc(model || "—")} on ${esc(OWN ? hostOf(base) : "NCSA Lumen")}">${
+        esc(model || "—")} on ${esc(OWN ? hostOf(base) : aiHost())}">${
         OWN ? "Change your model" : "Use your own model"}</button>`;
   const mcp = `<a href="${MCP_GUIDE}" target="_blank" rel="noopener"
       title="Grant Sift's MCP server: a stronger model with your own files and history. Your text and roster data then go to that provider.">Use in Claude or ChatGPT ↗</a>`;
@@ -43,7 +61,7 @@ function privacyText() {
   const signed = AUTH.enforced && AUTH.authenticated
     ? " Your sign-in is known to the proxy in front of this app, so it is private rather than anonymous."
     : "";
-  const via = OWN ? `${hostOf(keyBar().base)} on your own key` : "NCSA Lumen";
+  const via = OWN ? `${hostOf(keyBar().base)} on your own key` : aiHost();
   return "Nothing about your idea is stored on the server: it and its matches stay in this browser."
     + ` To match, the text goes to ${via} through a proxy that keeps nothing.${signed}`;
 }
@@ -90,7 +108,7 @@ function paintAI() {
   const own = !!OWN;
   document.querySelectorAll("[data-chatstatus]").forEach(el => {
     el.classList.toggle("ready", aiReady());
-    el.textContent = own ? "Your key" : AI.shared ? "NCSA" : "Not set up";
+    el.textContent = own ? "Your key" : AI.shared ? (AI.org || "Shared") : "Not set up";
   });
   document.querySelectorAll("[data-aibar]").forEach(el => {
     el.innerHTML = aiBarHTML();
@@ -106,11 +124,12 @@ function paintAI() {
 function paintAIPanel() {
   const own = !!OWN;
   const shared = document.getElementById("k-shared");
+  document.getElementById("k-shared-name").textContent = `${AI.org || "Shared"} default`;
   document.getElementById("k-shared-use").hidden = own || !AI.shared;
   document.getElementById("k-own-use").hidden = !own;
   shared.disabled = !AI.shared;
   document.getElementById("k-shared-note").textContent = AI.shared
-    ? `${AI.model} on NCSA Lumen. Nothing to set up; your text stays at NCSA.`
+    ? `${AI.model} on ${aiHost()}. Nothing to set up; your text stays at ${aiOrg()}.`
     : "Not available on this server.";
   if (document.activeElement?.name !== "k-mode") {
     (own || !AI.shared ? document.getElementById("k-own") : shared).checked = true;

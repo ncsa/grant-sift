@@ -25,7 +25,7 @@ from grant_sift import db, pipeline, telemetry
 DB_PATH = os.environ.get("GRANT_SIFT_DB", "grant-sift.db")
 SMTP_HOST = os.environ.get("GRANT_SIFT_SMTP_HOST", "localhost")
 SMTP_PORT = int(os.environ.get("GRANT_SIFT_SMTP_PORT", "25"))
-SMTP_FROM = os.environ.get("GRANT_SIFT_FROM", "grant-sift@ncsa.illinois.edu")
+SMTP_FROM = os.environ.get("GRANT_SIFT_FROM", "grant-sift@example.com")  # Helm: config.GRANT_SIFT_FROM
 
 # In-process nightly run. Empty disables the schedule; `python run.py daily`
 # stays available to run by hand or from an external scheduler.
@@ -83,6 +83,17 @@ def cmd_assess(conn, args):
         conn.commit()
         print(f"cleared {n} assessment(s) with no axis block, so they can be "
               "re-scored with subscores (this costs a full re-assess)")
+    if getattr(args, "rescore_all", False):
+        # After a change to scoring: in the profile, every stored score was
+        # judged against the old prompt. Requeue rather than delete, so the
+        # dashboard keeps showing the old score until each call is redone.
+        # Open calls only: a closed call's score is not worth paying for.
+        n = conn.execute(
+            f"""UPDATE assessments SET requeued = 1 WHERE opportunity_id IN
+                (SELECT o.id FROM opportunities o WHERE {db.LIVE})""").rowcount
+        conn.commit()
+        print(f"requeued {n} open call(s) for re-scoring; each run of assess "
+              f"takes --limit of them (old scores shown until replaced)")
     print("Assessing:")
     n = pipeline.assess_new(conn, roster, limit=args.limit)
     print(f"{n} assessed")
@@ -333,6 +344,11 @@ def main():
     a.add_argument("--rematch", action="store_true",
                    help="first clear assessments that matched no collaborator, "
                         "so a newly added roster entry can match them")
+    a.add_argument("--rescore-all", action="store_true",
+                   help="first requeue every open call, so all are re-scored "
+                        "against the current profile's scoring: block. Run "
+                        "after changing it; old scores stay visible until "
+                        "replaced. Costs one model call per open call.")
     a.add_argument("--backfill-axes", action="store_true",
                    help="first clear assessments that predate the axis "
                         "subscores, so they are re-scored with subscores, "
