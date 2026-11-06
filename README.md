@@ -774,8 +774,8 @@ Only the shared key falls back. A viewer's own key and model are theirs.
 
 - **Ask and Idea match** say which model answered when it was a backup.
 - **`assess`** stores the backup's name in `assessments.model` and the primary
-  it stood in for in `fallback_for`. The dashboard shows a dismissible notice
-  with the count; `python run.py assess --rescore-fallback` re-scores those
+  it stood in for in `fallback_for`. Those cards say so, and the Scoring panel
+  counts them; `python run.py assess --rescore-fallback` re-scores those
   calls on the primary only, and stops without spending if it is still down.
 - **Every fallback** writes a row to `llm_events` (primary, model used, path,
   time; nothing about the content), which the nightly rollup turns into
@@ -785,10 +785,11 @@ Only the shared key falls back. A viewer's own key and model are theirs.
 Each assessment also stores `scoring_version` (`llm.SCORING_VERSION`; bump it
 whenever the scoring prompt, the profile's `scoring:` block or the answer
 cleaning changes). Rows scored before it existed stay NULL. The dashboard's
-**How scoring works** panel (footer link, the fallback notice, a card's
-"Scored by" line, or `#scoring` in the URL) reads `/api/scoring`: the model,
-backups, thinking, scoring version, roster size and last pass, and the open
-calls broken down by model and scoring version. It makes no model call.
+**How scoring works** panel (Data menu, a card's "Scored by" line, or
+`#scoring` in the URL) says in plain words how a score is produced, which model
+and scoring version, and how the open calls split by model when they differ.
+It reads `/api/scoring` (which also returns thinking, roster size and the
+fallback count for operators) and makes no model call.
 
 No backups are configured by default: which model can stand in for gemma is a
 benchmarking question. Run the candidates on the same records as the table in
