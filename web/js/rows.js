@@ -237,7 +237,7 @@ function rowHTML(o, opts = {}) {
       </div>
       <div class="chat" data-chatbox="${esc(o.id)}">
         <div class="chathead">
-          <div class="aibar" data-aibar="chat">${aiBarHTML(false)}</div>
+          <div class="aibar" data-aibar="chat">${aiBarHTML()}</div>
           <span class="hint" data-chathint="${esc(o.id)}" aria-live="polite"></span>
           <span class="chattools">
             <button type="button" class="chatx" data-copy="${esc(o.id)}" aria-label="Copy chat" title="Copy chat">${ICON_COPY}</button>

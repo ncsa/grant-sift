@@ -26,11 +26,9 @@ function hostOf(url) {
 }
 
 // One quiet line wherever an AI feature sits (each call's chat, Idea match):
-// the privacy promise as a hover, and the two power-user ways to run it.
-function aiBarHTML(withLock = true) {
+// the two power-user ways to run it.
+function aiBarHTML() {
   const { model, base } = keyBar();
-  const priv = `<span class="aipriv" tabindex="0" role="img" aria-label="${esc(privacyText())}"
-      title="${esc(privacyText())}">${ICON_LOCK}</span>`;
   const own = !aiReady()
     ? `<button type="button" class="linkbtn" data-aimodel>Add your key</button>`
     : `<button type="button" class="linkbtn" data-aimodel title="Now: ${
@@ -38,17 +36,16 @@ function aiBarHTML(withLock = true) {
         OWN ? "Change your model" : "Use your own model"}</button>`;
   const mcp = `<a href="${MCP_GUIDE}" target="_blank" rel="noopener"
       title="Grant Sift's MCP server: a stronger model with your own files and history. Your text and roster data then go to that provider.">Use in Claude or ChatGPT ↗</a>`;
-  return `<span class="aipower"><span class="aplbl">Advanced options</span>${own}<span aria-hidden="true">·</span>${mcp}</span>${withLock ? priv : ""}`;
+  return `<span class="aipower"><span class="aplbl">Advanced options</span>${own}<span aria-hidden="true">·</span>${mcp}</span>`;
 }
 
 function privacyText() {
   const signed = AUTH.enforced && AUTH.authenticated
     ? " Your sign-in is known to the proxy in front of this app, so it is private rather than anonymous."
     : "";
-  const via = OWN ? `goes to ${hostOf(keyBar().base)} on your own key` : "goes to NCSA Lumen";
-  return `Not stored. What you type here stays in this browser tab, ${via}`
-    + ` through a proxy that keeps nothing.${signed}`
-    + " A chat is gone when you reload: copy or export it to keep it.";
+  const via = OWN ? `${hostOf(keyBar().base)} on your own key` : "NCSA Lumen";
+  return "Nothing about your idea is stored on the server: it and its matches stay in this browser."
+    + ` To match, the text goes to ${via} through a proxy that keeps nothing.${signed}`;
 }
 
 function saveChatSettings() {
@@ -96,10 +93,11 @@ function paintAI() {
     el.textContent = own ? "Your key" : AI.shared ? "NCSA" : "Not set up";
   });
   document.querySelectorAll("[data-aibar]").forEach(el => {
-    el.innerHTML = aiBarHTML(el.dataset.aibar !== "chat");
+    el.innerHTML = aiBarHTML();
   });
-  document.getElementById("aibtn-lbl").textContent = aiReady() ? "AI chat" : "Set up AI chat";
-  document.getElementById("aibtn-dot").hidden = aiReady();
+  // The privacy promise rides on the Idea match hover: it is where the
+  // unpublished text is typed.
+  document.getElementById("idea-head").title = privacyText();
   paintAIPanel();
 }
 
@@ -208,7 +206,6 @@ function openChatPanel(from) {
 }
 function closeChatPanel() { hideModal(document.getElementById("chat-modal")); }
 document.getElementById("m-chat").addEventListener("click", e => openChatPanel(e.currentTarget));
-document.getElementById("aibtn").addEventListener("click", e => openChatPanel(e.currentTarget));
 
 document.getElementById("chat-close").addEventListener("click", closeChatPanel);
 document.getElementById("chat-modal").addEventListener("click", e => {

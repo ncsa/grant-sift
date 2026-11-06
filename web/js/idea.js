@@ -37,8 +37,18 @@ function setIdeaHint(text) {
 
 function paintIdeaMode() {
   const on = IDEA.on;
+  const n = IDEA.items.length;
   document.getElementById("ideabox").classList.toggle("on", on);
-  document.getElementById("idea-on").checked = on;
+  document.getElementById("idea-off").hidden = !on;
+  const note = document.getElementById("facet-note");
+  note.hidden = !on || !n;
+  note.textContent = `Narrowing the ${n} ${n === 1 ? "call" : "calls"} that fit your idea`;
+  // Matches kept from earlier, while the list shows every call: one click
+  // brings them back without another minute-long match.
+  const show = document.getElementById("idea-show");
+  show.hidden = on || !n || _matchBusy;
+  show.textContent = `Show the ${n} ${n === 1 ? "call" : "calls"} that fit${
+    IDEA.matched && IDEA.matched !== ideaText() ? " the earlier idea" : ""}`;
   // The same sort, named for what it ranks by in each mode.
   document.querySelector('#sort option[value="score"]').textContent =
     on ? "Best fit to idea" : "Highest relevance";
@@ -121,28 +131,15 @@ function fetchUnseen() {
     .catch(() => {});
 }
 
+// On: the list is the idea's matches. Showing kept matches needs no model;
+// only Match does, and it checks for one itself.
 function setIdeaOn(on) {
   if (on === IDEA.on) return;
-  if (on && !aiReady()) {
-    document.getElementById("idea-on").checked = false;
-    openChatPanel(document.getElementById("idea-on"));
-    return;
-  }
   IDEA.on = on;
   saveIdea();
-  if (on) { _pageBefore = PAGE; PAGE = 1; } else { PAGE = _pageBefore; setIdeaHint(""); }
+  if (on) { _pageBefore = PAGE; PAGE = 1; paintMatchedHint(); } else { PAGE = _pageBefore; setIdeaHint(""); }
   paintIdeaMode();
   render();
-  if (!on) return;
-  const idea = ideaText();
-  if (!idea) {
-    setIdeaHint("Describe the idea, then Match.");
-    ideaEl().focus();
-  } else if (idea !== IDEA.matched || !IDEA.items.length) {
-    runMatch();
-  } else {
-    paintMatchedHint();
-  }
 }
 
 function paintMatchedHint() {
@@ -259,12 +256,14 @@ async function rankIdea() {
   }
 }
 
-document.getElementById("idea-on").addEventListener("change", e => setIdeaOn(e.target.checked));
+document.getElementById("idea-off").addEventListener("click", () => setIdeaOn(false));
+document.getElementById("idea-show").addEventListener("click", () => setIdeaOn(true));
 document.getElementById("idea-match").addEventListener("click", runMatch);
 ideaEl().addEventListener("input", e => {
   IDEA.idea = e.target.value;
   saveIdea();
   if (IDEA.on) paintMatchedHint();
+  paintIdeaMode();
 });
 // Cmd/Ctrl+Enter matches; a plain Enter is a new line in the idea.
 ideaEl().addEventListener("keydown", e => {

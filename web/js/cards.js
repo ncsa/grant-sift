@@ -105,7 +105,7 @@ function openChat(root, id, toggle) {
   const open = toggle ? !box.classList.contains("on") : true;
   setChat(root, id, open);
   if (!open) return;
-  box.querySelector("[data-aibar]").innerHTML = aiBarHTML(false);
+  box.querySelector("[data-aibar]").innerHTML = aiBarHTML();
   box.querySelector("input").focus();
 }
 document.getElementById("list").addEventListener("click", onCardClick);

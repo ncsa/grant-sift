@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=10">
+<link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
 <header class="strip">
@@ -48,10 +48,6 @@
           </div>
         </div>
       </div>
-      <button type="button" class="aibtn" id="aibtn" aria-haspopup="dialog">
-        <span class="dot" id="aibtn-dot" aria-hidden="true"></span>
-        <span id="aibtn-lbl">Set up AI chat</span>
-      </button>
       <div class="menuwrap">
         <button type="button" class="acct" id="acctbtn" aria-haspopup="menu" aria-expanded="false"
                 aria-controls="acctmenu" aria-label="Account">
@@ -105,7 +101,35 @@
     </p>
   </section>
 
-  <section class="controls" aria-label="Search and filters">
+  <!-- Idea match and the filters are two separate tools on one list: the
+       idea decides which calls are in it, the filters narrow whatever is in
+       it. Each has its own section and heading so they never read as one
+       form; the result bar says when the list is an idea's matches. -->
+  <section class="ideabox" id="ideabox" aria-labelledby="idea-lbl">
+    <div class="ideahead" id="idea-head"
+         title="Nothing about your idea is stored on the server: it and its matches stay in this browser.">
+      <h2 id="idea-lbl"><svg class="ico ic" width="18" height="18" aria-hidden="true"><use href="icons.svg#bulb"/></svg>Match an idea</h2>
+      <span class="about">Describe what you are working on; get the open calls that fit it, and the one to go for.</span>
+    </div>
+    <div class="idearow">
+      <label class="sr" for="idea">Your idea</label>
+      <textarea id="idea" rows="1" maxlength="4000"
+        placeholder="Describe your idea in your own words"></textarea>
+      <button type="button" class="primary" id="idea-match"
+        title="Searches every open call and ranks what fits (about a minute). Cmd/Ctrl+Enter from the idea.">Match</button>
+    </div>
+    <div class="ideafoot">
+      <span class="hint" id="idea-hint" aria-live="polite"></span>
+      <button type="button" class="linkbtn" id="idea-show" hidden></button>
+      <div class="aibar" data-aibar></div>
+    </div>
+  </section>
+
+  <section class="controls" aria-labelledby="facet-lbl">
+    <div class="facethead">
+      <h2 class="eyebrow" id="facet-lbl">Search and filter</h2>
+      <span class="facetnote" id="facet-note" hidden></span>
+    </div>
     <div class="find">
       <label class="field search-f">
         <span class="sr">Search</span>
@@ -122,31 +146,6 @@
         <span class="sr">Roster area</span>
         <select id="area" class="sortsel"><option value="">All roster areas</option></select>
       </label>
-    </div>
-    <!-- Idea match is a mode of this list, not a panel: on, the list is the
-         calls that fit the idea and every filter here narrows them. -->
-    <div class="ideabox" id="ideabox">
-      <div class="ideahead">
-        <label class="ideaswitch">
-          <input type="checkbox" id="idea-on" role="switch" aria-describedby="idea-about">
-          <span class="track" aria-hidden="true"></span>
-          <svg class="ico ic" width="18" height="18" aria-hidden="true"><use href="icons.svg#bulb"/></svg>
-          <b>Idea match</b>
-        </label>
-        <span class="about" id="idea-about">Describe an idea; the list becomes the open calls that fit it,
-          and the one to go for. Kept in this browser only.</span>
-      </div>
-      <div class="idearow">
-        <label class="sr" for="idea">Your idea</label>
-        <textarea id="idea" rows="2" maxlength="4000"
-          placeholder="What are you working on? Describe the idea in your own words."></textarea>
-        <button type="button" class="primary" id="idea-match"
-          title="Searches every open call and ranks what fits (about a minute). Cmd/Ctrl+Enter from the idea.">Match</button>
-      </div>
-      <div class="ideafoot">
-        <span class="hint" id="idea-hint" aria-live="polite"></span>
-        <div class="aibar" data-aibar></div>
-      </div>
     </div>
     <div class="filters">
       <div class="chipgroup" role="group" aria-labelledby="g-priority">
@@ -257,7 +256,16 @@
   </section>
 
   <div class="resultbar">
-    <div class="tally" id="tally" aria-live="polite"></div>
+    <div class="resultl">
+      <button type="button" class="ideapill" id="idea-off" hidden
+              title="Back to every open call. Your idea and its matches are kept.">
+        <svg class="ico ic" width="14" height="14" aria-hidden="true"><use href="icons.svg#bulb"/></svg>
+        Fits your idea
+        <svg class="ico ic" width="14" height="14" aria-hidden="true"><use href="icons.svg#x"/></svg>
+        <span class="sr">: show every call instead</span>
+      </button>
+      <div class="tally" id="tally" aria-live="polite"></div>
+    </div>
     <label class="sortlbl">Sort by
       <select id="sort" class="sortsel">
         <option value="score" selected>Highest relevance</option>
@@ -432,16 +440,16 @@
 </div>
 
 <!-- Plain scripts, not modules: they share top-level state, so order matters. -->
-<script src="js/format.js?v=10"></script>
-<script src="js/icons.js?v=10"></script>
-<script src="js/rows.js?v=10"></script>
-<script src="js/list.js?v=10"></script>
-<script src="js/ai.js?v=10"></script>
-<script src="js/ui.js?v=10"></script>
-<script src="js/idea.js?v=10"></script>
-<script src="js/panels.js?v=10"></script>
-<script src="js/account.js?v=10"></script>
-<script src="js/cards.js?v=10"></script>
-<script src="js/main.js?v=10"></script>
+<script src="js/format.js?v=11"></script>
+<script src="js/icons.js?v=11"></script>
+<script src="js/rows.js?v=11"></script>
+<script src="js/list.js?v=11"></script>
+<script src="js/ai.js?v=11"></script>
+<script src="js/ui.js?v=11"></script>
+<script src="js/idea.js?v=11"></script>
+<script src="js/panels.js?v=11"></script>
+<script src="js/account.js?v=11"></script>
+<script src="js/cards.js?v=11"></script>
+<script src="js/main.js?v=11"></script>
 </body>
 </html>
