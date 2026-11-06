@@ -483,6 +483,365 @@
         }
       },
       "description": "Consecutive ingest runs with zero results, per source. Only sources with a streak > 0 are drawn."
+    },
+    {
+      "type": "row",
+      "title": "Models & scoring (#66, #67)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "panels": []
+    },
+    {
+      "title": "Scored by model (stock)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 26
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "grant-sift-stats"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "http://grant-sift:8080/api/stats?metric=assessed_by_model&since_days=90",
+          "url_options": {
+            "method": "GET"
+          },
+          "format": "table",
+          "root_selector": "rows",
+          "columns": [
+            {
+              "selector": "day",
+              "text": "day",
+              "type": "timestamp"
+            },
+            {
+              "selector": "dim",
+              "text": "model",
+              "type": "string"
+            },
+            {
+              "selector": "value",
+              "text": "count",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never"
+          },
+          "displayName": "${__field.labels.model}"
+        },
+        "overrides": []
+      },
+      "transformations": [
+        {
+          "id": "partitionByValues",
+          "options": {
+            "fields": [
+              "model"
+            ],
+            "keepFields": false
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ],
+          "sortBy": "Last *",
+          "sortDesc": true,
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Assessments by the model that scored them. A backup model showing up here means the primary was down during a pass."
+    },
+    {
+      "title": "Scored by scoring version (stock)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "grant-sift-stats"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "http://grant-sift:8080/api/stats?metric=assessed_by_scoring_version&since_days=90",
+          "url_options": {
+            "method": "GET"
+          },
+          "format": "table",
+          "root_selector": "rows",
+          "columns": [
+            {
+              "selector": "day",
+              "text": "day",
+              "type": "timestamp"
+            },
+            {
+              "selector": "dim",
+              "text": "version",
+              "type": "string"
+            },
+            {
+              "selector": "value",
+              "text": "count",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never"
+          },
+          "displayName": "${__field.labels.version}"
+        },
+        "overrides": []
+      },
+      "transformations": [
+        {
+          "id": "partitionByValues",
+          "options": {
+            "fields": [
+              "version"
+            ],
+            "keepFields": false
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ],
+          "sortBy": "Last *",
+          "sortDesc": true,
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Assessments by the scoring rules that produced them. 'none' is before versioning. Old versions shrink as calls are re-scored."
+    },
+    {
+      "title": "Model fallbacks / day",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 35
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "grant-sift-stats"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "http://grant-sift:8080/api/stats?metric=llm_fallback_count&since_days=90",
+          "url_options": {
+            "method": "GET"
+          },
+          "format": "table",
+          "root_selector": "rows",
+          "columns": [
+            {
+              "selector": "day",
+              "text": "day",
+              "type": "timestamp"
+            },
+            {
+              "selector": "dim",
+              "text": "route",
+              "type": "string"
+            },
+            {
+              "selector": "value",
+              "text": "count",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "lineWidth": 1,
+            "fillOpacity": 80,
+            "showPoints": "never"
+          },
+          "displayName": "${__field.labels.route}"
+        },
+        "overrides": []
+      },
+      "transformations": [
+        {
+          "id": "partitionByValues",
+          "options": {
+            "fields": [
+              "route"
+            ],
+            "keepFields": false
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull"
+          ],
+          "sortBy": "Last *",
+          "sortDesc": true,
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Each time the shared key fell back to a backup model. Label: primary|model used|path (assess, extract, idea, ask). Alert: above 0 on two days in a row."
+    },
+    {
+      "title": "Share of open calls scored by a backup",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 35
+      },
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "grant-sift-stats"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "type": "json",
+          "source": "url",
+          "url": "http://grant-sift:8080/api/stats?metric=fallback_scored_share&since_days=90",
+          "url_options": {
+            "method": "GET"
+          },
+          "format": "table",
+          "root_selector": "rows",
+          "columns": [
+            {
+              "selector": "day",
+              "text": "day",
+              "type": "timestamp"
+            },
+            {
+              "selector": "value",
+              "text": "share",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "displayName": "backup-scored share",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "transformations": [],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "description": "Open calls a backup model scored, as a share of open assessed calls. Above 5%: run `python run.py assess --rescore-fallback` once the primary is back."
     }
   ],
   "refresh": "5m",
@@ -502,5 +861,5 @@
   "timezone": "browser",
   "title": "Grant Sift — Ops & Signal",
   "uid": "grant-sift-ops-signal",
-  "version": 2
+  "version": 3
 }
