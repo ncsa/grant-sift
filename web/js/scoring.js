@@ -63,10 +63,6 @@ async function loadScoring() {
 
   document.getElementById("sc-group").textContent = d.group ? ` (${d.group})` : "";
 
-  document.querySelectorAll(".scoring .sc-label").forEach(el => {
-    el.textContent = d.label || "relevance";
-  });
-
   // Only worth showing when the open calls were not all scored the same way.
   const groups = d.breakdown || [];
   if (groups.length < 2) { bd.innerHTML = ""; return; }
