@@ -1,0 +1,152 @@
+# IN-CORE: a sibling instance that ranks calls for the IN-CORE community
+# resilience platform and the NIST Center for Risk-Based Community Resilience
+# Planning around it. Same format as config/profile.yaml, which explains
+# every key.
+#
+# Use it with:
+#   GRANT_SIFT_PROFILE=config/profile.incore.yaml
+#   GRANT_SIFT_ROSTER=config/roster.incore.yaml
+# or in Kubernetes, a ConfigMap from this file and profile.existingConfigMap
+# in the Helm values (see config/profile.general.yaml for the commands).
+#
+# Its scoring differs from the default profile, so a database copied from
+# another instance needs `python run.py assess --rescore-all` before its scores mean
+# anything here.
+#
+# The roster has no `our_contact` lines: every match shows the person to
+# write to and nobody to go through, and the "Via me" chip matches nothing.
+
+org:
+  name: IN-CORE
+  # Sign-in is NCSA's Keycloak, so a bare username is an Illinois one.
+  email_domain: illinois.edu
+  # The crawler's User-Agent contact.
+  contact_email: incore-dev@lists.illinois.edu
+  # Roster entries with this org are hidden as "us". The platform team is
+  # not on the roster, so none carries it; every party's own institution
+  # shows on its card.
+  home: IN-CORE
+
+# From the IN-CORE apps (tools.in-core.org: primary #1B2D45, secondary
+# #8998AB, the logo's slate) and in-core.org (#495D78).
+theme:
+  primary: "#1B2D45"       # 13.9:1 on white
+  accent: "#8998AB"        # marks only; 4.7:1 against the header
+  accent_text: "#495D78"   # 6.7:1 on white
+  link: "#495D78"
+
+group:
+  tagline: Open funding calls, ranked for IN-CORE and community resilience modelling
+  description: >-
+    the team behind IN-CORE, an open-source platform for modelling how natural
+    hazards affect a community's buildings, infrastructure, economy and people
+  match_phrase: match a Center collaborator
+
+scoring:
+  label: Resilience fit
+  prompt: |
+    You screen funding opportunities for the team behind IN-CORE (Interdependent
+    Networked Community Resilience Modeling Environment), the open-source
+    computational platform of the NIST Center of Excellence for Risk-Based
+    Community Resilience Planning. IN-CORE models what a natural hazard does to a
+    community and how it recovers: hazard fields (earthquake, tsunami, tornado,
+    hurricane wind and surge, flood, wildfire); fragility and damage of buildings,
+    bridges and lifelines; interdependent infrastructure networks (electric power,
+    water, transportation, emergency services, shelters); computable general
+    equilibrium and other economic impact models; population dislocation, housing
+    and business recovery, social vulnerability and equity; and the what-if
+    mitigation, policy and investment choices that planners and decision makers
+    compare. The team builds and sustains the platform (pyincore, its web tools,
+    hazard and fragility services, data) with engineers, economists and social
+    scientists across many universities and NIST.
+
+    Score each opportunity 0-100 on whether this team should look at it.
+
+    The valuable finds are calls where community-scale, multi-hazard impact or
+    recovery modelling, or a decision-support tool for planners, is part of the
+    work: hazard mitigation, climate adaptation, infrastructure resilience,
+    disaster recovery, equity in hazard planning, testbed communities, and the
+    software and data that hold these together. A call about one structural
+    detail, a single sensor or lab material test, or a hazard with no community
+    or decision side is a poor fit even if it names a hazard.
+  categories:
+    - id: resilience_research
+      description: research call on hazards, risk or community resilience where modelling is central
+    - id: decision_support
+      description: planning, mitigation, adaptation or recovery call where a community needs analysis or a tool
+    - id: platform
+      description: research software, cyberinfrastructure or open-source sustainability call that fits the platform
+    - id: domain_partner
+      description: domain call (engineering, social science, climate, health) where IN-CORE modelling would join as a partner
+    - id: not_relevant
+      description: none of the above
+  guide: |
+    80-100  we should almost certainly pursue or bring to a partner
+    60-79   worth a look; real but partial fit
+    40-59   marginal
+    0-39    not for us
+  axes:
+    - id: hazard_modeling
+      description: |
+        how much natural-hazard, fragility, damage or risk modelling the
+        work needs. 0 = none. 100 = hazard and damage modelling is the call.
+    - id: community_scale
+      description: |
+        how far the work spans a whole community: interdependent
+        infrastructure, economy and population together. 0 = one
+        component or one building. 100 = the community as a system.
+    - id: social_economic
+      description: |
+        weight on people and money: dislocation, equity, social
+        vulnerability, housing and business recovery, economic impact.
+        0 = purely physical. 100 = social or economic outcomes are the call.
+    - id: decision_support
+      description: |
+        whether the outcome is a choice made by planners, agencies or
+        communities: scenarios, mitigation options, investments, policy.
+        0 = basic science with no decision. 100 = the deliverable is a
+        decision tool or plan.
+    - id: software_platform
+      description: |
+        how much software, data or computing has to be built or sustained.
+        0 = no engineering. 100 = the deliverable is a platform, its
+        services, data or long-term upkeep.
+
+digests:
+  - id: resilience-research
+    label: Hazards and resilience research
+    category: [resilience_research]
+    min_score: 60
+  - id: decision-support
+    label: Planning, mitigation and recovery
+    category: [decision_support]
+    min_score: 60
+  - id: platform
+    label: Research software and platform sustainability
+    category: [platform]
+    min_score: 60
+  - id: closing-soon
+    label: Closing within 30 days
+    deadline_within_days: 30
+    min_score: 60
+  - id: roster-match
+    label: Matches a Center collaborator
+    has_match: true
+    min_score: 60
+
+call_types:
+  - id: research
+    label: Resilience research
+    category: [resilience_research]
+  - id: planning
+    label: Planning and recovery
+    category: [decision_support]
+  - id: platform
+    label: Platform and software
+    category: [platform]
+  - id: partner
+    label: Domain partner calls
+    category: [domain_partner]
+  - id: foundation
+    label: Foundations
+    exclude_source: [grants.gov]
