@@ -27,6 +27,9 @@ helm/**/charts/
 
 # Deployment roster: real collaborator names/status. Ship the example only.
 config/roster.yaml
+# A sibling instance's roster (real names and addresses), e.g. roster.incore.yaml.
+config/roster.*.yaml
+!config/roster.example.yaml
 # Our own staff and their addresses. Same rule as the roster: the example is
 # tracked, the real file is not.
 config/staff.yaml
