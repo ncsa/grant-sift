@@ -7,11 +7,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=17">
+<link rel="stylesheet" href="styles.css?v=22">
 </head>
 <body>
 <header class="strip">
   <div class="wrap">
+    <!-- The organisation's mark, from the profile's logo block; painted by
+         main.js, and absent when the profile has none. -->
+    <span class="orglogo" id="orglogo" hidden></span>
     <a class="brand-block" href="./">
       <span class="brand">Grant Sift</span>
       <span class="tagline" id="tagline"></span>
@@ -119,32 +122,36 @@
         title="Clear the idea, its matches and the recommendation, and go back to every open call.">
         <svg class="ico ic" width="14" height="14" aria-hidden="true"><use href="icons.svg#reset"/></svg>Clear</button>
     </div>
+    <!-- One layout for every state: the idea and its file on the left, Upload
+         and the one primary button on the right, and nothing else ever joins
+         either column. All feedback goes to the status line under them. -->
     <div class="idearow">
-      <label class="sr" for="idea">Your idea</label>
-      <textarea id="idea" rows="1" maxlength="15000"
-        placeholder="Describe your idea, or drop a file here"></textarea>
-      <button type="button" class="secondary" id="idea-upload" aria-label="Upload file"
-        title="Attach one .txt, .md, .pdf, .docx or .pptx, up to 10 MB, such as a one-page summary. Read to text in this browser; only the text is matched.">
-        <svg class="ico ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#upload"/></svg><span class="lbl">Upload file</span></button>
-      <input type="file" id="idea-file" accept=".txt,.md,.markdown,.pdf,.docx,.pptx" hidden>
-      <button type="button" class="primary" id="idea-match"
-        title="Searches every open call and ranks what fits (about a minute). Cmd/Ctrl+Enter from the idea.">Match</button>
-      <button type="button" class="showfit" id="idea-show" hidden
-        title="Back to the calls your last match found, and its recommendation. No new match needed.">
-        <svg class="ico ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#bulb"/></svg><span class="lbl"></span></button>
+      <label class="idealbl" for="idea" id="idea-label">Describe your idea</label>
+      <textarea id="idea" rows="3" maxlength="15000"
+        placeholder="Aims, methods, data and software involved. Or drop a file here."></textarea>
+      <div class="ideabtns">
+        <button type="button" class="secondary" id="idea-upload" aria-label="Upload file"
+          title="Attach one .txt, .md, .pdf, .docx or .pptx, up to 10 MB, such as a one-page summary. Read to text in this browser; only the text is matched.">
+          <svg class="ico ic" width="16" height="16" aria-hidden="true"><use href="icons.svg#upload"/></svg><span class="lbl">Upload file</span></button>
+        <input type="file" id="idea-file" accept=".txt,.md,.markdown,.pdf,.docx,.pptx" hidden>
+        <button type="button" class="primary" id="idea-match"
+          title="Searches every open call and ranks what fits (about a minute). Cmd/Ctrl+Enter from the idea.">Match</button>
+      </div>
+      <div class="ideadoc" id="idea-doc" hidden></div>
     </div>
-    <div class="ideadoc" id="idea-doc" hidden></div>
-    <div class="ideastatus" id="idea-status" role="status" aria-live="polite" hidden>
-      <span class="spin" aria-hidden="true"></span>
-      <span class="msg"></span>
-      <span class="time"></span>
-      <span class="bar" aria-hidden="true"><i></i></span>
-    </div>
-    <div class="dropnote" aria-hidden="true">Drop the file to attach it to the idea</div>
-    <div class="ideafoot">
-      <span class="hint" id="idea-hint" aria-live="polite"></span>
+    <div class="ideastatus" id="idea-status">
+      <div class="msgline" id="idea-msg" role="status" aria-live="polite" tabindex="-1">
+        <svg class="ico ic sico" width="16" height="16" aria-hidden="true"><use href="icons.svg?v=2#clock"/></svg>
+        <span class="spin" aria-hidden="true"></span>
+        <span class="msg"></span>
+        <span class="time"></span>
+        <span class="bar" aria-hidden="true"><i></i></span>
+        <button type="button" class="act" id="idea-act" hidden></button>
+      </div>
       <div class="aibar" data-aibar></div>
     </div>
+    <article class="bkout" id="idea-rec" aria-label="Recommendation" hidden></article>
+    <div class="dropnote" aria-hidden="true">Drop the file to attach it to the idea</div>
   </section>
 
   <section class="controls" aria-labelledby="facet-lbl">
@@ -297,7 +304,6 @@
       </select>
     </label>
   </div>
-  <section class="bkout" id="idea-rec" aria-label="Recommendation" aria-live="polite" hidden></section>
   <ol id="list"></ol>
   <nav class="pager" id="pager" hidden aria-label="Pages"></nav>
 
@@ -504,12 +510,12 @@
 <script src="js/list.js?v=14"></script>
 <script src="js/ai.js?v=13"></script>
 <script src="js/ui.js?v=12"></script>
-<script src="js/ideafile.js?v=14"></script>
-<script src="js/idea.js?v=17"></script>
+<script src="js/ideafile.js?v=15"></script>
+<script src="js/idea.js?v=20"></script>
 <script src="js/panels.js?v=11"></script>
 <script src="js/account.js?v=11"></script>
 <script src="js/cards.js?v=13"></script>
 <script src="js/scoring.js?v=5"></script>
-<script src="js/main.js?v=18"></script>
+<script src="js/main.js?v=20"></script>
 </body>
 </html>

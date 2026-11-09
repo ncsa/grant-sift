@@ -2,7 +2,7 @@
 // and attached beside the Idea box, which stays free for the person's notes.
 
 // Read here, in the tab. The file itself is never uploaded: only its text goes
-// to /api/focus and /api/rescore, as the `document` field.
+// to /api/focus, as the `document` field.
 // The two readers are large (pdf.js ~1 MB with its worker, mammoth ~600 KB),
 // so each loads from cdnjs only when a file of its kind is picked. Versions
 // are exact: a reader that changed under us could change what gets matched.
@@ -89,10 +89,27 @@ async function docxText(file) {
   let mammoth;
   try { mammoth = await loadMammoth(); } catch (e) { throw offline("Word"); }
   try {
-    const out = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
-    return { text: tidyText(out.value || "") };
+    const buf = await file.arrayBuffer();
+    const pages = await docxPages(buf);
+    const out = await mammoth.extractRawText({ arrayBuffer: buf });
+    return { text: tidyText(out.value || ""), pages };
   } catch (e) {
     throw new IdeaFileError("This .docx could not be read; it may be damaged. Paste the text instead.");
+  }
+}
+
+// Word writes the page count it last laid out into docProps/app.xml. It is
+// Word's count, not ours, and a file saved by another editor may not carry
+// it: then the chip shows no pages rather than a guess.
+async function docxPages(buf) {
+  try {
+    const get = zipEntries(buf).get("docProps/app.xml");
+    if (!get) return 0;
+    const el = xml(await get()).getElementsByTagName("Pages")[0];
+    const n = parseInt(el && el.textContent, 10);
+    return n > 0 ? n : 0;
+  } catch (e) {
+    return 0;
   }
 }
 
@@ -249,7 +266,11 @@ async function readIdeaFile(file) {
     if (cut > IDEA_DOC_MAX_CHARS * 0.8) text = text.slice(0, cut);
     text = text.trim();
   }
+  // Pages or slides where the file has them; words for plain text, which
+  // has no pages to count.
+  const words = got.text.split(/\s+/).filter(Boolean).length;
   const detail = got.pages ? `${got.pages} ${got.pages === 1 ? "page" : "pages"}`
-    : got.slides ? `${got.slides} ${got.slides === 1 ? "slide" : "slides"}` : "";
+    : got.slides ? `${got.slides} ${got.slides === 1 ? "slide" : "slides"}`
+    : `${words.toLocaleString()} ${words === 1 ? "word" : "words"}`;
   return { text, trimmed, detail };
 }

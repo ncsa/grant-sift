@@ -153,6 +153,49 @@ def _theme(raw):
     return dict(raw)
 
 
+_LOGO_KEYS = {"src", "alt", "text", "href", "plate"}
+
+
+def _logo(raw):
+    """The organisation's mark at the left of the top bar: an image served
+    from web/ (src, with alt text) or a short word (text). None when left out,
+    and the bar shows Grant Sift alone."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ProfileError("logo must be a mapping")
+    bad = set(raw) - _LOGO_KEYS
+    if bad:
+        raise ProfileError(f"logo: unknown key(s) {sorted(bad)}; use {', '.join(sorted(_LOGO_KEYS))}")
+    plate = raw.get("plate", True)
+    if not isinstance(plate, bool):
+        raise ProfileError("logo.plate must be true or false")
+    raw = {k: v for k, v in raw.items() if k != "plate"}
+    vals = {k: v.strip() for k, v in raw.items() if isinstance(v, str) and v.strip()}
+    if set(raw) - set(vals):
+        raise ProfileError(f"logo.{sorted(set(raw) - set(vals))[0]} must be non-empty text")
+    if ("src" in vals) == ("text" in vals):
+        raise ProfileError("logo needs exactly one of src (an image) or text")
+    src = vals.get("src")
+    if src:
+        # A file under web/, so the page can never be pointed at another
+        # host's image (or a script) from config.
+        if src.startswith("/") or ":" in src or ".." in src.split("/") or "\\" in src:
+            raise ProfileError("logo.src must be a path under web/, like logos/ncsa.png")
+        if not re.search(r"\.(png|svg|webp|jpe?g)$", src, re.I):
+            raise ProfileError("logo.src must be a .png, .svg, .webp or .jpg")
+        if "alt" not in vals:
+            raise ProfileError("logo.alt is required with src: what the image says")
+    href = vals.get("href")
+    if href and not href.startswith("https://"):
+        raise ProfileError("logo.href must be an https:// link")
+    # plate: false for an image made for a dark ground, which then sits on
+    # the bar itself rather than on the white plate.
+    if not plate:
+        vals["plate"] = False
+    return vals
+
+
 def theme_css():
     """The profile's colours as a :root rule, for pages served without JS."""
     t = PROFILE["theme"]
@@ -179,6 +222,7 @@ def parse(raw):
     out = {"org": {k: _text(org, k, "org").strip()
                    for k in ("name", "email_domain", "contact_email", "home")},
            "theme": _theme(raw.get("theme")),
+           "logo": _logo(raw.get("logo")),
            "group": {k: _text(group, k, "group").strip()
                      for k in ("tagline", "description", "match_phrase")},
            "scoring": scoring,
@@ -218,6 +262,7 @@ def public():
     """What the page needs: wording and the chips, without the predicates."""
     return {"org": {k: PROFILE["org"][k] for k in ("name", "home")},
             "theme": {THEME_VARS[k]: v for k, v in PROFILE["theme"].items()},
+            "logo": PROFILE["logo"],
             "group": PROFILE["group"],
             "score_label": PROFILE["scoring"]["label"],
             "call_types": [{k: c[k] for k in ("id", "label", "title")}

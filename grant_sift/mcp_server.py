@@ -7,7 +7,7 @@ code the dashboard runs, not a second copy that drifts. This file only names
 the tools, describes them for a model, and trims what a model need not read.
 A write from Claude is stamped with the signed-in username exactly like a click.
 
-Not exposed: chat, focus, rescore and models. Each spends the viewer's own
+Not exposed: chat, focus and models. Each spends the viewer's own
 Lumen key, which would have to travel as a tool argument - through the
 model's context and the client's transcript - and the assistant calling these
 tools is already a model that can read get_opportunity and reason about it.

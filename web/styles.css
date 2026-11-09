@@ -58,6 +58,19 @@ a:hover { color: var(--c-primary); text-decoration: underline; }
   display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px;
   min-height: 64px; padding-top: 12px; padding-bottom: 12px;
 }
+/* The organisation's mark, then a rule, then Grant Sift. */
+.orglogo { flex: none; display: flex; align-items: center; gap: 20px; margin-right: -4px; }
+.orglogo[hidden] { display: none; }
+.orglogo::after { content: ""; width: 1px; height: 32px; background: rgba(255, 255, 255, 0.28); }
+.orglogo .plate { display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+                  height: 44px; max-width: 168px; padding: 6px 12px; background: #fff; border-radius: 8px; }
+.orglogo .plate:hover { text-decoration: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5); }
+/* A mark made for a dark ground: no plate, the full bar height. */
+.orglogo .plate.bare { padding: 0; background: none; border-radius: 6px; overflow: hidden; }
+.orglogo .plate.bare img { height: 44px; }
+.orglogo img { display: block; height: 32px; width: auto; max-width: 144px; object-fit: contain; }
+.orglogo .word { font-size: 15px; font-weight: 700; letter-spacing: 0.04em; color: var(--c-primary);
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .brand-block { display: flex; align-items: baseline; gap: 12px; flex: 1 1 auto; min-width: 0; }
 .brand-block:hover { text-decoration: none; }
 .brand { font-family: var(--serif); font-size: 22px; font-weight: 600;
@@ -614,30 +627,28 @@ h2.title a { color: var(--c-primary); }
 .ideahead .about { font-size: 13px; color: var(--text-2); }
 .ideahead .clearidea { margin-left: auto; align-self: center; display: inline-flex; align-items: center;
                        gap: 6px; cursor: pointer; }
-/* Idea on the left over two rows; Upload and Match on the first, and the way
-   back to kept matches under them, where the tall box leaves room. */
-.idearow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: start; gap: 10px; }
-.idearow textarea { grid-row: 1 / span 2; }
-.showfit {
-  grid-column: 2 / 4; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: 44px; padding: 8px 14px; font: inherit; font-size: 14px; font-weight: 600; line-height: 1.3;
-  color: var(--c-link); background: #fff; border: 1.5px solid var(--c-link);
-  border-radius: 8px; cursor: pointer; text-align: left;
-}
-.showfit:hover { background: var(--c-link); color: #fff; }
-.showfit[hidden] { display: none; }
+/* One layout for every state: the idea and its file on the left, Upload and
+   the primary button on the right. Nothing joins the right column, and the
+   field never changes height on focus or blur, so nothing jumps. */
+.idearow { display: grid; grid-template-columns: minmax(0, 1fr) 168px; align-items: start; gap: 8px 12px; }
+.idealbl { grid-column: 1; grid-row: 1; font-size: 12.5px; font-weight: 600; color: var(--text-2); }
+.idealbl .opt { font-weight: 400; color: var(--text-3); }
+.idearow textarea { grid-column: 1; grid-row: 2; }
+/* Upload over Match, stacked beside the field, the same width in every state. */
+.ideabtns { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; gap: 8px; }
+.ideabtns > button { width: 100%; justify-content: center; }
+.idearow .ideadoc { grid-column: 1; grid-row: 3; justify-self: start; }
 .idearow textarea {
-  flex: 1; min-width: 0; font: inherit; font-size: 15px; line-height: 1.55; color: var(--c-primary);
-  padding: 10px 14px; height: 44px; min-height: 44px; resize: vertical;
+  display: block; width: 100%; min-width: 0; font: inherit; font-size: 15px; line-height: 1.55; color: var(--c-primary);
+  padding: 10px 14px; resize: none; overflow-y: auto; box-sizing: border-box;
+  /* 3 lines, growing with the text to 6 (sizeIdea in idea.js). */
+  min-height: calc(3 * 1.55em + 22px); max-height: calc(6 * 1.55em + 22px);
   border: 1px solid var(--border-strong); border-radius: 10px; background: #fff;
 }
-/* One line until there is an idea in it; then room for a paragraph. Held
-   open while it has text, so leaving the field does not shift Match out
-   from under the pointer. */
-.idearow textarea:focus, .idearow textarea:not(:placeholder-shown) { height: 112px; }
-/* An empty one-line box shows its prompt on that line, not half of two. */
-.idearow textarea:placeholder-shown:not(:focus) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.idearow .primary { flex: none; min-width: 112px; }
+.idearow .primary { flex: none; }
+.idearow .primary:disabled { opacity: 1; color: var(--text-3); background: #E1E7F0; cursor: not-allowed; }
+.idearow .primary.cancel { color: var(--c-primary); background: #fff; border: 1.5px solid var(--c-primary); }
+.idearow .primary.cancel:hover { background: var(--tint-blue); }
 .idearow .secondary { flex: none; height: 44px; display: inline-flex; align-items: center; gap: 6px; }
 /* A file dragged over the card: the whole card is the target. */
 .ideabox { position: relative; }
@@ -649,7 +660,8 @@ h2.title a { color: var(--c-primary); }
 }
 /* Matching: the idea is locked and a status bar says what is happening. */
 .ideabox.busy { border-color: var(--c-link); }
-.ideabox.busy .idearow textarea { background: var(--surface-2); color: var(--text-2); cursor: not-allowed; }
+/* Read-only at full contrast: it is still the idea being matched. */
+.ideabox.busy .idearow textarea { cursor: default; background: #F6F8FB; }
 /* The attached file: one chip under the box, which then holds the notes. */
 .ideadoc { display: flex; align-items: center; gap: 8px; min-width: 0; align-self: flex-start; max-width: 100%;
            padding: 6px 6px 6px 12px; background: #fff; border: 1px solid var(--border-strong); border-radius: 999px;
@@ -657,42 +669,60 @@ h2.title a { color: var(--c-primary); }
 .ideadoc[hidden] { display: none; }
 .ideadoc > .ic { flex: none; color: var(--c-link); }
 .ideadoc .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.ideadoc .meta { flex: none; font-size: 13px; color: var(--text-3); }
-.ideadoc.trimmed .meta { color: var(--c-accent-text); }
-.ideadoc button { flex: none; display: inline-flex; align-items: center; justify-content: center;
+.ideadoc .meta { flex: none; font-size: 13px; color: var(--text-2); }
+.ideadoc .cut { flex: none; font-size: 13px; font-weight: 600; color: var(--c-accent-text); cursor: help; }
+.ideadoc button { flex: none; position: relative; display: inline-flex; align-items: center; justify-content: center;
                   width: 28px; height: 28px; padding: 0; border: 0; border-radius: 999px;
                   background: transparent; color: var(--text-2); cursor: pointer; }
 .ideadoc button:hover:not(:disabled) { background: var(--surface-2); color: var(--c-primary); }
 .ideadoc button:disabled { opacity: .4; cursor: not-allowed; }
+/* 44 px to hit, 28 px to see. */
+.ideadoc button::after, .ideapill::after { content: ""; position: absolute; inset: -8px; }
 @media (max-width: 560px) { .ideadoc .meta { display: none; } }
-.ideastatus { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
-              padding: 12px 14px; background: #fff; border: 1px solid var(--border-strong);
-              border-left: 4px solid var(--c-link); border-radius: 10px; }
-.ideastatus[hidden] { display: none; }
-.ideastatus .msg { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; color: var(--c-primary); }
+/* The status line: hint, progress, summary, error, one at a time, with the
+   advanced options pinned to its right end. Its height never changes. */
+/* The status line: hint, progress, summary, error, one at a time, with the
+   advanced options pinned to its right end. */
+.ideastatus { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px;
+              min-height: 36px; padding-top: 12px; border-top: 1px solid var(--border); }
+.ideastatus .msgline { flex: 1 1 320px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center;
+                       gap: 4px 10px; font-size: 14px; line-height: 1.45; color: var(--c-primary); outline: none; }
+.ideastatus .msgline:focus-visible { outline: 2px solid var(--c-link); outline-offset: 2px; border-radius: 4px; }
+.ideastatus .msgline b { font-weight: 600; }
+.ideastatus .msgline .sub { color: var(--text-3); font-size: 13px; }
+.ideastatus .sico { flex: none; color: var(--c-link); }
+.ideastatus .msgline.err .msg { color: var(--c-accent-text); font-weight: 500; }
+.ideastatus .msgline.err .sico { color: var(--c-accent-text); }
 .ideastatus .time { font-size: 13px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.ideastatus .spin { width: 18px; height: 18px; flex: none; border-radius: 999px;
-                    border: 2.5px solid var(--tint-blue); border-top-color: var(--c-link);
-                    animation: ideaspin .8s linear infinite; }
-.ideastatus .bar { flex: 1 1 100%; height: 4px; border-radius: 999px; overflow: hidden;
-                   background: var(--tint-blue); }
-.ideastatus .bar i { display: block; width: 35%; height: 100%; border-radius: 999px;
-                     background: var(--c-link); animation: ideabar 1.6s ease-in-out infinite; }
+.ideastatus .time:empty { display: none; }
+.ideastatus .act { font: inherit; font-size: 14px; font-weight: 600; color: var(--c-link); background: #fff;
+                   border: 1px solid #9DB3D3; border-radius: 8px; height: 32px; padding: 0 10px;
+                   white-space: nowrap; cursor: pointer; position: relative; }
+.ideastatus .act::after { content: ""; position: absolute; inset: -6px 0; }
+.ideastatus .act:hover { background: var(--tint-blue); }
+.ideastatus .act[hidden] { display: none; }
+.ideastatus .aibar { margin: 0 0 0 auto; }
+.ideastatus .linkbtn { padding: 0 4px; }
+.ideastatus .spin { display: none; width: 16px; height: 16px; flex: none; border-radius: 999px;
+                    border: 2px solid #C9D6E8; border-top-color: var(--c-link);
+                    animation: ideaspin .9s linear infinite; }
+.ideabox.matching .ideastatus .spin { display: inline-block; }
+.ideabox.matching .ideastatus .msg { font-weight: 600; }
+/* Indeterminate until /api/focus streams real stages: it says "working",
+   not how far. */
+.ideastatus .bar { display: none; flex: 1 1 80px; max-width: 260px; height: 4px; overflow: hidden;
+                   border-radius: 999px; background: #D5DEEA; }
+.ideabox.matching .ideastatus .bar { display: block; }
+.ideastatus .bar i { display: block; width: 25%; height: 100%; border-radius: 999px;
+                     background: var(--c-link); animation: ideabar 1.4s ease-in-out infinite; }
 @keyframes ideaspin { to { transform: rotate(360deg); } }
-@keyframes ideabar { 0% { transform: translateX(-100%); } 100% { transform: translateX(290%); } }
+@keyframes ideabar { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }
 @media (prefers-reduced-motion: reduce) {
   .ideastatus .spin, .ideastatus .bar i { animation-duration: 3s; }
 }
-.ideafoot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-            gap: 4px 16px; }
-.ideafoot .hint { font-size: 12.5px; color: var(--text-2); }
-.ideafoot .hint:empty { display: none; }
-.ideafoot .hint.err { color: var(--c-accent-text); font-weight: 500; }
-.ideafoot .aibar { margin: 0 0 0 auto; }
-.ideafoot .linkbtn { padding: 0; }
 .resultl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .ideapill {
-  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 12px;
+  position: relative; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px 0 12px;
   font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
   color: #fff; background: var(--c-primary); border: 0; border-radius: 999px;
 }
@@ -703,14 +733,22 @@ h2.title a { color: var(--c-primary); }
 }
 .primary:hover:not(:disabled) { background: #0C1C36; }
 .primary:disabled { opacity: .6; cursor: progress; }
-/* The recommendation: above the list, while Idea match is on. */
-#idea-rec { margin-top: 20px; }
-.bkout { background: var(--tint-blue); border-radius: 12px; padding: 20px 22px; min-width: 0; }
-.bkout.pending { background: var(--surface-2); border: 1px dashed var(--border-strong); }
-.bkout .placeholder { margin: 8px 0 0; font-size: 14px; line-height: 1.55; color: var(--text-3); }
-.bkout .tag { display: block; margin: 0; }
-.bkout .pick { margin: 8px 0 0; font-family: var(--serif); font-size: 19px; line-height: 1.45; max-width: 90ch; }
-.bkout .rest { margin: 10px 0 0; font-size: 14px; line-height: 1.55; color: var(--text-2); max-width: 110ch; }
+/* The recommendation: the last thing in the panel, while Idea match is on. */
+.bkout { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px;
+         min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.bkout[hidden] { display: none; }
+.bkout .rechead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.bkout .tag { display: block; margin: 0; color: var(--c-link); }
+.bkout .rechead .linkbtn { min-height: 32px; position: relative; }
+.bkout .rechead .linkbtn::after { content: ""; position: absolute; inset: -6px -8px; }
+.bkout p { margin: 0; }
+.bkout .pick { font-family: var(--serif); font-size: 21px; line-height: 1.35; max-width: 70ch; }
+.bkout .pick .why { color: var(--c-primary); font-weight: 400; }
+.bkout .facts { font-size: 13.5px; color: var(--text-3); }
+.bkout .reason { margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--rule, #E6E8EC);
+                 font-size: 14.5px; line-height: 1.55; color: var(--text-2); max-width: 110ch; }
+.bkout .reason .lbl { font-weight: 600; color: var(--c-primary); }
+.bkout .rest { font-size: 14px; line-height: 1.55; color: var(--text-2); max-width: 110ch; }
 .bkout a { color: var(--c-primary); font-weight: 600; text-decoration: underline;
            text-decoration-color: var(--border-strong); text-underline-offset: 3px; }
 
@@ -736,11 +774,13 @@ footer a { margin-left: 6px; }
      the model options are in the Account menu already. */
   .ideabox { padding: 14px; }
   .idearow .primary { min-width: 0; padding: 0 14px; }
-  .ideafoot .aibar { display: none; }
-  .idearow .secondary { padding: 0 12px; }
-  .idearow .secondary .lbl { display: none; }
-  .idearow textarea { grid-row: 1; }
-  .showfit { grid-column: 1 / -1; }
+  .ideastatus .aibar { display: none; }
+  /* Phones: the buttons go under the field, side by side, Match the wider. */
+  .idearow { grid-template-columns: minmax(0, 1fr); }
+  .ideabtns { grid-column: 1; grid-row: 3; flex-direction: row; }
+  .ideabtns > button { width: auto; }
+  .ideabtns .primary { flex: 1; }
+  .idearow .ideadoc { grid-row: 4; }
   .lead { flex: none; }
   .lead .score { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
   .lead .score .num b { font-size: 24px; }

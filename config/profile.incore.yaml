@@ -35,6 +35,12 @@ theme:
   accent_text: "#495D78"   # 6.7:1 on white
   link: "#495D78"
 
+# The mark at the left of the top bar (see config/profile.yaml).
+logo:
+  src: logos/in-core.png
+  alt: IN-CORE
+  href: https://in-core.org
+
 group:
   tagline: Open funding calls, ranked for IN-CORE and community resilience modelling
   description: >-
