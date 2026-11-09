@@ -1352,8 +1352,9 @@ Rules:
 # The recommendation is written by the rank pass, the last pass of a match.
 # (#73: rescoring straight after ranking wrote every "why" twice, to get this
 # one field.)
-RECOMMENDATION_SPEC = """2-3 sentences: which one to go for and why it beats the
-                     others. Name the runner-up and say what would change the
+RECOMMENDATION_SPEC = """2-3 sentences: why the pick beats the others (its
+                     one-line reason is shown separately; do not repeat it).
+                     Name the runner-up and say what would change the
                      answer. Deadlines count - a close fit that cannot be
                      written well in the time left is often the wrong answer."""
 
@@ -1364,6 +1365,10 @@ for.
 Return ONLY JSON, no fences:
 {
   "recommendation": "%s",
+  "pick": {"id": "the call to go for, exactly as given",
+           "reason": "why it, in one short sentence of at most 25 words, not naming the call"},
+  "runner_up": {"id": "the second choice, exactly as given, or empty",
+                "if": "when to pick it instead, finishing 'pick it if ...', at most 15 words"},
   "calls": [{"id": "exactly as given", "affinity": 0-100, "why": "one sentence, concrete"}]
 }
 
@@ -1513,6 +1518,18 @@ def _focus_obj(text):
     return {"calls": calls} if calls else {}
 
 
+def _focus_choice(v, kept, text_key):
+    """{"id", text_key} for the pick or the runner-up, or None. The id must be
+    one of the calls the rank pass kept: the card links it, so a call it
+    dropped (or invented) is no pick at all."""
+    if not isinstance(v, dict):
+        return None
+    rid = str(v.get("id") or "").strip()
+    if rid not in kept:
+        return None
+    return {"id": rid, text_key: " ".join(str(v.get(text_key) or "").split())[:300]}
+
+
 def _focus_calls(data, known):
     """Usable {id, affinity, why} rows from a parsed rank reply.
     An id not in `known` is dropped, never fabricated back."""
@@ -1639,7 +1656,13 @@ def focus(request: Request, payload: dict = Body(...)):
         out.sort(key=lambda x: -x["affinity"])
         # The rank pass is the only place the pick comes from.
         rec = str(data.get("recommendation") or "")[:2000] if out else ""
-        return {"results": out, "recommendation": rec, "searched": n, "trimmed": trimmed,
+        # The same pick in parts, for the card: a linked title, one reason,
+        # and the runner-up in one line. The prose above stays as the fallback.
+        kept = {c["id"] for c in out}
+        pick = _focus_choice(data.get("pick"), kept, "reason")
+        runner = _focus_choice(data.get("runner_up"), kept - {pick["id"]} if pick else kept, "if")
+        return {"results": out, "recommendation": rec, "pick": pick, "runner_up": runner,
+                "searched": n, "trimmed": trimmed,
                 "chunks": len(chunks), "usage": usage, **_answered(gw, "idea"),
                 "timing_ms": timing}
     finally:

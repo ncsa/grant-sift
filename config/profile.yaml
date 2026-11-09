@@ -42,6 +42,17 @@ theme:
   accent_text: "#C84113"   # the accent where it is text
   link: "#1D58A7"
 
+# The organisation's mark at the left of the top bar. Optional. Either an
+# image served from web/ (src and alt), or a short word (text: NCSA).
+# href makes it a link to the organisation's own site. It sits on a white
+# plate so any logo reads on the dark bar; plate: false for an image made for
+# a dark ground, like this one, which then sits on the bar itself.
+logo:
+  src: logos/ncsa.png
+  alt: NCSA
+  href: https://ncsa.illinois.edu
+  plate: false
+
 group:
   # The line under "Grant Sift" in the page header.
   tagline: Open funding calls, ranked for NCSA’s Research Software Engineering group

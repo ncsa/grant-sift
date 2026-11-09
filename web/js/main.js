@@ -69,11 +69,28 @@ function boot(cat) {
   probeAPI();
 }
 
+// The organisation's mark on a white plate, so any logo reads on the bar
+// whatever its own colours: an image from web/, or a short word.
+function paintLogo(l) {
+  const box = document.getElementById("orglogo");
+  if (!l || !(l.src || l.text)) { box.hidden = true; box.innerHTML = ""; return; }
+  const name = l.alt || l.text;
+  const mark = l.src
+    ? `<img src="${esc(l.src)}" alt="${esc(l.alt)}">`
+    : `<span class="word">${esc(l.text)}</span>`;
+  const cls = l.plate === false ? "plate bare" : "plate";
+  box.innerHTML = l.href
+    ? `<a class="${cls}" href="${esc(l.href)}" title="${esc(name)} website">${mark}</a>`
+    : `<span class="${cls}">${mark}</span>`;
+  box.hidden = false;
+}
+
 // Wording and Call type chips from config/profile.yaml.
 function paintProfile(p) {
   const g = p.group || {};
   if (g.tagline) document.getElementById("tagline").textContent = g.tagline;
   if (g.match_phrase) document.getElementById("match-phrase").textContent = g.match_phrase;
+  paintLogo(p.logo);
   HOME_ORG = (p.org || {}).home || "";
   for (const [v, colour] of Object.entries(p.theme || {})) {
     document.documentElement.style.setProperty(v, colour);

@@ -125,6 +125,33 @@ class Validation(unittest.TestCase):
         with self.assertRaisesRegex(profile.ProfileError, "unknown"):
             self.parse(theme={"background": "#ffffff"})
 
+    def test_logo_is_optional(self):
+        self.assertIsNone(self.parse()["logo"])
+        self.assertEqual(self.parse(logo={"text": " NCSA "})["logo"], {"text": "NCSA"})
+        self.assertEqual(self.parse(logo={"text": "A", "plate": False})["logo"], {"text": "A", "plate": False})
+        self.assertEqual(self.parse(logo={"src": "logos/a.png", "alt": "A"})["logo"],
+                         {"src": "logos/a.png", "alt": "A"})
+
+    def test_logo_is_an_image_under_web_or_text(self):
+        for bad, msg in (({"src": "a.png", "text": "A", "alt": "A"}, "exactly one"),
+                         ({}, "exactly one"),
+                         ({"src": "a.png"}, "alt"),
+                         ({"src": "https://x.org/a.png", "alt": "A"}, "under web"),
+                         ({"src": "../secret.png", "alt": "A"}, "under web"),
+                         ({"src": "/etc/a.png", "alt": "A"}, "under web"),
+                         ({"src": "logos/a.js", "alt": "A"}, r"\.png"),
+                         ({"text": "A", "href": "javascript:alert(1)"}, "https"),
+                         ({"text": "A", "size": "big"}, "unknown"),
+                         ({"text": ""}, "non-empty"),
+                         ({"text": "A", "plate": "no"}, "true or false")):
+            with self.subTest(bad=bad), self.assertRaisesRegex(profile.ProfileError, msg):
+                self.parse(logo=bad)
+
+    def test_shipped_logos_exist(self):
+        for name in ("profile.yaml", "profile.incore.yaml"):
+            logo = profile.load(ROOT / "config" / name)["logo"]
+            self.assertTrue((ROOT / "web" / logo["src"]).is_file(), name)
+
     def test_no_axes_leaves_them_out_of_the_prompt(self):
         text = llm.build_assess_system(self.parse()["scoring"])
         self.assertNotIn('"axes"', text)

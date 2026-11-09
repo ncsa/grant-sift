@@ -71,6 +71,8 @@ class FocusEndpoint(unittest.TestCase):
             if system.startswith("You match"):
                 return json.dumps([{"id": "c1", "why": "x"}, {"id": "c2", "why": "y"}]), {}
             return json.dumps({"recommendation": "Write for c1; c2 if the deadline slips.",
+                               "pick": {"id": "c1", "reason": "It funds  the pipeline."},
+                               "runner_up": {"id": "c9", "if": "made up"},
                                "calls": [{"id": "c2", "affinity": 61, "why": "b"},
                                          {"id": "c1", "affinity": 85, "why": "a"}]}), {}
 
@@ -95,10 +97,21 @@ class FocusEndpoint(unittest.TestCase):
         out = server.focus(None, {"idea": "a data pipeline"})
         self.assertEqual([r["id"] for r in out["results"]], ["c1", "c2"])
         self.assertEqual(out["recommendation"], "Write for c1; c2 if the deadline slips.")
+        self.assertEqual(out["pick"], {"id": "c1", "reason": "It funds the pipeline."})
+        # c9 was never kept, so it is no runner-up.
+        self.assertIsNone(out["runner_up"])
         ranks = [s for s in self.calls if s.startswith("You are scoring")]
         self.assertEqual(len(ranks), 1)
         self.assertEqual(set(out["timing_ms"]), {"search", "rank", "total"})
         self.assertTrue(all(isinstance(v, int) for v in out["timing_ms"].values()))
+
+
+class FocusChoiceTest(unittest.TestCase):
+    def test_choice_needs_a_kept_id(self):
+        self.assertEqual(server._focus_choice({"id": " A ", "if": "x"}, {"A"}, "if"), {"id": "A", "if": "x"})
+        self.assertIsNone(server._focus_choice({"id": "B", "if": "x"}, {"A"}, "if"))
+        self.assertIsNone(server._focus_choice("A", {"A"}, "if"))
+        self.assertIsNone(server._focus_choice(None, {"A"}, "if"))
 
 
 if __name__ == "__main__":
