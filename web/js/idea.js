@@ -12,9 +12,8 @@ const IDEA_KEY = "gs.shortlist";
 const IDEA_BLANK = () => ({ idea: "", doc: null, items: [], recommendation: "", matched: "", searched: 0, on: false });
 let IDEA = IDEA_BLANK();
 let _matchBusy = false;
-let _rankBusy = false;
 let _fileBusy = false;
-const ideaBusy = () => _matchBusy || _rankBusy;
+const ideaBusy = () => _matchBusy;
 // The dashboard page when the mode came on, so turning it off lands there.
 let _pageBefore = 1;
 
@@ -149,7 +148,7 @@ function paintIdeaMode() {
     on ? "Best idea fit" : `Highest ${SCORE_LABEL}`;
   const btn = document.getElementById("idea-match");
   btn.disabled = busy;
-  btn.textContent = _matchBusy ? "Matching…" : _rankBusy ? "Picking…"
+  btn.textContent = _matchBusy ? "Matching…"
     : IDEA.items.length ? "Match again" : "Match";
 }
 
@@ -200,10 +199,10 @@ function paintIdeaRec(onPage) {
   }
   box.hidden = false;
   const text = IDEA.recommendation;
-  if (_matchBusy || _rankBusy || !text) {
+  if (_matchBusy || !text) {
     box.className = "bkout pending";
     box.innerHTML = `<span class="tag">Recommendation</span>
-      <p class="placeholder">${_matchBusy || _rankBusy
+      <p class="placeholder">${_matchBusy
         ? "Working on it… the call to go for lands here."
         : "No recommendation for these matches. Match again to get one."}</p>`;
     return;
@@ -302,9 +301,7 @@ async function runMatch() {
     const results = data.results || [];
     // Replace, don't merge: the matches are for this idea as written.
     IDEA.items = results.map(row => ({ id: row.id, affinity: row.affinity, why: row.why }));
-    // The rank pass writes the pick too, so a fresh match does not go on to
-    // /api/rescore: that would score the same shortlist against the same
-    // text a second time (#73). Rescore is for after the idea is edited.
+    // The rank pass writes the pick too, so there is no second pass (#73).
     IDEA.recommendation = data.recommendation || "";
     IDEA.matched = sig;
     IDEA.searched = data.searched || 0;
@@ -325,7 +322,7 @@ async function runMatch() {
   } finally {
     stop();
     _matchBusy = false;
-    if (!_rankBusy) stopIdeaStatus();
+    stopIdeaStatus();
     paintIdeaMode();
     if (IDEA.on) render();
   }
@@ -337,55 +334,12 @@ function fallbackNote(d) {
     ? ` Matched on ${d.model}: ${d.fallback} is down right now.` : "";
 }
 
-// Re-score the matches against the idea as now written and pick one: seconds,
-// where a fresh match is a minute. Runs when the idea is edited and the field
-// is left; a fresh match brings its own pick from /api/focus.
-async function rankIdea() {
-  if (_rankBusy || !IDEA.items.length) return;
-  if (!hasIdea()) return;
-  if (!aiReady()) { openChatPanel(document.getElementById("idea-match")); return; }
-  const { key, model, base } = keyBar();
-  _rankBusy = true;
-  startIdeaStatus("Re-ranking the matches against your edited idea…");
-  paintIdeaMode();
-  if (IDEA.on) render();
-  try {
-    const r = await fetch("api/rescore", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...ideaPayload(), ids: IDEA.items.map(i => i.id),
-                             api_key: key, model, base_url: base }),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.detail || `${r.status}`);
-    const by = Object.fromEntries((d.items || []).map(i => [i.id, i]));
-    for (const it of IDEA.items) {
-      if (by[it.id]) { it.affinity = by[it.id].affinity; it.why = by[it.id].why; }
-    }
-    IDEA.items.sort((a, b) => (b.affinity ?? 0) - (a.affinity ?? 0));
-    IDEA.recommendation = d.recommendation || "";
-    saveIdea();
-    await fetchUnseen();
-    paintMatchedHint();
-    if (d.fallback && !document.getElementById("idea-hint").textContent) {
-      setIdeaHint(fallbackNote(d).trim());
-    }
-  } catch (e) {
-    setIdeaHint(String(e.message || e).slice(0, 240), true);
-  } finally {
-    _rankBusy = false;
-    stopIdeaStatus();
-    paintIdeaMode();
-    if (IDEA.on) render();
-  }
-}
-
 // Forget the idea entirely: text, matches, pick, and the mode. The list goes
 // back to every open call, on the page it was on before the mode came on.
 function clearIdea() {
   if (ideaBusy()) return;
   const wasOn = IDEA.on;
   IDEA = IDEA_BLANK();
-  _rankedFor = "";
   saveIdea();
   ideaEl().value = "";
   ideaEl().blur();
@@ -412,15 +366,6 @@ ideaEl().addEventListener("input", e => {
 // Cmd/Ctrl+Enter matches; a plain Enter is a new line in the idea.
 ideaEl().addEventListener("keydown", e => {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); runMatch(); }
-});
-// Re-rank when the idea is edited and the field is left, not on every
-// keystroke, which would thrash the model while someone is still typing.
-let _rankedFor = "";
-ideaEl().addEventListener("focusout", () => {
-  const next = ideaSig();
-  if (!IDEA.on || !IDEA.items.length || !next || next === _rankedFor || next === IDEA.matched) return;
-  _rankedFor = next;
-  rankIdea();
 });
 
 // ---- From a file: Upload file, or drop one on the box --------------------

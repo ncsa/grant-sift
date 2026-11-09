@@ -2,7 +2,7 @@
 // and attached beside the Idea box, which stays free for the person's notes.
 
 // Read here, in the tab. The file itself is never uploaded: only its text goes
-// to /api/focus and /api/rescore, as the `document` field.
+// to /api/focus, as the `document` field.
 // The two readers are large (pdf.js ~1 MB with its worker, mammoth ~600 KB),
 // so each loads from cdnjs only when a file of its kind is picked. Versions
 // are exact: a reader that changed under us could change what gets matched.

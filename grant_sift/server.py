@@ -94,10 +94,8 @@ MAX_TURNS = 12
 
 # Focus: idea text -> matching calls. A search reads the whole catalogue, about
 # 0.015 coins on the shared key against a refill of 24 a day, so it is the
-# tight one. Re-scoring a shortlist is a few thousand tokens and is meant to be
-# pressed after each edit, so it has its own, looser bucket.
+# tight one.
 FOCUS_PER_HOUR = int(os.environ.get("GRANT_SIFT_FOCUS_PER_HOUR", "6"))
-RESCORE_PER_HOUR = int(os.environ.get("GRANT_SIFT_RESCORE_PER_HOUR", "30"))
 # The idea is a document (one file, read to text in the tab) plus the
 # researcher's own notes from the box. 15k between them fits a one-page
 # summary with room for notes. The document never takes more than
@@ -1351,10 +1349,9 @@ Rules:
   because no description was generated for that call yet. Treat those as
   weaker evidence, not as a reason to skip the call."""
 
-# The recommendation is written by whichever pass scores the shortlist last:
-# the rank pass after a fresh match, the rescore pass after an edit. One wording
-# for both, so a pick reads the same however it was reached. (#73: rescoring
-# straight after ranking wrote every "why" twice, to get this one field.)
+# The recommendation is written by the rank pass, the last pass of a match.
+# (#73: rescoring straight after ranking wrote every "why" twice, to get this
+# one field.)
 RECOMMENDATION_SPEC = """2-3 sentences: which one to go for and why it beats the
                      others. Name the runner-up and say what would change the
                      answer. Deadlines count - a close fit that cannot be
@@ -1383,36 +1380,6 @@ Say why in terms of the idea, not the call in general. Drop anything under 40
 from "calls" rather than listing it, and recommend only from what you keep.""" % RECOMMENDATION_SPEC
 
 
-# Re-scoring is not searching, and reusing the search prompt was wrong: it says
-# to drop anything under 40, which is right when sifting a thousand calls and
-# wrong here. In a re-score the model has seen every item, so "not returned"
-# would mean "scored low" -- and silently keeping the old number then leaves a
-# call that has become irrelevant still looking relevant. Measured: 5 of 9 came
-# back, and the 4 missing were the ones the edited idea had demoted.
-FOCUS_RESCORE_SYSTEM = """You are helping someone choose ONE funding call to write for,
-from a shortlist they have kept and pruned while working on the idea below. They
-are converging, not assembling a portfolio.
-
-Some of these were kept under an earlier wording of the idea and may no longer
-fit. Score every one against the idea AS IT NOW READS.
-
-Return ONLY JSON, no fences:
-{
-  "recommendation": "%s",
-  "calls": [{"id": "exactly as given", "affinity": 0-100, "why": "one sentence"}]
-}
-
-affinity is how well THIS CALL fits THIS IDEA as now written. It is not a
-quality score: a superb call that no longer matches should drop, and saying so
-is the point of this pass.
-
-  80-100  the idea could be proposed to this call largely as it stands
-  60-79   a real fit; the idea would need reframing
-  40-59   adjacent; a component of the idea fits
-  0-39    not a fit any more
-
-Include EVERY call given, the poor fits included - those are the ones the
-shortlist most needs told about. Omitting one leaves a stale score on screen.""" % RECOMMENDATION_SPEC
 
 
 _corpus_cache: dict = {}
@@ -1475,7 +1442,7 @@ def _focus_corpus(conn):
 
 
 def _idea_parts(payload: dict) -> tuple[str, str]:
-    """(notes, document) from a focus or rescore payload, within budget.
+    """(notes, document) from a focus payload, within budget.
 
     The document is cut first, to MAX_DOC_CHARS; the notes get what is left of
     MAX_IDEA_CHARS. The page trims both before sending, so a cut here only
@@ -1525,8 +1492,8 @@ def _focus_json(text):
 
 
 def _focus_obj(text):
-    """The {"recommendation", "calls"} object the rank and rescore passes
-    return, with the same defensive parse as _focus_json. A model that
+    """The {"recommendation", "calls"} object the rank pass
+    returns, with the same defensive parse as _focus_json. A model that
     ignores the format and returns a bare array still yields its calls, with
     no recommendation. A dict or {}."""
     cleaned = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.MULTILINE).strip()
@@ -1547,7 +1514,7 @@ def _focus_obj(text):
 
 
 def _focus_calls(data, known):
-    """Usable {id, affinity, why} rows from a parsed rank or rescore reply.
+    """Usable {id, affinity, why} rows from a parsed rank reply.
     An id not in `known` is dropped, never fabricated back."""
     out = []
     for item in data.get("calls") or []:
@@ -1670,82 +1637,13 @@ def focus(request: Request, payload: dict = Body(...)):
         data = _focus_obj(ranked_raw)
         out = _focus_calls(data, rows)
         out.sort(key=lambda x: -x["affinity"])
-        # The page shows this and does not rescore after a fresh match, so the
-        # rank pass is the only place it can come from.
+        # The rank pass is the only place the pick comes from.
         rec = str(data.get("recommendation") or "")[:2000] if out else ""
         return {"results": out, "recommendation": rec, "searched": n, "trimmed": trimmed,
                 "chunks": len(chunks), "usage": usage, **_answered(gw, "idea"),
                 "timing_ms": timing}
     finally:
         conn.close()
-
-
-@app.post("/api/rescore")
-def rescore(request: Request, payload: dict = Body(...)):
-    """Score a shortlist against an idea, and recommend one of them.
-
-    Stateless, like /api/focus. The shortlist lives in the caller's browser;
-    this receives the ids and the idea, looks the calls up in the catalogue -
-    public data the server already holds - and scores them. Nothing about the
-    idea or the shortlist is written anywhere.
-
-    Cheap enough to press after every edit to the idea: a handful of calls at
-    1,500 chars each is around 2k prompt tokens and a few seconds, against
-    ~96k and over a minute for a search of the whole catalogue.
-    """
-    auth.require_user(request)
-    _rate_limit(f"rescore:{_client(request)}", RESCORE_PER_HOUR)
-
-    notes, doc = _idea_parts(payload)
-    ids = payload.get("ids")
-
-    if not notes and not doc:
-        raise HTTPException(400, "idea is required; there is nothing to score against")
-    if not isinstance(ids, list) or not ids:
-        raise HTTPException(400, "ids must be a non-empty list")
-    ids = [str(i) for i in ids][:60]
-    gw = _gateway(payload)
-
-    conn = _conn()
-    try:
-        # The ids come from the caller, i.e. from a focus shortlist that may
-        # have been on screen for a while. Filtering here rather than trusting
-        # that provenance is what keeps a call that has closed since out of
-        # the prompt; an id dropped here falls out of `ordered` below exactly
-        # as an unknown id already does.
-        rows = {r["id"]: r for r in conn.execute(
-            f"""SELECT o.id, o.title, o.agency, o.deadline, o.award_ceiling, o.synopsis,
-                      a.summary
-                 FROM opportunities o LEFT JOIN assessments a ON a.opportunity_id = o.id
-                WHERE o.id IN ({",".join("?" * len(ids))}) AND {db.LIVE}""", ids)}
-    finally:
-        conn.close()
-    # Keep the caller's order: it is what their screen shows, and a shortlist
-    # reordered underneath them by an id lookup would be disorienting.
-    ordered = [rows[i] for i in ids if i in rows]
-    if not ordered:
-        raise HTTPException(404, "none of those calls are still open")
-
-    detail = "\n\n".join(
-        f"{r['id']} | {r['title']} | {r['agency'] or ''} | "
-        f"deadline {r['deadline'] or 'rolling'} | award {r['award_ceiling'] or 'not stated'}\n"
-        f"{' '.join((r['summary'] or '').split())}\n"
-        f"{' '.join((r['synopsis'] or '').split())[:FOCUS_RERANK_CHARS]}"
-        for r in ordered)
-
-    raw, usage = _focus_post(
-        gw, FOCUS_RESCORE_SYSTEM + IDEA_INPUT_RULES,
-        "SHORTLISTED CALLS:\n\n" + detail + "\n\n" + _idea_block(notes, doc),
-        max_tokens=4000)
-
-    data = _focus_obj(raw)
-    out = _focus_calls(data, rows)
-    if not out:
-        raise HTTPException(502, "the model returned no usable scores")
-
-    return {"recommendation": str(data.get("recommendation") or "")[:2000],
-            "items": out, "scored": len(out), "of": len(ordered), "usage": usage,
-            **_answered(gw, "idea")}
 
 
 _PAGE_MAX = 200

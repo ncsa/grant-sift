@@ -161,7 +161,7 @@ Two properties worth preserving:
 **The model runs offline, never in a request path.** The dashboard reads
 scores already in the database, so nothing user-facing depends on the gateway
 being up. The chat
-proxy and Idea match (`/api/focus`, `/api/rescore`) are the exceptions: both
+proxy and Idea match (`/api/focus`) are the exceptions: both
 call the model per request, on the server’s Lumen key by default or the
 viewer’s own key if they bring one.
 
@@ -474,8 +474,8 @@ and "via me" included - so the page and an assistant cannot disagree.
 
 Search is fuzzy on names, titles, funders and people (a typo still finds
 them, via rapidfuzz) and exact on prose: rationale, summary and the captured
-synopsis. Chat, idea match and
-rescore are not exposed: each spends the viewer's own Lumen key, which would
+synopsis. Chat and idea match
+are not exposed: each spends the viewer's own Lumen key, which would
 have to pass through the model as a tool argument, and the assistant is already
 a model that can read `get_opportunity` itself.
 
@@ -521,8 +521,7 @@ the browser cannot call it directly.
 **Budget.** gemma costs about 0.16 Lumen coins per million tokens: roughly
 0.005 coins per chat conversation and 0.015 per Idea match search, against a
 refill of 24 coins a day. The only guard is the in-memory per-user hourly
-limit (`GRANT_SIFT_CHAT_PER_HOUR` 60, `GRANT_SIFT_FOCUS_PER_HOUR` 6,
-`GRANT_SIFT_RESCORE_PER_HOUR` 30). When Lumen is out of coins the page says
+limit (`GRANT_SIFT_CHAT_PER_HOUR` 60, `GRANT_SIFT_FOCUS_PER_HOUR` 6). When Lumen is out of coins the page says
 the shared model is busy rather than showing the gateway’s error. Ingest
 scoring spends the same key, so a drained bucket delays scoring until it
 refills (calls are picked up next run); a separate ingest key removes that.
@@ -559,11 +558,10 @@ dashboard is as it was, with its filters and sort.
 
 Each row leads with one of two scores, labelled so they are never confused:
 the profile’s score (“RSE relevance” by default: the 0–100 score, the same for everyone) or,
-in Idea match, **Idea fit** (fit to this idea, from `/api/focus` and
-`/api/rescore`). Hovering either label explains it. The two are never averaged.
+in Idea match, **Idea fit** (fit to this idea, from `/api/focus`). Hovering either label explains it. The two are never averaged.
 
 ```
-idea ──► Match ──► matches in the list ──► filter / sort ──► edit idea ──► auto re-rank
+idea ──► Match ──► matches in the list ──► filter / sort ──► edit idea ──► Match again
 ```
 
 **Nothing about the idea is stored on the server.** The paragraph, the matched
@@ -571,18 +569,18 @@ calls and the recommendation live in `localStorage` / the tab only — the same
 posture as the chat transcript. Clear browser data and they are gone; they do not
 follow you to another device.
 
-**Two endpoints**, on the server’s Lumen key by default or the viewer’s own
+**One endpoint**, on the server’s Lumen key by default or the viewer’s own
 (same AI model setting as chat):
 
 | Endpoint | Role | Cost (approx.) |
 | --- | --- | --- |
 | `POST /api/focus` | Scan every live call (chunked, in parallel), then rank a shortlist | ~96k prompt tokens, ~1 min |
-| `POST /api/rescore` | Re-score kept calls against the idea as now written; pick one | ~2k tokens, seconds |
 
 Matching shows elapsed time and staged status while `/api/focus` runs. When it
 finishes, the list fills with the hits and a recommendation follows. Editing
-the idea and leaving the field re-ranks the matches without another full
-catalogue search; Match again searches the whole catalogue with the new text.
+the idea does not touch the matches (the page notes they are for the earlier
+wording); Match again searches the whole catalogue with the new text, since an
+edit can change what is being looked for.
 
 **From a file:** one file, attached with Upload file or by dropping it on the
 Idea box. `.txt` and `.md` are read as text; `.pdf` with pdf.js and `.docx`

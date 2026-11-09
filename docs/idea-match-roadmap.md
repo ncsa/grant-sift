@@ -14,8 +14,9 @@ Where Idea match stands, and what to build next, in rough order of value.
   input tokens a request). One more call ranks the merged shortlist. About
   100k prompt tokens and a minute a match. Nothing is filtered out before the
   model reads it.
-- **Re-score:** editing the idea re-ranks the kept matches in seconds (~2k
-  tokens), without a new search.
+- **No re-score:** editing the idea takes a fresh Match. Re-ranking the old
+  matches against new wording was removed: an edit can change what is being
+  looked for, and the old shortlist would never show what it now fits.
 
 Why the input has a budget at all: the idea is repeated in every catalogue
 chunk, so a longer idea costs about 4 times as much as it does in one request.

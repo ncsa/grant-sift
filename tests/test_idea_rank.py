@@ -1,4 +1,4 @@
-"""Idea match: the rank pass picks the call, so a fresh match needs no rescore (#73).
+"""Idea match: the rank pass picks the call, in the same request as the search (#73).
 
 Stdlib only:  python -m unittest discover tests
 """
@@ -38,11 +38,15 @@ class Parse(unittest.TestCase):
     def test_unparseable_is_empty(self):
         self.assertEqual(server._focus_obj("no idea"), {})
 
-    def test_rank_and_rescore_share_the_recommendation_wording(self):
+    def test_rank_prompt_asks_for_the_recommendation(self):
         self.assertIn(server.RECOMMENDATION_SPEC, server.FOCUS_RANK_SYSTEM)
-        self.assertIn(server.RECOMMENDATION_SPEC, server.FOCUS_RESCORE_SYSTEM)
-        # The search-time rule that separates the two prompts stays.
         self.assertIn("Drop anything under 40", server.FOCUS_RANK_SYSTEM)
+
+    def test_rescore_is_gone(self):
+        # Editing the idea no longer re-ranks the old matches: an edit can
+        # change what is being looked for, so it takes a fresh match.
+        self.assertFalse(hasattr(server, "rescore"))
+        self.assertFalse(any(getattr(r, "path", "") == "/api/rescore" for r in server.app.routes))
 
 
 class FocusEndpoint(unittest.TestCase):
@@ -93,7 +97,6 @@ class FocusEndpoint(unittest.TestCase):
         self.assertEqual(out["recommendation"], "Write for c1; c2 if the deadline slips.")
         ranks = [s for s in self.calls if s.startswith("You are scoring")]
         self.assertEqual(len(ranks), 1)
-        self.assertFalse(any("kept and pruned" in s for s in self.calls))  # no rescore prompt
         self.assertEqual(set(out["timing_ms"]), {"search", "rank", "total"})
         self.assertTrue(all(isinstance(v, int) for v in out["timing_ms"].values()))
 
