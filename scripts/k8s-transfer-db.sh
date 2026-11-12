@@ -82,6 +82,10 @@ EOF
 
 kubectl -n "$NAMESPACE" wait --for=condition=Ready "pod/${JOB_POD}" --timeout=120s
 
+# A WAL or shared-memory file left by the database being replaced belongs to
+# that file, not this one; SQLite would replay it into the copy on open.
+kubectl -n "$NAMESPACE" exec "$JOB_POD" -- rm -f "${REMOTE_DB}-wal" "${REMOTE_DB}-shm"
+
 echo "copying database -> ${JOB_POD}:${REMOTE_DB}"
 kubectl -n "$NAMESPACE" cp "$TMP" "${JOB_POD}:${REMOTE_DB}"
 
