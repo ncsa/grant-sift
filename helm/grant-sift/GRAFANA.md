@@ -21,9 +21,9 @@ Chart dependency: official [`grafana/grafana`](https://artifacthub.io/packages/h
 
 ### 1. Keycloak client (same realm as the dashboard)
 
-Use the **same** Keycloak realm as oauth2-proxy (`keycloak.realm`, default **NCSA**). Create a **separate** confidential client for Grafana (cleaner redirect URIs than reusing `grant-sift`).
+Use the **same** Keycloak realm as oauth2-proxy (`keycloak.realm`, default **Grant-Sift**). Create a **separate** confidential client for Grafana (cleaner redirect URIs than reusing `grant-sift`).
 
-In [Keycloak admin](https://keycloak.software-dev.ncsa.illinois.edu/) → realm **NCSA** → Clients → Create:
+In [Keycloak admin](https://keycloak.software-dev.ncsa.illinois.edu/) → realm **Grant-Sift** → Clients → Create:
 
 | Field | Value |
 |---|---|
@@ -88,7 +88,7 @@ kubectl -n grant-sift get deploy,svc,ingress | grep -E 'grafana|grant-sift'
 
 UI (software-dev): **https://grant-sift-grafana.software-dev.ncsa.illinois.edu**
 
-- Prefer **Sign in with Keycloak** (same NCSA realm as the grant-sift dashboard).
+- Prefer **Sign in with Keycloak** (same Grant-Sift realm as the grant-sift dashboard).
 - Local `admin` / secret password remains as break-glass (`auth.disable_login_form: false`).
 - **Anonymous Viewer** is on for software-dev so the Ops & Signal board can be linked
   and **embedded** in the grant-sift app without a Grafana login. Edits still need
@@ -262,7 +262,7 @@ Or omit the overlay block. Re-run `helm upgrade`.
 ## Security notes
 
 - Grafana admin password + Keycloak client secret live in Secret `grant-sift-grafana` — not in git.
-- Prefer Keycloak (same NCSA realm as the app). Local admin is break-glass only.
+- Prefer Keycloak (same Grant-Sift realm as the app). Local admin is break-glass only.
 - Anonymous **Viewer** is intentional on software-dev for a public board link; turn it off if the host must not be world-readable.
 - Ingress TLS is on. `/api/stats` stays unauthenticated on the app ClusterIP (same idea as `/api/health`); Grafana scrapes in-cluster, not via the public oauth2 Ingress.
 - Do not publish a public Ingress that bypasses oauth2-proxy just for stats.

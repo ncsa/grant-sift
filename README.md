@@ -493,7 +493,7 @@ same `auth.require_user` as the REST endpoints. Keycloak setup is in
 
 ```bash
 GRANT_SIFT_PUBLIC_URL=https://grant-sift.example.com   # names the resource; allowed Host
-GRANT_SIFT_OIDC_ISSUER=https://keycloak…/realms/NCSA   # set by the chart from keycloak.*
+GRANT_SIFT_OIDC_ISSUER=https://keycloak…/realms/Grant-Sift   # set by the chart from keycloak.*
 ```
 
 There is no anonymous mode. With `GRANT_SIFT_AUTH` anything but `proxy`,

@@ -52,7 +52,7 @@ from . import auth, profile
 # to the Host allowlist.
 PUBLIC_URL = os.environ.get("GRANT_SIFT_PUBLIC_URL", "").strip().rstrip("/")
 # The Keycloak realm MCP clients log in against, e.g.
-# https://keycloak.software-dev.ncsa.illinois.edu/realms/NCSA. Without it there
+# https://keycloak.software-dev.ncsa.illinois.edu/realms/Grant-Sift. Without it there
 # is no metadata to serve, and a client behind the proxy cannot find a login.
 OIDC_ISSUER = os.environ.get("GRANT_SIFT_OIDC_ISSUER", "").strip().rstrip("/")
 
