@@ -156,6 +156,8 @@ kubectl -n grant-sift logs deploy/grant-sift-oauth2-proxy --since=15m | grep -E 
 | Tool error: `no identity in 'x-forwarded-preferred-username'` | Token lacks `preferred_username`; assign the `profile` scope |
 | Tool error: `identity headers refused` | Request didn't come from the proxy; check `GRANT_SIFT_TRUSTED_PROXIES` |
 | `/mcp` returns 503 | App is running with `GRANT_SIFT_AUTH` other than `proxy` |
+| Sign-in ends in a 500, proxy log says `email in id_token … isn't verified` | The account's email is unverified and `insecure_oidc_allow_unverified_email` is off; turn on the realm's Verify email, or set the flag |
+| Sign-in ends in a 500, proxy log says `neither the id_token nor the profileURL set an email` | The account has no email in Keycloak; add one |
 | Keycloak shows "Invalid redirect URI" | Add the exact URI from the error to the client |
 
 To check a token by hand: in Keycloak, open `grant-sift-mcp` → **Client scopes → Evaluate** → pick a user → **Generated access token**. Then send it to the app:
