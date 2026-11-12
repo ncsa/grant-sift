@@ -28,13 +28,13 @@ Grafana setup details: **[GRAFANA.md](./GRAFANA.md)**.
 | Ingress | **traefik** + letsencrypt |
 | Storage | **nfs-taiga** (RWX) |
 | DNS | `*.software-dev.ncsa.illinois.edu` |
-| Keycloak | [keycloak.software-dev…](https://keycloak.software-dev.ncsa.illinois.edu/) — set `keycloak.realm` (default **NCSA**) |
+| Keycloak | [keycloak.software-dev…](https://keycloak.software-dev.ncsa.illinois.edu/) — set `keycloak.realm` (default **Grant-Sift**) |
 | Image | **public** `ghcr.io/ncsa/grant-sift:main` |
 
 Traffic path:
 
 ```
-Browser → Traefik → oauth2-proxy → Keycloak (NCSA) → grant-sift:8080
+Browser → Traefik → oauth2-proxy → Keycloak (Grant-Sift) → grant-sift:8080
 ```
 
 ---
@@ -57,7 +57,7 @@ CI tags on merge to `main`: `:main`, `:sha-<short>`. Releases add semver + `:lat
 
 ### 2. Keycloak client
 
-In [Keycloak admin](https://keycloak.software-dev.ncsa.illinois.edu/) → realm matching `keycloak.realm` in `values-software-dev.yaml` (default **NCSA**) → Clients → Create:
+In [Keycloak admin](https://keycloak.software-dev.ncsa.illinois.edu/) → realm matching `keycloak.realm` in `values-software-dev.yaml` (default **Grant-Sift**) → Clients → Create:
 
 | Field | Value |
 |---|---|
@@ -74,7 +74,7 @@ Realm is a Helm value (not hard-coded in the issuer URL):
 ```yaml
 keycloak:
   url: https://keycloak.software-dev.ncsa.illinois.edu
-  realm: NCSA          # ← change here if needed
+  realm: Grant-Sift    # ← change here if needed
 ```
 
 The chart builds `{{url}}/realms/{{realm}}` into ConfigMap `grant-sift-keycloak` and injects it as `OAUTH2_PROXY_OIDC_ISSUER_URL`.
@@ -185,7 +185,7 @@ kubectl -n grant-sift logs -l app.kubernetes.io/name=oauth2-proxy -f
 ```
 
 Open: **https://grant-sift.software-dev.ncsa.illinois.edu**  
-You should bounce through Keycloak (NCSA), then see the dashboard.
+You should bounce through Keycloak (Grant-Sift), then see the dashboard.
 
 Grafana (software-dev): **https://grant-sift-grafana.software-dev.ncsa.illinois.edu** — see [GRAFANA.md](./GRAFANA.md). Seed rollups with `python run.py telemetry` inside the app pod (also runs at the end of the nightly `daily` job).
 
@@ -221,7 +221,7 @@ Chat still uses the browser **Personalize** key (not the pipeline Secret).
 | Setting | Where |
 |---|---|
 | Issuer `{{keycloak.url}}/realms/{{keycloak.realm}}` | ConfigMap `grant-sift-keycloak` → oauth2-proxy + Grafana OAuth |
-| `keycloak.realm` | `values-software-dev.yaml` (default `NCSA`) |
+| `keycloak.realm` | `values-software-dev.yaml` (default `Grant-Sift`) |
 | Client id / secret / cookie (app) | Secret `grant-sift-oauth2` |
 | Grafana Keycloak client | Client `grant-sift-grafana`; secret key `client-secret` in `grant-sift-grafana` |
 | `GRANT_SIFT_AUTH=proxy` | ConfigMap |

@@ -1,12 +1,12 @@
 # Grant Sift: how authentication works
 
-Grant Sift does no OAuth itself. **Keycloak** (NCSA realm) issues identities, **oauth2-proxy** checks them on every request, and the **app** trusts the identity headers the proxy adds. The dashboard (browser) and the MCP endpoint (Claude) go through the same gate and the same app code. They differ only in how the caller proves who they are: a browser uses a cookie, an MCP client sends a bearer token.
+Grant Sift does no OAuth itself. **Keycloak** (Grant-Sift realm) issues identities, **oauth2-proxy** checks them on every request, and the **app** trusts the identity headers the proxy adds. The dashboard (browser) and the MCP endpoint (Claude) go through the same gate and the same app code. They differ only in how the caller proves who they are: a browser uses a cookie, an MCP client sends a bearer token.
 
 ## The parts
 
 | Part | Job | Where |
 |---|---|---|
-| **Keycloak**, realm `NCSA` | Knows who you are; signs tokens with its private key | `keycloak.software-dev.ncsa.illinois.edu` |
+| **Keycloak**, realm `Grant-Sift` | Knows who you are; signs tokens with its private key | `keycloak.software-dev.ncsa.illinois.edu` |
 | **oauth2-proxy** | Sits in front of the app; checks the cookie or bearer token; adds `X-Forwarded-*` identity headers | `grant-sift-oauth2-proxy` deployment |
 | **grant-sift app** | Never sees tokens. Trusts the identity headers, but only from the proxy's address range | `grant-sift` deployment |
 | **MCP client** | Claude Code, or Claude Desktop through `mcp-remote`. Logs in to Keycloak itself and holds the token | User's laptop |
@@ -48,8 +48,8 @@ Claude (laptop)           oauth2-proxy           grant-sift              Keycloa
    │<──────── 401 ────────────│ (401, not a 302)    │                       │
    │ ② GET /.well-known/oauth-protected-resource/mcp│                       │
    │─────────────────────────>│ skip_auth_routes ──>│                       │
-   │<── {"authorization_servers": [".../realms/NCSA"]}                      │
-   │ ③ GET .../realms/NCSA/.well-known/openid-configuration ───────────────>│
+   │<── {"authorization_servers": [".../realms/Grant-Sift"]}                │
+   │ ③ GET .../realms/Grant-Sift/.well-known/openid-configuration ─────────>│
    │ ④ browser: login as client_id=grant-sift-mcp, with PKCE ──────────────>│
    │<──── redirect to http://localhost:33418/callback?code=… ───────────────│
    │ ⑤ POST /token  code + PKCE verifier ──────────────────────────────────>│
@@ -66,7 +66,7 @@ Claude                         oauth2-proxy                          grant-sift
    │ POST /mcp                     │                                     │
    │ Authorization: Bearer eyJ…    │ skip_jwt_bearer_tokens:             │
    │──────────────────────────────>│  ✓ signature (Keycloak public key)  │
-   │                               │  ✓ iss = NCSA realm                 │
+   │                               │  ✓ iss = Grant-Sift realm           │
    │                               │  ✓ aud includes "grant-sift"        │
    │                               │  ✓ not expired                      │
    │                               │── X-Forwarded-Preferred-Username ──>│ auth.require_user():
@@ -81,7 +81,7 @@ When the access token expires, the client uses its refresh token to get a new on
 A JWT that Keycloak signs:
 
 ```json
-{ "iss": "https://keycloak…/realms/NCSA",
+{ "iss": "https://keycloak…/realms/Grant-Sift",
   "aud": ["grant-sift"],
   "preferred_username": "cwang138",
   "email": "cwang138",

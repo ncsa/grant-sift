@@ -50,7 +50,7 @@ roster:
 # Change realm here — issuer becomes {{url}}/realms/{{realm}} for oauth2-proxy.
 keycloak:
   url: https://keycloak.software-dev.ncsa.illinois.edu
-  realm: NCSA
+  realm: Grant-Sift
 
 config:
   GRANT_SIFT_DB: /data/grant-sift.db

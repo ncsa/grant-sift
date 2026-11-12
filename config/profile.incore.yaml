@@ -18,7 +18,7 @@
 
 org:
   name: IN-CORE
-  # Sign-in is NCSA's Keycloak, so a bare username is an Illinois one.
+  # A bare username (NetID-style) is taken to be an Illinois one.
   email_domain: illinois.edu
   # The crawler's User-Agent contact.
   contact_email: incore-dev@lists.illinois.edu
