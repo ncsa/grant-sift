@@ -1,0 +1,45 @@
+# IN-CORE instance on software-dev, layered over the NCSA one:
+#   helm upgrade --install grant-sift ./helm/grant-sift -n grant-sift-incore \
+#     -f helm/grant-sift/values-software-dev.yaml \
+#     -f helm/grant-sift/values-software-dev-incore.yaml \
+#     -f helm/grant-sift/values-secrets.yaml
+# Only what differs from values-software-dev.yaml is here.
+
+# Its own claim. The NCSA overlay names grant-sift-data-cinder, which lives
+# in the grant-sift namespace; blank makes the chart create one here.
+persistence:
+  existingClaim: ""
+  storageClassName: csi-cinder-sc-retain
+  accessModes:
+    - ReadWriteOnce
+  size: 2Gi
+
+# config/roster.incore.yaml, no staff file: no "via us" on this instance.
+roster:
+  existingConfigMap: grant-sift-roster
+  key: roster.yaml
+  staffKey: ""
+
+# config/profile.incore.yaml
+profile:
+  existingConfigMap: grant-sift-profile
+  key: profile.yaml
+
+config:
+  GRANT_SIFT_PUBLIC_URL: https://in-core.grant-sift.software-dev.ncsa.illinois.edu
+  # No Grafana for this instance; blank hides the header link.
+  GRANT_SIFT_GRAFANA_URL: ""
+
+grafana:
+  enabled: false
+  keycloakAuth:
+    enabled: false
+
+oauth2-proxy:
+  ingress:
+    hosts:
+      - in-core.grant-sift.software-dev.ncsa.illinois.edu
+    tls:
+      - hosts:
+          - in-core.grant-sift.software-dev.ncsa.illinois.edu
+        secretName: grant-sift-incore-tls
