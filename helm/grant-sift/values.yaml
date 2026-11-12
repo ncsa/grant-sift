@@ -214,9 +214,17 @@ oauth2-proxy:
       pass_authorization_header = false
       pass_user_headers = true
       set_authorization_header = false
+      # The email header carries Keycloak's real email claim. A deprecated
+      # user_id_claim = "preferred_username" used to sit here; it silently
+      # replaced the email with the username, which was only right while every
+      # username was a NetID. The username still arrives in
+      # X-Forwarded-Preferred-Username.
       oidc_email_claim = "email"
+      # Self-registered accounts have email_verified = false and oauth2-proxy
+      # refuses those by default. Drop this line once the realm has "Verify
+      # email" on; until then the address is whatever the person typed.
+      insecure_oidc_allow_unverified_email = true
       oidc_groups_claim = "groups"
-      user_id_claim = "preferred_username"
       # MCP clients (Claude Code, Claude Desktop) cannot follow a cookie login.
       # They log in to Keycloak themselves, as the public client grant-sift-mcp,
       # and send the access token as "Authorization: Bearer". This accepts a
@@ -232,7 +240,6 @@ oauth2-proxy:
   # come from existingSecret.
   extraArgs:
     - --provider=keycloak-oidc
-    - --user-id-claim=preferred_username
     - --oidc-email-claim=email
     - --reverse-proxy=true
     - --pass-user-headers=true

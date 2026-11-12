@@ -141,17 +141,36 @@ def listed_dates(o):
     return sorted(d for d in dates if d and d >= today)
 
 
+def _ours(domain):
+    """Is this an address in our own domain, or a subdomain of it?"""
+    org = profile.PROFILE["org"]["email_domain"].strip().lower()
+    return bool(org) and (domain == org or domain.endswith("." + org))
+
+
 def is_me(person_email, principal):
-    """Is this roster address the signed-in person? Keycloak sometimes puts
-    the NetID in the email claim with no @, and staff addresses come as
-    NetID@illinois.edu or NetID@ncsa.illinois.edu."""
+    """Is this roster address the signed-in person?
+
+    The proxy hands over one of two things as the email, depending on the
+    realm and its config, and both have to work:
+
+      a real address   exact match, or the same NetID at a sibling address of
+                       ours (NetID@illinois.edu and NetID@ncsa.illinois.edu
+                       are one person). Only inside our domain: jdoe@gmail.com
+                       is not staff member jdoe.
+      a bare NetID     no @ at all, or no email and only a username. Matches
+                       the staff address that starts with it.
+    """
     pe = (person_email or "").strip().lower()
     if not pe or not principal.authenticated:
         return False
     email = (principal.email or "").strip().lower()
-    if "@" in email and pe == email:
-        return True
-    netid = (email.split("@")[0] if email else principal.username).lower()
+    if "@" in email:
+        if pe == email:
+            return True
+        local, _, domain = email.partition("@")
+        theirs, _, their_domain = pe.partition("@")
+        return local == theirs and _ours(domain) and _ours(their_domain)
+    netid = (email or principal.username or "").strip().lower()
     return bool(netid) and pe.startswith(netid + "@")
 
 
